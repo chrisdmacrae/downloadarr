@@ -1,0 +1,35 @@
+{
+  "name": "downloadarr",
+  "version": "1.0.0",
+  "description": "All-in-one media and ROM downloading tool with VPN integration",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev:api\" \"npm run dev:ui\"",
+    "dev:api": "npm run dev --workspace=@app/api",
+    "dev:ui": "npm run dev --workspace=@app/ui",
+    "build": "npm run build --workspaces",
+    "build:api": "npm run build --workspace=@app/api",
+    "build:ui": "npm run build --workspace=@app/ui",
+    "start": "npm run start --workspace=@app/api",
+    "test": "npm run test --workspaces",
+    "lint": "npm run lint --workspaces",
+    "clean": "npm run clean --workspaces && rm -rf node_modules"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/chrisdmacrae/downloadarr.git"
+  },
+  "author": "Chris MacRae",
+  "license": "MIT"
+}
