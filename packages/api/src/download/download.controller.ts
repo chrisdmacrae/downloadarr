@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, Param } from '@nestjs/common';
+import { Controller, Post, Get, Body, Param, Put, Delete } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { DownloadService } from './download.service';
 import { CreateDownloadDto } from './dto/create-download.dto';
@@ -34,5 +34,40 @@ export class DownloadController {
   @ApiResponse({ status: 200, description: 'Download job status' })
   async getDownloadStatus(@Param('id') id: string) {
     return this.downloadService.getDownloadStatus(id);
+  }
+
+  @Put(':id/pause')
+  @ApiOperation({ summary: 'Pause a download job' })
+  @ApiResponse({ status: 200, description: 'Download job paused' })
+  async pauseDownload(@Param('id') id: string) {
+    return this.downloadService.pauseDownload(id);
+  }
+
+  @Put(':id/resume')
+  @ApiOperation({ summary: 'Resume a download job' })
+  @ApiResponse({ status: 200, description: 'Download job resumed' })
+  async resumeDownload(@Param('id') id: string) {
+    return this.downloadService.resumeDownload(id);
+  }
+
+  @Delete(':id')
+  @ApiOperation({ summary: 'Cancel a download job' })
+  @ApiResponse({ status: 200, description: 'Download job cancelled' })
+  async cancelDownload(@Param('id') id: string) {
+    return this.downloadService.cancelDownload(id);
+  }
+
+  @Get('queue/stats')
+  @ApiOperation({ summary: 'Get download queue statistics' })
+  @ApiResponse({ status: 200, description: 'Queue statistics' })
+  async getQueueStats() {
+    return this.downloadService.getQueueStats();
+  }
+
+  @Get('aria2/stats')
+  @ApiOperation({ summary: 'Get Aria2 global statistics' })
+  @ApiResponse({ status: 200, description: 'Aria2 statistics' })
+  async getAria2Stats() {
+    return this.downloadService.getAria2Stats();
   }
 }

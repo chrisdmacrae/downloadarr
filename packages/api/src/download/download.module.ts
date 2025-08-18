@@ -3,6 +3,9 @@ import { BullModule } from '@nestjs/bull';
 import { DownloadController } from './download.controller';
 import { DownloadService } from './download.service';
 import { DownloadProcessor } from './download.processor';
+import { Aria2Service } from './aria2.service';
+import { DownloadGateway } from './download.gateway';
+import { ProgressTrackerService } from './progress-tracker.service';
 
 @Module({
   imports: [
@@ -11,7 +14,7 @@ import { DownloadProcessor } from './download.processor';
     }),
   ],
   controllers: [DownloadController],
-  providers: [DownloadService, DownloadProcessor],
-  exports: [DownloadService],
+  providers: [DownloadService, DownloadProcessor, Aria2Service, DownloadGateway, ProgressTrackerService],
+  exports: [DownloadService, Aria2Service, DownloadGateway],
 })
 export class DownloadModule {}

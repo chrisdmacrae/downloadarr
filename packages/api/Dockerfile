@@ -3,12 +3,12 @@ FROM node:18-alpine AS builder
 
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
-COPY packages/api/package*.json ./packages/api/
+# Copy package files (excluding lock files to avoid platform issues)
+COPY package.json ./
+COPY packages/api/package.json ./packages/api/
 
-# Install dependencies
-RUN npm ci --only=production && npm cache clean --force
+# Install all dependencies (including dev dependencies for build)
+RUN npm install && npm cache clean --force
 
 # Copy source code
 COPY packages/api ./packages/api
@@ -20,19 +20,21 @@ RUN npm run build
 # Production stage
 FROM node:18-alpine AS production
 
-# Install system dependencies for VPN and downloading
+# Install system dependencies for VPN, downloading, and Docker
 RUN apk add --no-cache \
     openvpn \
     curl \
     wget \
-    aria2
+    aria2 \
+    docker-cli \
+    shadow
 
 WORKDIR /app
 
 # Copy package files and install production dependencies
-COPY package*.json ./
-COPY packages/api/package*.json ./packages/api/
-RUN npm ci --only=production && npm cache clean --force
+COPY package.json ./
+COPY packages/api/package.json ./packages/api/
+RUN npm install --only=production && npm cache clean --force
 
 # Copy built application
 COPY --from=builder /app/packages/api/dist ./packages/api/dist
@@ -41,8 +43,13 @@ COPY --from=builder /app/packages/api/node_modules ./packages/api/node_modules
 # Create directories
 RUN mkdir -p /downloads /app/vpn
 
-# Set permissions
+# Set permissions and Docker access
 RUN chown -R node:node /app /downloads
+
+# Add node user to docker group for Docker socket access
+RUN addgroup -g 999 docker || true
+RUN adduser node docker || true
+
 USER node
 
 WORKDIR /app/packages/api

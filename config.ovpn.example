@@ -1,0 +1,62 @@
+# Example OpenVPN Configuration
+# Copy this file to config.ovpn and update with your VPN provider's settings
+
+client
+dev tun
+proto udp
+remote your-vpn-server.com 1194
+resolv-retry infinite
+nobind
+persist-key
+persist-tun
+ca ca.crt
+cert client.crt
+key client.key
+remote-cert-tls server
+auth SHA256
+cipher AES-256-CBC
+verb 3
+
+# Uncomment if your VPN provider requires username/password authentication
+# auth-user-pass
+
+# Example for providers that use inline certificates:
+# <ca>
+# -----BEGIN CERTIFICATE-----
+# Your CA certificate content here
+# -----END CERTIFICATE-----
+# </ca>
+#
+# <cert>
+# -----BEGIN CERTIFICATE-----
+# Your client certificate content here
+# -----END CERTIFICATE-----
+# </cert>
+#
+# <key>
+# -----BEGIN PRIVATE KEY-----
+# Your private key content here
+# -----END PRIVATE KEY-----
+# </key>
+
+# Common provider-specific settings:
+
+# For NordVPN:
+# remote nordvpn-server.com 1194
+# auth-user-pass
+
+# For ExpressVPN:
+# remote expressvpn-server.com 1195
+# auth-user-pass
+
+# For Surfshark:
+# remote surfshark-server.com 1194
+# auth-user-pass
+
+# For ProtonVPN:
+# remote protonvpn-server.com 1194
+# auth-user-pass
+
+# For Private Internet Access (PIA):
+# remote pia-server.com 1198
+# auth-user-pass

@@ -63,7 +63,7 @@ downloads/
 
 # VPN configs
 *.ovpn
-vpn-configs/
+credentials.txt
 
 # Temporary files
 tmp/

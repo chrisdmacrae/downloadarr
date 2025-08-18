@@ -1,0 +1,99 @@
+# VPN Overlay Configuration
+# This file extends the base docker-compose.yml to route Aria2 traffic through a VPN
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.vpn.yml up
+
+services:
+  # OpenVPN client container
+  vpn:
+    image: dperson/openvpn-client
+    container_name: downloadarr-vpn
+    cap_add:
+      - net_admin
+    security_opt:
+      - label:disable
+    dns:
+      - 1.1.1.1
+      - 1.0.0.1
+    sysctls:
+      - net.ipv4.conf.all.src_valid_mark=1
+      - net.ipv6.conf.all.disable_ipv6=1
+    volumes:
+      - /dev/net:/dev/net:z
+      - ./config.ovpn:/vpn/config.ovpn:ro
+      - ./credentials.txt:/vpn/credentials.txt:ro
+    environment:
+      TZ: ${TZ:-UTC}
+    entrypoint: ["/sbin/tini", "--", "/usr/bin/openvpn.sh"]
+    command: '-p "6800" -p "6888" -p "6888;udp" -p "3001" -f ""'
+    ports:
+      - "3001:3001"  # API port
+    restart: unless-stopped
+    networks:
+      - downloadarr
+
+  # Override API service to run through VPN
+  api:
+    image: downloadarr-api:latest
+    container_name: downloadarr-api-vpn
+    restart: unless-stopped
+    ports: !reset []  # Remove ports when using network_mode
+    environment:
+      NODE_ENV: production
+      VPN_ENABLED: "true"
+      VPN_NETWORK_MODE: "true"
+      ARIA2_HOST: localhost
+      ARIA2_PORT: 6800
+      ARIA2_SECRET: ${ARIA2_RPC_SECRET:-downloadarr}
+      DATABASE_URL: postgresql://downloadarr:downloadarr@host.docker.internal:5432/downloadarr
+      REDIS_URL: redis://host.docker.internal:6379
+      JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-key}
+      JACKETT_URL: http://host.docker.internal:9117
+    volumes:
+      - downloads:/downloads
+    network_mode: "service:vpn"
+    networks: !reset []  # Remove networks when using network_mode
+    depends_on:
+      - vpn
+
+  # Disable the original aria2 service
+  aria2:
+    deploy:
+      replicas: 0
+
+  # New Aria2 service that routes through VPN
+  aria2-vpn:
+    image: p3terx/aria2-pro:latest
+    container_name: downloadarr-aria2-vpn
+    restart: unless-stopped
+    environment:
+      PUID: 1000
+      PGID: 1000
+      UMASK_SET: 022
+      RPC_SECRET: ${ARIA2_RPC_SECRET:-downloadarr}
+      RPC_PORT: 6800
+      LISTEN_PORT: 6888
+      DISK_CACHE: 64M
+      IPV6_MODE: false
+      UPDATE_TRACKERS: true
+      CUSTOM_TRACKER_URL: ""
+      TZ: ${TZ:-UTC}
+    volumes:
+      - aria2_config:/config
+      - downloads:/downloads
+    network_mode: "service:vpn"
+    depends_on:
+      - vpn
+
+  # Override AriaNG to connect through VPN
+  ariang:
+    links:
+      - vpn:aria2
+
+  # Override frontend to connect to API through VPN
+  frontend:
+    environment:
+      VITE_API_URL: http://vpn:3001
+    volumes:
+      - ./packages/ui/nginx.vpn.conf:/etc/nginx/conf.d/default.conf:ro
+    links:
+      - vpn:api

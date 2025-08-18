@@ -3,12 +3,12 @@ FROM node:18-alpine AS builder
 
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
-COPY packages/ui/package*.json ./packages/ui/
+# Copy package files (excluding lock files to avoid platform issues)
+COPY package.json ./
+COPY packages/ui/package.json ./packages/ui/
 
 # Install dependencies
-RUN npm ci && npm cache clean --force
+RUN npm install && npm cache clean --force
 
 # Copy source code
 COPY packages/ui ./packages/ui

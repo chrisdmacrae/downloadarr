@@ -14,25 +14,14 @@ export class VpnController {
     return this.vpnService.getStatus();
   }
 
-  @Post('connect')
-  @ApiOperation({ summary: 'Connect to VPN' })
-  @ApiResponse({ status: 200, description: 'VPN connection initiated' })
-  async connect() {
-    const success = await this.vpnService.connect();
+  @Get('health')
+  @ApiOperation({ summary: 'Check VPN health status' })
+  @ApiResponse({ status: 200, description: 'VPN health check result' })
+  async checkHealth() {
+    const healthy = await this.vpnService.isVpnHealthy();
     return {
-      success,
-      message: success ? 'VPN connected successfully' : 'Failed to connect to VPN',
-    };
-  }
-
-  @Delete('disconnect')
-  @ApiOperation({ summary: 'Disconnect from VPN' })
-  @ApiResponse({ status: 200, description: 'VPN disconnection initiated' })
-  async disconnect() {
-    const success = await this.vpnService.disconnect();
-    return {
-      success,
-      message: success ? 'VPN disconnected successfully' : 'Failed to disconnect from VPN',
+      healthy,
+      message: healthy ? 'VPN is healthy' : 'VPN connection issues detected',
     };
   }
 }

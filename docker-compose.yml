@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # Redis for BullMQ job queue
   redis:
@@ -11,6 +9,8 @@ services:
     volumes:
       - redis_data:/data
     command: redis-server --appendonly yes
+    networks:
+      - downloadarr
 
   # PostgreSQL database (optional, for future use)
   postgres:
@@ -25,6 +25,8 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    networks:
+      - downloadarr
 
   # NestJS API Server
   api:
@@ -42,16 +44,18 @@ services:
       REDIS_PORT: 6379
       DATABASE_URL: postgresql://downloadarr:${POSTGRES_PASSWORD:-downloadarr}@postgres:5432/downloadarr
       VPN_ENABLED: ${VPN_ENABLED:-false}
-      VPN_CONFIG_PATH: ${VPN_CONFIG_PATH:-/app/vpn/config.ovpn}
+      ARIA2_HOST: aria2
+      ARIA2_PORT: 6800
+      ARIA2_SECRET: ${ARIA2_RPC_SECRET:-downloadarr}
       DOWNLOAD_PATH: /downloads
       JACKETT_URL: http://jackett:9117
       JACKETT_API_KEY: ${JACKETT_API_KEY}
     volumes:
       - downloads:/downloads
-      - ./vpn-configs:/app/vpn:ro
     depends_on:
       - redis
       - postgres
+      - aria2
     networks:
       - downloadarr
 
@@ -123,6 +127,7 @@ services:
     ports:
       - "6880:6880"
     command: --port 6880 --ipv6
+
     networks:
       - downloadarr
 

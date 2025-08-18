@@ -45,9 +45,19 @@ npm run dev
 
 ### Production Deployment
 
+See [DOCKER-SETUP.md](./DOCKER-SETUP.md) for detailed Docker configuration options.
+
+**Quick Start:**
+
 1. Configure environment variables in `.env`
-2. Start all services with Docker Compose:
+2. Start all services:
+
 ```bash
+# Without VPN (basic setup)
+docker-compose up -d
+
+# With VPN (recommended for torrents)
+docker-compose -f docker-compose.yml -f docker-compose.vpn.yml up -d
 docker-compose up -d
 ```
 

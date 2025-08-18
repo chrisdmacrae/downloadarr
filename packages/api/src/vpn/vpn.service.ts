@@ -1,143 +1,24 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import * as fs from 'fs';
-import * as path from 'path';
+import { DockerService } from '../docker/docker.service';
 
 @Injectable()
 export class VpnService {
   private readonly logger = new Logger(VpnService.name);
-  private vpnConnection: any = null;
-  private isConnected = false;
-  private connectionAttempts = 0;
-  private maxRetries = 3;
 
-  constructor(private configService: ConfigService) {}
+  constructor(
+    private configService: ConfigService,
+    private dockerService: DockerService,
+  ) {}
 
-  async connect(): Promise<boolean> {
-    const vpnEnabled = this.configService.get<string>('VPN_ENABLED') === 'true';
-
-    if (!vpnEnabled) {
-      this.logger.log('VPN is disabled in configuration');
-      return false;
-    }
-
-    const configPath = this.configService.get<string>('VPN_CONFIG_PATH');
-
-    if (!configPath) {
-      this.logger.error('VPN_CONFIG_PATH not configured');
-      return false;
-    }
-
-    // Check if config file exists
-    if (!fs.existsSync(configPath)) {
-      this.logger.error(`VPN config file not found: ${configPath}`);
-      return false;
-    }
-
+  async checkVpnConnection(): Promise<boolean> {
     try {
-      this.logger.log(`Connecting to VPN using config: ${configPath}`);
-
-      // Import node-openvpn dynamically to handle potential missing dependency
+      // In Docker Compose setup, we check if we can reach the VPN container
+      // This is a simple connectivity check
       const { spawn } = await import('child_process');
 
       return new Promise((resolve) => {
-        const vpnProcess = spawn('openvpn', [
-          '--config', configPath,
-          '--daemon',
-          '--log', '/tmp/openvpn.log',
-          '--status', '/tmp/openvpn-status.log',
-          '--management', '127.0.0.1', '7505'
-        ]);
-
-        vpnProcess.on('spawn', () => {
-          this.logger.log('VPN process started');
-          this.vpnConnection = vpnProcess;
-
-          // Wait a bit for connection to establish
-          setTimeout(() => {
-            this.checkConnectionStatus().then((connected) => {
-              this.isConnected = connected;
-              if (connected) {
-                this.logger.log('VPN connected successfully');
-                this.connectionAttempts = 0;
-              } else {
-                this.logger.warn('VPN process started but connection not established');
-              }
-              resolve(connected);
-            });
-          }, 5000);
-        });
-
-        vpnProcess.on('error', (error) => {
-          this.logger.error('Failed to start VPN process:', error);
-          this.isConnected = false;
-          resolve(false);
-        });
-
-        vpnProcess.on('exit', (code) => {
-          this.logger.warn(`VPN process exited with code: ${code}`);
-          this.isConnected = false;
-          this.vpnConnection = null;
-        });
-      });
-    } catch (error) {
-      this.logger.error('Failed to connect to VPN:', error);
-      this.connectionAttempts++;
-
-      if (this.connectionAttempts < this.maxRetries) {
-        this.logger.log(`Retrying VPN connection (${this.connectionAttempts}/${this.maxRetries})`);
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        return this.connect();
-      }
-
-      return false;
-    }
-  }
-
-  async disconnect(): Promise<boolean> {
-    if (!this.isConnected || !this.vpnConnection) {
-      return true;
-    }
-
-    try {
-      this.logger.log('Disconnecting from VPN...');
-
-      // Kill the VPN process
-      this.vpnConnection.kill('SIGTERM');
-
-      // Wait for process to terminate
-      await new Promise((resolve) => {
-        this.vpnConnection.on('exit', () => {
-          resolve(true);
-        });
-
-        // Force kill after 5 seconds if not terminated
-        setTimeout(() => {
-          if (this.vpnConnection && !this.vpnConnection.killed) {
-            this.vpnConnection.kill('SIGKILL');
-          }
-          resolve(true);
-        }, 5000);
-      });
-
-      this.isConnected = false;
-      this.vpnConnection = null;
-      this.connectionAttempts = 0;
-
-      this.logger.log('VPN disconnected successfully');
-      return true;
-    } catch (error) {
-      this.logger.error('Failed to disconnect from VPN:', error);
-      return false;
-    }
-  }
-
-  private async checkConnectionStatus(): Promise<boolean> {
-    try {
-      // Check if we can reach the internet through VPN
-      const { spawn } = await import('child_process');
-
-      return new Promise((resolve) => {
+        // Try to ping a public DNS server to check internet connectivity
         const pingProcess = spawn('ping', ['-c', '1', '-W', '3', '8.8.8.8']);
 
         pingProcess.on('exit', (code) => {
@@ -185,37 +66,70 @@ export class VpnService {
 
   async getStatus() {
     const publicIP = await this.getPublicIP();
+    const vpnEnabled = this.configService.get<string>('VPN_ENABLED', 'true') === 'true';
+
+    // VPN connection logic: only "connected" if VPN is enabled AND we can get Docker status
+    let connected = false;
+    let message = '';
+    let containerRunning = false;
+    let containerHealthy = false;
+
+    if (vpnEnabled) {
+      try {
+        // Check VPN container status using Docker service
+        const vpnContainerInfo = await this.dockerService.getVpnContainerStatus();
+        containerRunning = vpnContainerInfo.running;
+        containerHealthy = vpnContainerInfo.healthy;
+
+        if (vpnContainerInfo.running && vpnContainerInfo.healthy) {
+          // Container is running, now check network connectivity
+          const networkConnected = await this.checkVpnConnection();
+          connected = networkConnected;
+          message = networkConnected
+            ? 'VPN container running and network connected'
+            : 'VPN container running but network issues detected';
+        } else {
+          connected = false;
+          message = vpnContainerInfo.message;
+        }
+      } catch (error) {
+        // Cannot get Docker status - VPN cannot be connected
+        connected = false;
+        containerRunning = false;
+        containerHealthy = false;
+        message = 'Cannot communicate with Docker - VPN status unknown';
+      }
+    } else {
+      // VPN is disabled - never report as "connected"
+      connected = false;
+      message = 'VPN is disabled';
+    }
 
     return {
-      enabled: this.configService.get<string>('VPN_ENABLED') === 'true',
-      connected: this.isConnected,
-      configPath: this.configService.get<string>('VPN_CONFIG_PATH'),
+      enabled: vpnEnabled,
+      connected,
       publicIP,
-      connectionAttempts: this.connectionAttempts,
-      processRunning: this.vpnConnection && !this.vpnConnection.killed,
+      containerRunning,
+      containerHealthy,
+      message,
     };
   }
 
-  isVpnConnected(): boolean {
-    return this.isConnected;
-  }
+  async isVpnHealthy(): Promise<boolean> {
+    const vpnEnabled = this.configService.get<string>('VPN_ENABLED', 'true') === 'true';
 
-  async ensureVpnConnection(): Promise<boolean> {
-    if (this.configService.get<string>('VPN_ENABLED') !== 'true') {
-      return true; // VPN not required
+    if (!vpnEnabled) {
+      return true; // VPN not required, so it's "healthy"
     }
 
-    if (this.isConnected) {
-      // Verify connection is still active
-      const isActive = await this.checkConnectionStatus();
-      if (isActive) {
-        return true;
-      } else {
-        this.logger.warn('VPN connection lost, attempting to reconnect...');
-        this.isConnected = false;
-      }
+    // Check both container status and network connectivity
+    const vpnContainerInfo = await this.dockerService.getVpnContainerStatus();
+
+    if (!vpnContainerInfo.running || !vpnContainerInfo.healthy) {
+      return false; // Container not running or unhealthy
     }
 
-    return this.connect();
+    // Container is healthy, check network connectivity
+    return this.checkVpnConnection();
   }
 }
