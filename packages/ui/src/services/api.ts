@@ -183,6 +183,17 @@ export const apiService = {
     return response.data;
   },
 
+  getMovieGenres: async (): Promise<{ success: boolean; data?: Array<{ id: number; name: string }>; error?: string }> => {
+    const response = await api.get('/movies/genres/list');
+    return response.data;
+  },
+
+  getMoviesByGenre: async (genreId: number, page?: number): Promise<{ success: boolean; data?: SearchResult[]; error?: string }> => {
+    const params = page ? `?page=${page}` : '';
+    const response = await api.get(`/movies/genres/${genreId}${params}`);
+    return response.data;
+  },
+
   // TV Shows
   searchTvShows: async (query: string, year?: number, page?: number): Promise<{ success: boolean; data?: SearchResult[]; error?: string }> => {
     const params = new URLSearchParams({ query });
@@ -204,6 +215,17 @@ export const apiService = {
     return response.data;
   },
 
+  getTvGenres: async (): Promise<{ success: boolean; data?: Array<{ id: number; name: string }>; error?: string }> => {
+    const response = await api.get('/tv-shows/genres/list');
+    return response.data;
+  },
+
+  getTvShowsByGenre: async (genreId: number, page?: number): Promise<{ success: boolean; data?: SearchResult[]; error?: string }> => {
+    const params = page ? `?page=${page}` : '';
+    const response = await api.get(`/tv-shows/genres/${genreId}${params}`);
+    return response.data;
+  },
+
   // Games
   searchGames: async (query: string, limit?: number): Promise<{ success: boolean; data?: SearchResult[]; error?: string }> => {
     const params = new URLSearchParams({ query });
@@ -221,6 +243,17 @@ export const apiService = {
   getPopularGames: async (limit?: number): Promise<{ success: boolean; data?: SearchResult[]; error?: string }> => {
     const params = limit ? `?limit=${limit}` : '';
     const response = await api.get(`/games/popular${params}`);
+    return response.data;
+  },
+
+  getSupportedPlatforms: async (): Promise<{ success: boolean; data?: Array<{ name: string; id: number }>; error?: string }> => {
+    const response = await api.get('/games/platforms/list');
+    return response.data;
+  },
+
+  getGamesByPlatform: async (platformName: string, limit?: number): Promise<{ success: boolean; data?: SearchResult[]; error?: string }> => {
+    const params = limit ? `?limit=${limit}` : '';
+    const response = await api.get(`/games/platforms/${encodeURIComponent(platformName)}${params}`);
     return response.data;
   },
 };

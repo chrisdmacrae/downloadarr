@@ -1,16 +1,22 @@
 import { Link, useLocation } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
-import { 
-  Download, 
-  Search, 
-  Settings, 
+import {
+  Download,
+  Search,
+  Settings,
   Home,
-  Activity
+  Activity,
+  Film,
+  Tv,
+  Gamepad2
 } from 'lucide-react'
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: Home },
+  { name: 'Movies', href: '/movies', icon: Film },
+  { name: 'TV Shows', href: '/tv-shows', icon: Tv },
+  { name: 'Games', href: '/games', icon: Gamepad2 },
   { name: 'Downloads', href: '/downloads', icon: Download },
   { name: 'Search', href: '/search', icon: Search },
   { name: 'Settings', href: '/settings', icon: Settings },

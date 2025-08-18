@@ -1,0 +1,154 @@
+services:
+  # Redis for BullMQ job queue
+  redis:
+    image: redis:7-alpine
+    container_name: downloadarr-redis-dev
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data_dev:/data
+    command: redis-server --appendonly yes
+    networks:
+      - downloadarr-dev
+
+  # PostgreSQL database (optional, for future use)
+  postgres:
+    image: postgres:15-alpine
+    container_name: downloadarr-postgres-dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: downloadarr
+      POSTGRES_USER: downloadarr
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-downloadarr}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data_dev:/var/lib/postgresql/data
+    networks:
+      - downloadarr-dev
+
+  # NestJS API Server (Development)
+  api:
+    build:
+      context: .
+      dockerfile: packages/api/Dockerfile.dev
+    container_name: downloadarr-api-dev
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      NODE_ENV: development
+      PORT: 3001
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      DATABASE_URL: postgresql://downloadarr:${POSTGRES_PASSWORD:-downloadarr}@postgres:5432/downloadarr
+      VPN_ENABLED: ${VPN_ENABLED:-false}
+      ARIA2_HOST: aria2
+      ARIA2_PORT: 6800
+      ARIA2_SECRET: ${ARIA2_RPC_SECRET:-downloadarr}
+      DOWNLOAD_PATH: /downloads
+      JACKETT_URL: http://jackett:9117
+      JACKETT_API_KEY: ${JACKETT_API_KEY}
+      # External API Keys for Discovery Services
+      OMDB_API_KEY: ${OMDB_API_KEY}
+      TMDB_API_KEY: ${TMDB_API_KEY}
+      IGDB_CLIENT_ID: ${IGDB_CLIENT_ID}
+      IGDB_ACCESS_TOKEN: ${IGDB_ACCESS_TOKEN}
+    volumes:
+      # Mount source code for hot reloading
+      - ./packages/api/src:/app/packages/api/src:ro
+      # Mount downloads directory
+      - downloads_dev:/downloads
+    depends_on:
+      - redis
+      - postgres
+      - aria2
+    networks:
+      - downloadarr-dev
+
+  # React Frontend (Development)
+  frontend:
+    build:
+      context: .
+      dockerfile: packages/ui/Dockerfile.dev
+    container_name: downloadarr-frontend-dev
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      VITE_API_URL: http://localhost:3001
+      DOCKER_ENV: "true"
+    volumes:
+      # Mount source code for hot reloading
+      - ./packages/ui/src:/app/packages/ui/src:ro
+    depends_on:
+      - api
+    networks:
+      - downloadarr-dev
+
+  # Jackett for torrent indexing
+  jackett:
+    image: lscr.io/linuxserver/jackett:latest
+    container_name: downloadarr-jackett-dev
+    restart: unless-stopped
+    environment:
+      PUID: 1000
+      PGID: 1000
+      TZ: ${TZ:-UTC}
+      AUTO_UPDATE: true
+    ports:
+      - "9117:9117"
+    volumes:
+      - jackett_config_dev:/config
+      - downloads_dev:/downloads
+    networks:
+      - downloadarr-dev
+
+  # Aria2c for downloading
+  aria2:
+    image: p3terx/aria2-pro:latest
+    container_name: downloadarr-aria2-dev
+    restart: unless-stopped
+    environment:
+      PUID: 1000
+      PGID: 1000
+      UMASK_SET: 022
+      RPC_SECRET: ${ARIA2_RPC_SECRET:-downloadarr}
+      RPC_PORT: 6800
+      LISTEN_PORT: 6888
+      DISK_CACHE: 64M
+      IPV6_MODE: false
+      UPDATE_TRACKERS: true
+      CUSTOM_TRACKER_URL: ""
+      TZ: ${TZ:-UTC}
+    ports:
+      - "6800:6800"  # RPC port
+      - "6888:6888"  # BT listen port
+    volumes:
+      - aria2_config_dev:/config
+      - downloads_dev:/downloads
+    networks:
+      - downloadarr-dev
+
+  # AriaNG Web UI for Aria2
+  ariang:
+    image: p3terx/ariang:latest
+    container_name: downloadarr-ariang-dev
+    restart: unless-stopped
+    ports:
+      - "6880:6880"
+    command: --port 6880 --ipv6
+    networks:
+      - downloadarr-dev
+
+volumes:
+  redis_data_dev:
+  postgres_data_dev:
+  jackett_config_dev:
+  aria2_config_dev:
+  downloads_dev:
+
+networks:
+  downloadarr-dev:
+    driver: bridge

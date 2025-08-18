@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -8,12 +9,43 @@ import { apiService, SearchResult } from '@/services/api'
 import { useToast } from '@/hooks/use-toast'
 
 export default function Search() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [activeTab, setActiveTab] = useState<'movies' | 'tv' | 'games'>('movies')
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<SearchResult[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const { toast } = useToast()
+
+  // Update URL when tab changes
+  const handleTabChange = (tab: 'movies' | 'tv' | 'games') => {
+    setActiveTab(tab)
+    const newParams = new URLSearchParams(searchParams)
+    newParams.set('tab', tab)
+    setSearchParams(newParams)
+  }
+
+  // Initialize from URL parameters
+  useEffect(() => {
+    const query = searchParams.get('q')
+    const tab = searchParams.get('tab') as 'movies' | 'tv' | 'games'
+
+    if (query) {
+      setSearchQuery(query)
+    }
+
+    if (tab && ['movies', 'tv', 'games'].includes(tab)) {
+      setActiveTab(tab)
+    }
+  }, [searchParams])
+
+  // Perform search when query is set from URL
+  useEffect(() => {
+    const query = searchParams.get('q')
+    if (query && query.trim()) {
+      performSearch(query.trim())
+    }
+  }, [searchParams, activeTab])
 
   // Load popular content when tab changes
   useEffect(() => {
@@ -57,12 +89,8 @@ export default function Search() {
     }
   }
 
-  const handleSearch = async () => {
-    if (!searchQuery.trim()) {
-      toast({
-        title: "Search query required",
-        description: "Please enter a search term",
-      })
+  const performSearch = async (query: string) => {
+    if (!query.trim()) {
       return
     }
 
@@ -73,13 +101,13 @@ export default function Search() {
       let response
       switch (activeTab) {
         case 'movies':
-          response = await apiService.searchMovies(searchQuery)
+          response = await apiService.searchMovies(query)
           break
         case 'tv':
-          response = await apiService.searchTvShows(searchQuery)
+          response = await apiService.searchTvShows(query)
           break
         case 'games':
-          response = await apiService.searchGames(searchQuery)
+          response = await apiService.searchGames(query)
           break
       }
 
@@ -88,7 +116,7 @@ export default function Search() {
         if (response.data.length === 0) {
           toast({
             title: "No results found",
-            description: `No ${activeTab} found for "${searchQuery}"`,
+            description: `No ${activeTab} found for "${query}"`,
           })
         }
       } else {
@@ -108,6 +136,24 @@ export default function Search() {
     } finally {
       setIsLoading(false)
     }
+  }
+
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) {
+      toast({
+        title: "Search query required",
+        description: "Please enter a search term",
+      })
+      return
+    }
+
+    // Update URL parameters
+    const newParams = new URLSearchParams(searchParams)
+    newParams.set('q', searchQuery.trim())
+    newParams.set('tab', activeTab)
+    setSearchParams(newParams)
+
+    await performSearch(searchQuery.trim())
   }
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -142,7 +188,7 @@ export default function Search() {
                 placeholder={`Search for ${activeTab === 'games' ? 'games' : activeTab === 'tv' ? 'TV shows' : 'movies'}...`}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyPress={handleKeyPress}
+                onKeyDown={handleKeyPress}
                 className="pl-10"
               />
             </div>
@@ -163,10 +209,21 @@ export default function Search() {
           <button
             key={tab.id}
             onClick={() => {
-              setActiveTab(tab.id)
-              setSearchQuery('')
+              handleTabChange(tab.id)
               setSearchResults([])
               setError(null)
+              // Keep search query in URL when switching tabs
+              const newParams = new URLSearchParams(searchParams)
+              if (searchQuery.trim()) {
+                newParams.set('q', searchQuery.trim())
+              }
+              newParams.set('tab', tab.id)
+              setSearchParams(newParams)
+
+              // If there's a search query, perform search for the new tab
+              if (searchQuery.trim()) {
+                performSearch(searchQuery.trim())
+              }
             }}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
               activeTab === tab.id
