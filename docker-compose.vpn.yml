@@ -48,6 +48,11 @@ services:
       REDIS_URL: redis://host.docker.internal:6379
       JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-key}
       JACKETT_URL: http://host.docker.internal:9117
+      # External API Keys for Discovery Services
+      OMDB_API_KEY: ${OMDB_API_KEY}
+      TMDB_API_KEY: ${TMDB_API_KEY}
+      IGDB_CLIENT_ID: ${IGDB_CLIENT_ID}
+      IGDB_ACCESS_TOKEN: ${IGDB_ACCESS_TOKEN}
     volumes:
       - downloads:/downloads
     network_mode: "service:vpn"

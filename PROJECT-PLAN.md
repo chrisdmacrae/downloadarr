@@ -29,6 +29,7 @@ All-in-one media and ROM downloading tool with VPN integration, NestJS API with 
   - [ ] IGDB service for ROMs
 - [ ] REST API controllers for each service
 - [ ] Error handling and rate limiting
+- [ ] Basic search UI with images
 
 ## Phase 4: Torrent Integration
 - [ ] Jackett API service integration

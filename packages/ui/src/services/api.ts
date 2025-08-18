@@ -49,6 +49,55 @@ export interface DownloadJob {
   };
 }
 
+// Discovery service types
+export interface SearchResult {
+  id: string;
+  title: string;
+  year?: number;
+  poster?: string;
+  overview?: string;
+  type: 'movie' | 'tv' | 'game';
+}
+
+export interface MovieDetails extends SearchResult {
+  type: 'movie';
+  imdbId?: string;
+  tmdbId?: number;
+  runtime?: number;
+  genre?: string[];
+  director?: string;
+  actors?: string;
+  plot?: string;
+  rating?: number;
+  released?: string;
+}
+
+export interface TvShowDetails extends SearchResult {
+  type: 'tv';
+  tmdbId?: number;
+  imdbId?: string;
+  seasons?: number;
+  episodes?: number;
+  genre?: string[];
+  creator?: string;
+  network?: string;
+  status?: string;
+  firstAirDate?: string;
+  lastAirDate?: string;
+}
+
+export interface GameDetails extends SearchResult {
+  type: 'game';
+  igdbId?: number;
+  platforms?: string[];
+  genre?: string[];
+  developer?: string;
+  publisher?: string;
+  releaseDate?: string;
+  rating?: number;
+  screenshots?: string[];
+}
+
 // API service functions
 export const apiService = {
   // Get queue statistics
@@ -109,6 +158,69 @@ export const apiService = {
   // Cancel download
   cancelDownload: async (id: string) => {
     const response = await api.delete(`/downloads/${id}`);
+    return response.data;
+  },
+
+  // Discovery Services
+  // Movies
+  searchMovies: async (query: string, year?: number, page?: number): Promise<{ success: boolean; data?: SearchResult[]; error?: string }> => {
+    const params = new URLSearchParams({ query });
+    if (year) params.append('year', year.toString());
+    if (page) params.append('page', page.toString());
+
+    const response = await api.get(`/movies/search?${params}`);
+    return response.data;
+  },
+
+  getMovieDetails: async (id: string): Promise<{ success: boolean; data?: MovieDetails; error?: string }> => {
+    const response = await api.get(`/movies/${id}`);
+    return response.data;
+  },
+
+  getPopularMovies: async (page?: number): Promise<{ success: boolean; data?: SearchResult[]; error?: string }> => {
+    const params = page ? `?page=${page}` : '';
+    const response = await api.get(`/movies/popular${params}`);
+    return response.data;
+  },
+
+  // TV Shows
+  searchTvShows: async (query: string, year?: number, page?: number): Promise<{ success: boolean; data?: SearchResult[]; error?: string }> => {
+    const params = new URLSearchParams({ query });
+    if (year) params.append('year', year.toString());
+    if (page) params.append('page', page.toString());
+
+    const response = await api.get(`/tv-shows/search?${params}`);
+    return response.data;
+  },
+
+  getTvShowDetails: async (id: string): Promise<{ success: boolean; data?: TvShowDetails; error?: string }> => {
+    const response = await api.get(`/tv-shows/${id}`);
+    return response.data;
+  },
+
+  getPopularTvShows: async (page?: number): Promise<{ success: boolean; data?: SearchResult[]; error?: string }> => {
+    const params = page ? `?page=${page}` : '';
+    const response = await api.get(`/tv-shows/popular${params}`);
+    return response.data;
+  },
+
+  // Games
+  searchGames: async (query: string, limit?: number): Promise<{ success: boolean; data?: SearchResult[]; error?: string }> => {
+    const params = new URLSearchParams({ query });
+    if (limit) params.append('limit', limit.toString());
+
+    const response = await api.get(`/games/search?${params}`);
+    return response.data;
+  },
+
+  getGameDetails: async (id: string): Promise<{ success: boolean; data?: GameDetails; error?: string }> => {
+    const response = await api.get(`/games/${id}`);
+    return response.data;
+  },
+
+  getPopularGames: async (limit?: number): Promise<{ success: boolean; data?: SearchResult[]; error?: string }> => {
+    const params = limit ? `?limit=${limit}` : '';
+    const response = await api.get(`/games/popular${params}`);
     return response.data;
   },
 };

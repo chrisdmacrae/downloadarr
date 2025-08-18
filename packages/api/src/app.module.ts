@@ -5,6 +5,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { DownloadModule } from './download/download.module';
 import { VpnModule } from './vpn/vpn.module';
+import { DiscoveryModule } from './discovery/discovery.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { VpnModule } from './vpn/vpn.module';
     }),
     DownloadModule,
     VpnModule,
+    DiscoveryModule,
   ],
   controllers: [AppController],
   providers: [AppService],

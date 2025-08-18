@@ -50,6 +50,11 @@ services:
       DOWNLOAD_PATH: /downloads
       JACKETT_URL: http://jackett:9117
       JACKETT_API_KEY: ${JACKETT_API_KEY}
+      # External API Keys for Discovery Services
+      OMDB_API_KEY: ${OMDB_API_KEY}
+      TMDB_API_KEY: ${TMDB_API_KEY}
+      IGDB_CLIENT_ID: ${IGDB_CLIENT_ID}
+      IGDB_ACCESS_TOKEN: ${IGDB_ACCESS_TOKEN}
     volumes:
       - downloads:/downloads
     depends_on:
