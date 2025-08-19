@@ -61,6 +61,31 @@ export class CreateTorrentRequestDto {
   episode?: number;
 
   @ApiPropertyOptional({
+    description: 'IGDB ID for games',
+    example: 1020,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  igdbId?: number;
+
+  @ApiPropertyOptional({
+    description: 'Game platform (PC, PlayStation, Xbox, etc.)',
+    example: 'PC',
+  })
+  @IsOptional()
+  @IsString()
+  platform?: string;
+
+  @ApiPropertyOptional({
+    description: 'Game genre',
+    example: 'Action',
+  })
+  @IsOptional()
+  @IsString()
+  genre?: string;
+
+  @ApiPropertyOptional({
     description: 'Preferred video qualities',
     enum: TorrentQuality,
     isArray: true,

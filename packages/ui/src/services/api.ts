@@ -110,6 +110,14 @@ export interface GameDetails extends SearchResult {
   screenshots?: string[];
 }
 
+export interface GamePlatform {
+  id: string;
+  name: string;
+  category: string;
+  description: string;
+  aliases: string[];
+}
+
 // Torrent Request Types
 export interface TorrentRequest {
   id: string;
@@ -181,6 +189,10 @@ export interface CreateTorrentRequestDto {
   episode?: number;
   imdbId?: string;
   tmdbId?: number;
+  // Game-specific fields
+  igdbId?: number;
+  platform?: string;
+  genre?: string;
   preferredQualities?: string[];
   preferredFormats?: string[];
   minSeeders?: number;
@@ -369,6 +381,12 @@ export const apiService = {
     return response.data;
   },
 
+  getPcGamesByGenre: async (genreName: string, limit?: number): Promise<{ success: boolean; data?: SearchResult[]; error?: string }> => {
+    const params = limit ? `?limit=${limit}` : '';
+    const response = await api.get(`/games/pc/genres/${encodeURIComponent(genreName)}${params}`);
+    return response.data;
+  },
+
   // Torrent Request Services
   requestMovieDownload: async (dto: CreateTorrentRequestDto): Promise<{ success: boolean; data?: TorrentRequest; error?: string }> => {
     const response = await api.post('/torrent-requests/movies', dto);
@@ -377,6 +395,11 @@ export const apiService = {
 
   requestTvShowDownload: async (dto: CreateTorrentRequestDto): Promise<{ success: boolean; data?: TorrentRequest; error?: string }> => {
     const response = await api.post('/torrent-requests/tv-shows', dto);
+    return response.data;
+  },
+
+  requestGameDownload: async (dto: CreateTorrentRequestDto): Promise<{ success: boolean; data?: TorrentRequest; error?: string }> => {
+    const response = await api.post('/torrent-requests/games', dto);
     return response.data;
   },
 
@@ -510,8 +533,48 @@ export const apiService = {
     return response.data;
   },
 
+  searchGameTorrents: async (params: {
+    query: string;
+    year?: number;
+    platform?: string;
+    igdbId?: number;
+    indexers?: string[];
+    minSeeders?: number;
+    maxSize?: string;
+    limit?: number;
+  }): Promise<{ success: boolean; data?: TorrentResult[]; error?: string }> => {
+    const searchParams = new URLSearchParams();
+    searchParams.append('query', params.query);
+    if (params.year) searchParams.append('year', params.year.toString());
+    if (params.platform) searchParams.append('platform', params.platform);
+    if (params.igdbId) searchParams.append('igdbId', params.igdbId.toString());
+    if (params.indexers) params.indexers.forEach(i => searchParams.append('indexers', i));
+    if (params.minSeeders) searchParams.append('minSeeders', params.minSeeders.toString());
+    if (params.maxSize) searchParams.append('maxSize', params.maxSize);
+    if (params.limit) searchParams.append('limit', params.limit.toString());
+
+    const response = await api.get(`/torrents/games?${searchParams}`);
+    return response.data;
+  },
+
   selectTorrent: async (requestId: string, resultId: string): Promise<{ success: boolean; message?: string; error?: string }> => {
     const response = await api.post(`/torrent-requests/${requestId}/select-torrent/${resultId}`);
+    return response.data;
+  },
+
+  // Game Platforms API
+  getGamePlatforms: async (): Promise<{ success: boolean; data: GamePlatform[] }> => {
+    const response = await api.get('/game-platforms');
+    return response.data;
+  },
+
+  getGamePlatformOptions: async (grouped = false): Promise<{ success: boolean; data: any }> => {
+    const response = await api.get(`/game-platforms/options?grouped=${grouped}`);
+    return response.data;
+  },
+
+  searchGamePlatforms: async (query: string): Promise<{ success: boolean; data: GamePlatform[] }> => {
+    const response = await api.get(`/game-platforms/search?q=${encodeURIComponent(query)}`);
     return response.data;
   },
 };

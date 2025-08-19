@@ -105,6 +105,41 @@ export class TorrentRequestsController {
     }
   }
 
+  @Post('games')
+  @ApiOperation({
+    summary: 'Request game download',
+    description: 'Create a new torrent request for a game',
+  })
+  @ApiResponse({ status: 201, description: 'Game request created successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid request data' })
+  @ApiResponse({ status: 409, description: 'Duplicate request - game already requested' })
+  async requestGame(@Body() dto: CreateTorrentRequestDto): Promise<{ success: boolean; data: RequestedTorrent }> {
+    try {
+      this.logger.log(`Creating game request: ${dto.title} (${dto.platform || 'Unknown Platform'})`);
+
+      const request = await this.requestedTorrentsService.createGameRequest(dto);
+
+      return {
+        success: true,
+        data: request,
+      };
+    } catch (error) {
+      this.logger.error(`Error creating game request: ${error.message}`, error.stack);
+
+      if (error.message.includes('already exists')) {
+        throw new HttpException(
+          error.message,
+          HttpStatus.CONFLICT,
+        );
+      }
+
+      throw new HttpException(
+        'Failed to create game request',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
   @Get()
   @ApiOperation({
     summary: 'Get all torrent requests',

@@ -18,6 +18,10 @@ model RequestedTorrent {
   tmdbId             Int?
   season             Int?
   episode            Int?
+  // Game-specific fields
+  igdbId             Int?               // IGDB game ID
+  platform           String?            // Game platform (PC, PlayStation, etc.)
+  genre              String?            // Game genre
   status             RequestStatus      @default(PENDING)
   priority           Int                @default(5)
   preferredQualities TorrentQuality[]
@@ -137,6 +141,7 @@ enum DownloadStatus {
 enum ContentType {
   MOVIE
   TV_SHOW
+  GAME
 }
 
 enum RequestStatus {

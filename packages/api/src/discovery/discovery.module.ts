@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { HttpModule } from '@nestjs/axios';
 import { ConfigModule } from '@nestjs/config';
+import { GameConfigModule } from '../config/config.module';
 
 // Services
 import { OmdbService } from './services/omdb.service';
@@ -24,6 +25,7 @@ import { TorrentPreferencesController } from './controllers/torrent-preferences.
       maxRedirects: 5,
     }),
     ConfigModule,
+    GameConfigModule,
   ],
   providers: [
     OmdbService,

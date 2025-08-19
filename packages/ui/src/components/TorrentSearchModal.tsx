@@ -27,7 +27,7 @@ import {
   Search,
   Magnet,
 } from 'lucide-react'
-import { apiService, TorrentResult, SearchResult } from '@/services/api'
+import { apiService, TorrentResult, SearchResult, GamePlatform } from '@/services/api'
 import { useToast } from '@/hooks/use-toast'
 
 interface TorrentSearchModalProps {
@@ -51,18 +51,72 @@ export function TorrentSearchModal({
   const [maxSize, setMaxSize] = useState<string>('')
   const [quality, setQuality] = useState<string>('')
   const [format, setFormat] = useState<string>('')
+  // Game-specific filters
+  const [platform, setPlatform] = useState<string>('any')
+  const [genre, setGenre] = useState<string>('any')
+  const [platformOptions, setPlatformOptions] = useState<GamePlatform[]>([])
+  const [loadingPlatforms, setLoadingPlatforms] = useState<boolean>(false)
   const { toast } = useToast()
+
+  const isGame = searchItem?.type === 'game'
+
+  // Set appropriate default minSeeders based on content type
+  useEffect(() => {
+    if (isGame) {
+      setMinSeeders(1) // Games often have lower seeder counts
+    } else {
+      setMinSeeders(5) // Movies/TV can have higher seeder requirements
+    }
+  }, [isGame])
+
+  // Load platform options for games
+  useEffect(() => {
+    if (isOpen && isGame && platformOptions.length === 0) {
+      setLoadingPlatforms(true)
+      apiService.getGamePlatforms()
+        .then(response => {
+          if (response.success) {
+            setPlatformOptions(response.data)
+          }
+        })
+        .catch(error => {
+          console.error('Failed to load platform options:', error)
+          toast({
+            title: "Error",
+            description: "Failed to load platform options",
+            variant: "destructive",
+          })
+        })
+        .finally(() => {
+          setLoadingPlatforms(false)
+        })
+    }
+  }, [isOpen, isGame, platformOptions.length, toast])
 
   useEffect(() => {
     if (isOpen && searchItem) {
-      // Initialize search query with item title and year
-      const initialQuery = searchItem.year 
+      // Initialize search query - for games, don't include year as it makes searches too specific
+      const initialQuery = isGame
+        ? searchItem.title
+        : searchItem.year
         ? `${searchItem.title} ${searchItem.year}`
         : searchItem.title
       setSearchQuery(initialQuery)
-      
+
+      // Reset filters
+      setMinSeeders(isGame ? 1 : 5)
+      setMaxSize('')
+      setQuality('')
+      setFormat('')
+      setPlatform('any')
+      setGenre('any')
+
       // Auto-search when modal opens
       performSearch(initialQuery)
+    } else if (!isOpen) {
+      // Reset state when modal closes
+      setSearchResults([])
+      setError(null)
     }
   }, [isOpen, searchItem])
 
@@ -80,14 +134,20 @@ export function TorrentSearchModal({
     setError(null)
 
     try {
-      const searchParams = {
+      const baseSearchParams = {
         query: searchTerm.trim(),
         minSeeders: minSeeders > 0 ? minSeeders : undefined,
         maxSize: maxSize || undefined,
-        quality: quality && quality !== 'any' ? [quality] : undefined,
-        format: format && format !== 'any' ? [format] : undefined,
         limit: 50,
       }
+
+      const searchParams = isGame
+        ? baseSearchParams
+        : {
+            ...baseSearchParams,
+            quality: quality && quality !== 'any' ? [quality] : undefined,
+            format: format && format !== 'any' ? [format] : undefined,
+          }
 
       let response
       if (searchItem?.type === 'movie') {
@@ -101,6 +161,12 @@ export function TorrentSearchModal({
           ...searchParams,
           year: searchItem.year,
           imdbId: searchItem.imdbId,
+        })
+      } else if (searchItem?.type === 'game') {
+        response = await apiService.searchGameTorrents({
+          ...searchParams,
+          platform: platform && platform !== 'any' ? platform : undefined,
+          igdbId: parseInt(searchItem.id),
         })
       } else {
         response = await apiService.searchTorrents(searchParams)
@@ -177,9 +243,11 @@ export function TorrentSearchModal({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-6xl max-h-[90vh]">
         <DialogHeader>
-          <DialogTitle>Search Torrents</DialogTitle>
+          <DialogTitle>
+            Search {isGame ? 'Game' : searchItem?.type === 'movie' ? 'Movie' : 'TV'} Torrents
+          </DialogTitle>
           <DialogDescription>
-            {searchItem && `Find torrents for "${searchItem.title}"`}
+            {searchItem && `Find ${isGame ? 'game' : searchItem.type === 'movie' ? 'movie' : 'TV show'} torrents for "${searchItem.title}"`}
           </DialogDescription>
         </DialogHeader>
 
@@ -226,36 +294,87 @@ export function TorrentSearchModal({
                 onChange={(e) => setMaxSize(e.target.value)}
               />
             </div>
-            <div>
-              <Label htmlFor="quality">Quality</Label>
-              <Select value={quality} onValueChange={setQuality}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Any quality" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="any">Any quality</SelectItem>
-                  <SelectItem value="4K">4K</SelectItem>
-                  <SelectItem value="1080p">1080p</SelectItem>
-                  <SelectItem value="720p">720p</SelectItem>
-                  <SelectItem value="SD">SD</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="format">Format</Label>
-              <Select value={format} onValueChange={setFormat}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Any format" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="any">Any format</SelectItem>
-                  <SelectItem value="x265">x265</SelectItem>
-                  <SelectItem value="x264">x264</SelectItem>
-                  <SelectItem value="HEVC">HEVC</SelectItem>
-                  <SelectItem value="AV1">AV1</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            {isGame ? (
+              <>
+                <div>
+                  <Label htmlFor="platform">Platform</Label>
+                  <Select value={platform} onValueChange={setPlatform}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Any platform" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="any">Any platform</SelectItem>
+                      {loadingPlatforms ? (
+                        <SelectItem value="loading" disabled>
+                          <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                          Loading platforms...
+                        </SelectItem>
+                      ) : (
+                        platformOptions.map((platform) => (
+                          <SelectItem key={platform.id} value={platform.id}>
+                            {platform.name}
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="genre">Genre</Label>
+                  <Select value={genre} onValueChange={setGenre}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Any genre" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="any">Any genre</SelectItem>
+                      <SelectItem value="Action">Action</SelectItem>
+                      <SelectItem value="Adventure">Adventure</SelectItem>
+                      <SelectItem value="RPG">RPG</SelectItem>
+                      <SelectItem value="Strategy">Strategy</SelectItem>
+                      <SelectItem value="Shooter">Shooter</SelectItem>
+                      <SelectItem value="Simulation">Simulation</SelectItem>
+                      <SelectItem value="Sports">Sports</SelectItem>
+                      <SelectItem value="Racing">Racing</SelectItem>
+                      <SelectItem value="Puzzle">Puzzle</SelectItem>
+                      <SelectItem value="Indie">Indie</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            ) : (
+              <>
+                <div>
+                  <Label htmlFor="quality">Quality</Label>
+                  <Select value={quality} onValueChange={setQuality}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Any quality" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="any">Any quality</SelectItem>
+                      <SelectItem value="4K">4K</SelectItem>
+                      <SelectItem value="1080p">1080p</SelectItem>
+                      <SelectItem value="720p">720p</SelectItem>
+                      <SelectItem value="SD">SD</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="format">Format</Label>
+                  <Select value={format} onValueChange={setFormat}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Any format" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="any">Any format</SelectItem>
+                      <SelectItem value="x265">x265</SelectItem>
+                      <SelectItem value="x264">x264</SelectItem>
+                      <SelectItem value="HEVC">HEVC</SelectItem>
+                      <SelectItem value="AV1">AV1</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            )}
           </div>
         </div>
 

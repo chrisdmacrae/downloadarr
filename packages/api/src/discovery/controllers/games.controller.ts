@@ -126,6 +126,82 @@ export class GamesController {
     }
   }
 
+  @Get('pc/genres/:genreName')
+  @ApiOperation({
+    summary: 'Get PC games by genre',
+    description: 'Get PC games filtered by a specific genre',
+  })
+  @ApiParam({
+    name: 'genreName',
+    description: 'Game genre name (e.g., Action, Adventure, Strategy)',
+    example: 'Action',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'PC games by genre retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+        data: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', example: '1020' },
+              title: { type: 'string', example: 'Half-Life 2' },
+              year: { type: 'number', example: 2004 },
+              poster: { type: 'string', example: 'https://images.igdb.com/...' },
+              overview: { type: 'string', example: 'A groundbreaking FPS...' },
+              type: { type: 'string', example: 'game' },
+            },
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid genre name',
+  })
+  @ApiResponse({
+    status: 503,
+    description: 'External API service unavailable',
+  })
+  async getPcGamesByGenre(
+    @Param('genreName') genreName: string,
+    @Query() query: PopularContentDto,
+  ): Promise<{ success: boolean; data?: SearchResult[]; error?: string }> {
+    try {
+      this.logger.log(`Getting PC games for genre: ${genreName}, limit: ${query.limit}`);
+
+      const result = await this.igdbService.getPcGamesByGenre(genreName, query.limit || 20);
+
+      if (!result.success) {
+        throw new HttpException(
+          result.error || 'Failed to get PC games by genre',
+          result.statusCode || HttpStatus.SERVICE_UNAVAILABLE,
+        );
+      }
+
+      return {
+        success: true,
+        data: result.data,
+      };
+    } catch (error) {
+      this.logger.error(`Error getting PC games by genre: ${error.message}`, error.stack);
+
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      throw new HttpException(
+        'Internal server error while getting PC games by genre',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
   @Get(':id')
   @ApiOperation({
     summary: 'Get game details',

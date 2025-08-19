@@ -1,7 +1,7 @@
 import { Controller, Get, Query, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
 import { JackettService } from '../services/jackett.service';
-import { TorrentSearchDto, MovieTorrentSearchDto, TvTorrentSearchDto } from '../dto/torrent-search.dto';
+import { TorrentSearchDto, MovieTorrentSearchDto, TvTorrentSearchDto, GameTorrentSearchDto } from '../dto/torrent-search.dto';
 import { TorrentResult } from '../interfaces/external-api.interface';
 
 @ApiTags('Torrents')
@@ -226,6 +226,76 @@ export class TorrentsController {
 
       throw new HttpException(
         'Internal server error while searching TV torrents',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Get('games')
+  @ApiOperation({
+    summary: 'Search game torrents',
+    description: 'Search for game torrents using Jackett indexers with game-specific parameters',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Game torrents retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+        data: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              title: { type: 'string' },
+              link: { type: 'string' },
+              magnetUri: { type: 'string' },
+              size: { type: 'string' },
+              seeders: { type: 'number' },
+              leechers: { type: 'number' },
+              category: { type: 'string' },
+              indexer: { type: 'string' },
+              publishDate: { type: 'string' },
+              quality: { type: 'string' },
+              format: { type: 'string' },
+            },
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 400, description: 'Invalid search parameters' })
+  @ApiResponse({ status: 503, description: 'Jackett service unavailable' })
+  async searchGameTorrents(@Query() searchDto: GameTorrentSearchDto): Promise<{ success: boolean; data?: TorrentResult[]; error?: string }> {
+    try {
+      this.logger.log(`Searching game torrents with query: "${searchDto.query}", platform: ${searchDto.platform}, year: ${searchDto.year}`);
+
+      const result = await this.jackettService.searchGameTorrents(searchDto);
+
+      if (!result.success) {
+        throw new HttpException(
+          result.error || 'Failed to search game torrents',
+          result.statusCode || HttpStatus.SERVICE_UNAVAILABLE,
+        );
+      }
+
+      // Limit results
+      const limitedResults = result.data?.slice(0, searchDto.limit || 20) || [];
+
+      return {
+        success: true,
+        data: limitedResults,
+      };
+    } catch (error) {
+      this.logger.error(`Error searching game torrents: ${error.message}`, error.stack);
+
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      throw new HttpException(
+        'Internal server error while searching game torrents',
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }

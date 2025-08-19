@@ -64,7 +64,7 @@ export class IgdbService extends BaseExternalApiService {
     };
   }
 
-  async searchGames(query: string, limit: number = 20): Promise<ExternalApiResponse<SearchResult[]>> {
+  async searchGames(query: string, limit: number = 20, platform?: string): Promise<ExternalApiResponse<SearchResult[]>> {
     try {
       const sanitizedQuery = this.sanitizeSearchQuery(query);
       if (!sanitizedQuery) {
@@ -74,10 +74,20 @@ export class IgdbService extends BaseExternalApiService {
         };
       }
 
+      let platformFilter = '';
+      if (platform) {
+        const platformId = this.getPlatformId(platform);
+        if (platformId) {
+          platformFilter = ` & platforms = (${platformId})`;
+        } else {
+          this.logger.warn(`Platform "${platform}" not found in platform mapping`);
+        }
+      }
+
       const requestBody = `search "${sanitizedQuery}";
 fields id, name, summary, cover.url, first_release_date, genres.name, platforms.name;
 limit ${limit};
-where category = 0;`;
+where category = 0${platformFilter};`;
 
       const response = await this.makeIgdbRequest<IgdbGame[]>('/games', requestBody);
 
@@ -276,33 +286,42 @@ where category = 0 & rating_count > 100 & platforms = (${platformFilter});`;
     return `${this.screenshotBaseUrl}${imageId}`;
   }
 
+  private getPlatformId(platformName: string): number | null {
+    // Map platform names to IGDB platform IDs
+    const platformMap: Record<string, number> = {
+      // PC Platforms
+      'PC': 6, // PC (Microsoft Windows)
+      'Steam': 6, // Steam uses PC platform ID
+      'Windows': 6, // Windows is PC
+      // Console Platforms
+      'NES': 18,
+      'SNES': 19,
+      'N64': 4,
+      'GameCube': 21,
+      'Wii': 5,
+      'Wii U': 41,
+      'Game Boy': 33,
+      'Game Boy Color': 22,
+      'Game Boy Advance': 24,
+      'Switch': 130,
+      'Genesis': 29,
+      'Saturn': 32,
+      'Dreamcast': 23,
+      'PlayStation': 7,
+      'PlayStation 2': 8,
+      'PlayStation 3': 9,
+      'Xbox': 11,
+      'Xbox 360': 12,
+    };
+
+    return platformMap[platformName] || null;
+  }
+
   async getGamesByPlatform(platformName: string, limit: number = 20): Promise<ExternalApiResponse<SearchResult[]>> {
     try {
       this.logger.log(`Getting games for platform: ${platformName}, limit: ${limit}`);
 
-      // Map platform names to IGDB platform IDs
-      const platformMap: Record<string, number> = {
-        'NES': 18,
-        'SNES': 19,
-        'N64': 4,
-        'GameCube': 21,
-        'Wii': 5,
-        'Wii U': 41,
-        'Game Boy': 33,
-        'Game Boy Color': 22,
-        'Game Boy Advance': 24,
-        'Switch': 130,
-        'Genesis': 29,
-        'Saturn': 32,
-        'Dreamcast': 23,
-        'PlayStation': 7,
-        'PlayStation 2': 8,
-        'PlayStation 3': 9,
-        'Xbox': 11,
-        'Xbox 360': 12,
-      };
-
-      const platformId = platformMap[platformName];
+      const platformId = this.getPlatformId(platformName);
       if (!platformId) {
         return {
           success: false,
@@ -342,6 +361,72 @@ where category = 0 & platforms = (${platformId}) & rating_count > 10;`;
       return {
         success: false,
         error: error.message,
+      };
+    }
+  }
+
+  async getPcGamesByGenre(genreName: string, limit: number = 20): Promise<ExternalApiResponse<SearchResult[]>> {
+    try {
+      this.logger.log(`Getting PC games for genre: ${genreName}, limit: ${limit}`);
+
+      // Map genre names to IGDB genre IDs
+      const genreMap: Record<string, number> = {
+        'Action': 4,
+        'Adventure': 31,
+        'Strategy': 15,
+        'RPG': 12,
+        'Shooter': 5,
+        'Simulation': 13,
+        'Sports': 14,
+        'Racing': 10,
+        'Fighting': 4,
+        'Puzzle': 9,
+        'Indie': 32,
+      };
+
+      const genreId = genreMap[genreName];
+      if (!genreId) {
+        return {
+          success: false,
+          error: `Genre "${genreName}" not supported`,
+        };
+      }
+
+      // PC platform ID is 6 (Microsoft Windows)
+      const requestBody = `fields id, name, summary, cover.url, first_release_date, genres.name, platforms.name;
+sort rating desc;
+limit ${limit};
+where category = 0 & platforms = (6) & genres = (${genreId}) & rating_count > 10;`;
+
+      const response = await this.makeIgdbRequest<IgdbGame[]>('/games', requestBody);
+
+      if (!response.success || !response.data) {
+        return {
+          success: false,
+          error: response.error,
+        };
+      }
+
+      const searchResults: SearchResult[] = response.data.map(game => ({
+        id: game.id.toString(),
+        title: game.name,
+        year: game.first_release_date ? new Date(game.first_release_date * 1000).getFullYear() : undefined,
+        poster: game.cover?.url ? this.formatImageUrl(game.cover.url) : undefined,
+        overview: game.summary || undefined,
+        type: 'game' as const,
+      }));
+
+      this.logger.log(`Found ${searchResults.length} PC games for genre ${genreName}`);
+
+      return {
+        success: true,
+        data: searchResults,
+      };
+    } catch (error) {
+      this.logger.error(`Error getting PC games by genre: ${error.message}`, error.stack);
+      return {
+        success: false,
+        error: 'Failed to get PC games by genre',
       };
     }
   }

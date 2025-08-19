@@ -57,6 +57,7 @@ services:
       IGDB_ACCESS_TOKEN: ${IGDB_ACCESS_TOKEN}
     volumes:
       - downloads:/downloads
+      - ./config:/app/config:ro
     depends_on:
       - redis
       - postgres

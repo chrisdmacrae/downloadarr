@@ -1,0 +1,275 @@
+platforms:
+  # PC Platforms
+  - id: "pc"
+    name: "PC"
+    category: "pc"
+    description: "Windows PC games"
+    aliases: ["windows", "win", "pc-windows"]
+    
+  - id: "mac"
+    name: "Mac"
+    category: "pc"
+    description: "macOS games"
+    aliases: ["macos", "osx", "mac-os"]
+    
+  - id: "linux"
+    name: "Linux"
+    category: "pc"
+    description: "Linux games"
+    aliases: ["ubuntu", "debian", "arch"]
+
+  # Digital Distribution Platforms
+  - id: "steam"
+    name: "Steam"
+    category: "digital"
+    description: "Steam platform games"
+    aliases: ["valve"]
+    
+  - id: "gog"
+    name: "GOG"
+    category: "digital"
+    description: "GOG (Good Old Games) DRM-free games"
+    aliases: ["gog.com", "good-old-games"]
+    
+  - id: "epic"
+    name: "Epic Games"
+    category: "digital"
+    description: "Epic Games Store"
+    aliases: ["epic-games", "egs"]
+    
+  - id: "origin"
+    name: "Origin"
+    category: "digital"
+    description: "EA Origin platform"
+    aliases: ["ea-origin", "ea"]
+    
+  - id: "uplay"
+    name: "Uplay"
+    category: "digital"
+    description: "Ubisoft Uplay platform"
+    aliases: ["ubisoft", "ubisoft-connect"]
+
+  # Console Platforms - Nintendo
+  - id: "nintendo-switch"
+    name: "Nintendo Switch"
+    category: "nintendo"
+    description: "Nintendo Switch games"
+    aliases: ["switch", "ns"]
+    
+  - id: "nintendo-3ds"
+    name: "Nintendo 3DS"
+    category: "nintendo"
+    description: "Nintendo 3DS handheld games"
+    aliases: ["3ds", "n3ds"]
+    
+  - id: "nintendo-ds"
+    name: "Nintendo DS"
+    category: "nintendo"
+    description: "Nintendo DS handheld games"
+    aliases: ["ds", "nds"]
+    
+  - id: "wii-u"
+    name: "Wii U"
+    category: "nintendo"
+    description: "Nintendo Wii U console games"
+    aliases: ["wiiu"]
+    
+  - id: "wii"
+    name: "Nintendo Wii"
+    category: "nintendo"
+    description: "Nintendo Wii console games"
+    aliases: ["nintendo-wii"]
+    
+  - id: "gamecube"
+    name: "GameCube"
+    category: "nintendo"
+    description: "Nintendo GameCube games"
+    aliases: ["gc", "ngc", "nintendo-gamecube"]
+    
+  - id: "n64"
+    name: "Nintendo 64"
+    category: "nintendo"
+    description: "Nintendo 64 games"
+    aliases: ["nintendo-64", "nintendo64"]
+    
+  - id: "snes"
+    name: "Super Nintendo"
+    category: "nintendo"
+    description: "Super Nintendo Entertainment System games"
+    aliases: ["super-nintendo", "super-nes", "sfc"]
+    
+  - id: "nes"
+    name: "Nintendo Entertainment System"
+    category: "nintendo"
+    description: "Nintendo Entertainment System games"
+    aliases: ["nintendo-nes", "famicom"]
+    
+  - id: "gameboy-advance"
+    name: "Game Boy Advance"
+    category: "nintendo"
+    description: "Game Boy Advance handheld games"
+    aliases: ["gba", "game-boy-advance"]
+    
+  - id: "gameboy-color"
+    name: "Game Boy Color"
+    category: "nintendo"
+    description: "Game Boy Color handheld games"
+    aliases: ["gbc", "game-boy-color"]
+    
+  - id: "gameboy"
+    name: "Game Boy"
+    category: "nintendo"
+    description: "Original Game Boy handheld games"
+    aliases: ["gb", "game-boy"]
+
+  # Console Platforms - Sony PlayStation
+  - id: "ps5"
+    name: "PlayStation 5"
+    category: "playstation"
+    description: "Sony PlayStation 5 games"
+    aliases: ["playstation-5", "playstation5"]
+    
+  - id: "ps4"
+    name: "PlayStation 4"
+    category: "playstation"
+    description: "Sony PlayStation 4 games"
+    aliases: ["playstation-4", "playstation4"]
+    
+  - id: "ps3"
+    name: "PlayStation 3"
+    category: "playstation"
+    description: "Sony PlayStation 3 games"
+    aliases: ["playstation-3", "playstation3"]
+    
+  - id: "ps2"
+    name: "PlayStation 2"
+    category: "playstation"
+    description: "Sony PlayStation 2 games"
+    aliases: ["playstation-2", "playstation2"]
+    
+  - id: "ps1"
+    name: "PlayStation"
+    category: "playstation"
+    description: "Original Sony PlayStation games"
+    aliases: ["playstation-1", "playstation1", "psx"]
+    
+  - id: "psp"
+    name: "PlayStation Portable"
+    category: "playstation"
+    description: "Sony PlayStation Portable handheld games"
+    aliases: ["playstation-portable"]
+    
+  - id: "ps-vita"
+    name: "PlayStation Vita"
+    category: "playstation"
+    description: "Sony PlayStation Vita handheld games"
+    aliases: ["vita", "playstation-vita", "psvita"]
+
+  # Console Platforms - Microsoft Xbox
+  - id: "xbox-series-x"
+    name: "Xbox Series X/S"
+    category: "xbox"
+    description: "Microsoft Xbox Series X/S games"
+    aliases: ["xbox-series", "series-x", "series-s"]
+    
+  - id: "xbox-one"
+    name: "Xbox One"
+    category: "xbox"
+    description: "Microsoft Xbox One games"
+    aliases: ["xbone"]
+    
+  - id: "xbox-360"
+    name: "Xbox 360"
+    category: "xbox"
+    description: "Microsoft Xbox 360 games"
+    aliases: ["x360"]
+    
+  - id: "xbox"
+    name: "Xbox"
+    category: "xbox"
+    description: "Original Microsoft Xbox games"
+    aliases: ["xbox-original", "original-xbox"]
+
+  # Retro Platforms - Sega
+  - id: "dreamcast"
+    name: "Dreamcast"
+    category: "sega"
+    description: "Sega Dreamcast games"
+    aliases: ["sega-dreamcast"]
+    
+  - id: "saturn"
+    name: "Sega Saturn"
+    category: "sega"
+    description: "Sega Saturn games"
+    aliases: ["sega-saturn"]
+    
+  - id: "genesis"
+    name: "Sega Genesis"
+    category: "sega"
+    description: "Sega Genesis/Mega Drive games"
+    aliases: ["mega-drive", "sega-genesis", "sega-mega-drive"]
+    
+  - id: "master-system"
+    name: "Master System"
+    category: "sega"
+    description: "Sega Master System games"
+    aliases: ["sega-master-system", "sms"]
+    
+  - id: "game-gear"
+    name: "Game Gear"
+    category: "sega"
+    description: "Sega Game Gear handheld games"
+    aliases: ["sega-game-gear", "gg"]
+
+  # Arcade
+  - id: "arcade"
+    name: "Arcade"
+    category: "arcade"
+    description: "Arcade games and MAME ROMs"
+    aliases: ["mame", "arcade-games"]
+
+  # Mobile
+  - id: "android"
+    name: "Android"
+    category: "mobile"
+    description: "Android mobile games"
+    aliases: ["google-play"]
+    
+  - id: "ios"
+    name: "iOS"
+    category: "mobile"
+    description: "iOS mobile games"
+    aliases: ["iphone", "ipad", "app-store"]
+
+categories:
+  - id: "pc"
+    name: "PC Platforms"
+    description: "Desktop computer platforms"
+    
+  - id: "digital"
+    name: "Digital Distribution"
+    description: "Digital game distribution platforms"
+    
+  - id: "nintendo"
+    name: "Nintendo"
+    description: "Nintendo gaming platforms"
+    
+  - id: "playstation"
+    name: "PlayStation"
+    description: "Sony PlayStation platforms"
+    
+  - id: "xbox"
+    name: "Xbox"
+    description: "Microsoft Xbox platforms"
+    
+  - id: "sega"
+    name: "Sega"
+    description: "Sega gaming platforms"
+    
+  - id: "arcade"
+    name: "Arcade"
+    description: "Arcade and emulation platforms"
+    
+  - id: "mobile"
+    name: "Mobile"
+    description: "Mobile gaming platforms"

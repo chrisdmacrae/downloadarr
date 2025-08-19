@@ -173,7 +173,7 @@ export class TorrentCheckerService {
           format: request.preferredFormats as any,
           limit: 50,
         });
-      } else {
+      } else if (request.contentType === ContentType.TV_SHOW) {
         searchResult = await this.jackettService.searchTvTorrents({
           query: searchQuery,
           season: request.season,
@@ -184,6 +184,17 @@ export class TorrentCheckerService {
           maxSize: `${request.maxSizeGB}GB`,
           quality: request.preferredQualities as any,
           format: request.preferredFormats as any,
+          limit: 50,
+        });
+      } else if (request.contentType === ContentType.GAME) {
+        searchResult = await this.jackettService.searchGameTorrents({
+          query: searchQuery,
+          year: request.year,
+          platform: request.platform,
+          igdbId: request.igdbId,
+          indexers: request.trustedIndexers.length > 0 ? request.trustedIndexers : undefined,
+          minSeeders: request.minSeeders,
+          maxSize: `${request.maxSizeGB}GB`,
           limit: 50,
         });
       }

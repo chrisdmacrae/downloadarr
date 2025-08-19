@@ -79,6 +79,7 @@ services:
     volumes:
       - downloads:/downloads
       - vpn_ip_share:/tmp/vpn-ip:ro  # Read-only access to VPN IP data
+      - ./config:/app/config:ro  # Mount config directory
     # Keep normal networking - don't use network_mode
     networks:
       - downloadarr

@@ -3,8 +3,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Download, Calendar, Star, User, Building, Gamepad2 } from 'lucide-react'
+import { Download, Calendar, Star, User, Building, Gamepad2, Search } from 'lucide-react'
 import { SearchResult, GameDetails, apiService } from '@/services/api'
+import { useCreateDownload } from '@/hooks/useApi'
+import { DownloadRequestModal } from './DownloadRequestModal'
+import { TorrentSearchModal } from './TorrentSearchModal'
+import { DownloadStatusBadge } from './DownloadStatusBadge'
+import { useTorrentRequests } from '@/hooks/useTorrentRequests'
 import { useToast } from '@/hooks/use-toast'
 
 interface GameDetailModalProps {
@@ -16,8 +21,13 @@ interface GameDetailModalProps {
 export function GameDetailModal({ game, open, onOpenChange }: GameDetailModalProps) {
   const [gameDetails, setGameDetails] = useState<GameDetails | null>(null)
   const [isLoading, setIsLoading] = useState(false)
-  const [isDownloading, setIsDownloading] = useState(false)
+  const [showDownloadModal, setShowDownloadModal] = useState(false)
+  const [showTorrentSearchModal, setShowTorrentSearchModal] = useState(false)
+  const { getRequestForItem, refreshRequests } = useTorrentRequests()
   const { toast } = useToast()
+  const createDownloadMutation = useCreateDownload()
+
+  const existingRequest = game ? getRequestForItem(game.title, game.year, undefined, undefined, 'GAME' as any) : undefined
 
   useEffect(() => {
     if (game && open) {
@@ -58,26 +68,21 @@ export function GameDetailModal({ game, open, onOpenChange }: GameDetailModalPro
     }
   }
 
-  const handleDownload = async () => {
-    if (!gameDetails) return
+  const handleDownload = () => {
+    setShowDownloadModal(true)
+  }
 
-    setIsDownloading(true)
-    try {
-      // TODO: Implement actual download functionality
-      // This would typically create a download job
-      toast({
-        title: "Download Started",
-        description: `Added "${gameDetails.title}" to download queue`,
-      })
-      onOpenChange(false)
-    } catch (error) {
-      toast({
-        title: "Download Failed",
-        description: "Failed to start download",
-      })
-    } finally {
-      setIsDownloading(false)
-    }
+  const handleTorrentSearch = () => {
+    setShowTorrentSearchModal(true)
+  }
+
+  const handleDownloadRequestCreated = () => {
+    toast({
+      title: "Download Requested",
+      description: `${game?.title} has been added to the download queue`,
+    })
+    // Refresh the torrent requests to show the new status
+    refreshRequests()
   }
 
   if (!game) return null
@@ -213,22 +218,98 @@ export function GameDetailModal({ game, open, onOpenChange }: GameDetailModalPro
                   </div>
                 )}
 
-                {/* Download Button */}
+                {/* Download Actions */}
                 <div className="pt-4">
-                  <Button 
-                    onClick={handleDownload} 
-                    disabled={isDownloading}
-                    className="w-full md:w-auto"
-                  >
-                    <Download className="h-4 w-4 mr-2" />
-                    {isDownloading ? 'Adding to Queue...' : 'Download'}
-                  </Button>
+                  {(() => {
+                    if (existingRequest) {
+                      return (
+                        <div className="space-y-2">
+                          <DownloadStatusBadge
+                            status={existingRequest.status}
+                            className="w-full justify-center"
+                          />
+                          <Button
+                            onClick={handleTorrentSearch}
+                            variant="outline"
+                            className="w-full"
+                          >
+                            <Search className="h-4 w-4 mr-2" />
+                            View Torrents
+                          </Button>
+                        </div>
+                      )
+                    } else {
+                      return (
+                        <div className="flex flex-col sm:flex-row gap-2">
+                          <Button
+                            onClick={handleDownload}
+                            className="flex-1 sm:flex-none"
+                          >
+                            <Download className="h-4 w-4 mr-2" />
+                            Request Download
+                          </Button>
+                          <Button
+                            onClick={handleTorrentSearch}
+                            variant="outline"
+                            className="flex-1 sm:flex-none"
+                          >
+                            <Search className="h-4 w-4 mr-2" />
+                            View Torrents
+                          </Button>
+                        </div>
+                      )
+                    }
+                  })()}
                 </div>
               </>
             )}
           </div>
         </div>
       </DialogContent>
+
+      {/* Download Request Modal */}
+      <DownloadRequestModal
+        item={game}
+        open={showDownloadModal}
+        onOpenChange={setShowDownloadModal}
+        onRequestCreated={handleDownloadRequestCreated}
+      />
+
+      {/* Torrent Search Modal */}
+      <TorrentSearchModal
+        isOpen={showTorrentSearchModal}
+        onClose={() => setShowTorrentSearchModal(false)}
+        searchItem={game}
+        onTorrentDownload={async (torrent) => {
+          try {
+            // Determine download type and URL
+            const downloadUrl = torrent.magnetUri || torrent.link
+            const downloadType = torrent.magnetUri ? 'magnet' : 'torrent'
+
+            // Create download job using the mutation
+            await createDownloadMutation.mutateAsync({
+              url: downloadUrl,
+              type: downloadType,
+              name: torrent.title,
+              destination: undefined // Use default destination
+            })
+
+            toast({
+              title: "Download Started",
+              description: `Successfully started downloading "${torrent.title}"`,
+            })
+
+            setShowTorrentSearchModal(false)
+          } catch (error) {
+            console.error('Failed to start download:', error)
+            toast({
+              title: "Download Failed",
+              description: "Failed to start the download. Please try again.",
+              variant: "destructive",
+            })
+          }
+        }}
+      />
     </Dialog>
   )
 }

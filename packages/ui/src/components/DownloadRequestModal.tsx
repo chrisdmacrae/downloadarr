@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -8,7 +8,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Download, Loader2, Settings, Film, Tv } from 'lucide-react'
-import { SearchResult, CreateTorrentRequestDto, apiService } from '@/services/api'
+import { SearchResult, CreateTorrentRequestDto, GamePlatform, apiService } from '@/services/api'
 import { useToast } from '@/hooks/use-toast'
 
 interface DownloadRequestModalProps {
@@ -34,9 +34,13 @@ const FORMAT_OPTIONS = [
 
 export function DownloadRequestModal({ item, open, onOpenChange, onRequestCreated }: DownloadRequestModalProps) {
   const [isLoading, setIsLoading] = useState(false)
+  const [platformOptions, setPlatformOptions] = useState<GamePlatform[]>([])
+  const [loadingPlatforms, setLoadingPlatforms] = useState<boolean>(false)
   const [formData, setFormData] = useState({
     season: '',
     episode: '',
+    platform: '',
+    genre: '',
     preferredQualities: ['HD_1080P'],
     preferredFormats: ['X265'],
     minSeeders: 5,
@@ -49,6 +53,38 @@ export function DownloadRequestModal({ item, open, onOpenChange, onRequestCreate
 
   const isMovie = item?.type === 'movie'
   const isTvShow = item?.type === 'tv'
+  const isGame = item?.type === 'game'
+
+  // Set appropriate defaults based on content type when modal opens
+  useEffect(() => {
+    if (open && item) {
+      setFormData(prev => ({
+        ...prev,
+        preferredQualities: isGame ? [] : ['HD_1080P'],
+        preferredFormats: isGame ? [] : ['X265'],
+        minSeeders: isGame ? 1 : 5, // Games often have lower seeder counts
+      }))
+    }
+  }, [open, item, isGame])
+
+  // Load platform options for games
+  useEffect(() => {
+    if (open && isGame && platformOptions.length === 0) {
+      setLoadingPlatforms(true)
+      apiService.getGamePlatforms()
+        .then(response => {
+          if (response.success) {
+            setPlatformOptions(response.data)
+          }
+        })
+        .catch(error => {
+          console.error('Failed to load platform options:', error)
+        })
+        .finally(() => {
+          setLoadingPlatforms(false)
+        })
+    }
+  }, [open, isGame, platformOptions.length])
 
   const handleQualityChange = (quality: string, checked: boolean) => {
     setFormData(prev => ({
@@ -71,7 +107,8 @@ export function DownloadRequestModal({ item, open, onOpenChange, onRequestCreate
   const handleSubmit = async () => {
     if (!item) return
 
-    if (formData.preferredQualities.length === 0) {
+    // Skip quality validation for games
+    if (!isGame && formData.preferredQualities.length === 0) {
       toast({
         title: "Validation Error",
         description: "Please select at least one quality preference",
@@ -80,7 +117,8 @@ export function DownloadRequestModal({ item, open, onOpenChange, onRequestCreate
       return
     }
 
-    if (formData.preferredFormats.length === 0) {
+    // Skip format validation for games
+    if (!isGame && formData.preferredFormats.length === 0) {
       toast({
         title: "Validation Error",
         description: "Please select at least one format preference",
@@ -96,13 +134,16 @@ export function DownloadRequestModal({ item, open, onOpenChange, onRequestCreate
         title: item.title,
         year: item.year,
         tmdbId: parseInt(item.id),
-        preferredQualities: formData.preferredQualities,
-        preferredFormats: formData.preferredFormats,
         minSeeders: formData.minSeeders,
         maxSizeGB: formData.maxSizeGB,
         priority: formData.priority,
         searchIntervalMins: formData.searchIntervalMins,
         maxSearchAttempts: formData.maxSearchAttempts,
+        // Only include quality/format preferences for movies and TV shows
+        ...(isGame ? {} : {
+          preferredQualities: formData.preferredQualities,
+          preferredFormats: formData.preferredFormats,
+        }),
       }
 
       // Add TV show specific fields
@@ -115,9 +156,24 @@ export function DownloadRequestModal({ item, open, onOpenChange, onRequestCreate
         }
       }
 
-      const response = isMovie 
+      // Add game specific fields
+      if (isGame) {
+        if (formData.platform) {
+          requestDto.platform = formData.platform
+        }
+        if (formData.genre) {
+          requestDto.genre = formData.genre
+        }
+        if (parseInt(item.id)) {
+          requestDto.igdbId = parseInt(item.id)
+        }
+      }
+
+      const response = isMovie
         ? await apiService.requestMovieDownload(requestDto)
-        : await apiService.requestTvShowDownload(requestDto)
+        : isTvShow
+          ? await apiService.requestTvShowDownload(requestDto)
+          : await apiService.requestGameDownload(requestDto)
 
       if (response.success) {
         toast({
@@ -131,9 +187,11 @@ export function DownloadRequestModal({ item, open, onOpenChange, onRequestCreate
         setFormData({
           season: '',
           episode: '',
-          preferredQualities: ['HD_1080P'],
-          preferredFormats: ['X265'],
-          minSeeders: 5,
+          platform: '',
+          genre: '',
+          preferredQualities: isGame ? [] : ['HD_1080P'],
+          preferredFormats: isGame ? [] : ['X265'],
+          minSeeders: isGame ? 1 : 5, // Games often have lower seeder counts
           maxSizeGB: 20,
           priority: 5,
           searchIntervalMins: 30,
@@ -182,7 +240,7 @@ export function DownloadRequestModal({ item, open, onOpenChange, onRequestCreate
                 />
               ) : (
                 <div className="w-full h-full flex items-center justify-center">
-                  {isMovie ? <Film className="h-8 w-8" /> : <Tv className="h-8 w-8" />}
+                  {isMovie ? <Film className="h-8 w-8" /> : isTvShow ? <Tv className="h-8 w-8" /> : <Download className="h-8 w-8" />}
                 </div>
               )}
             </div>
@@ -190,7 +248,7 @@ export function DownloadRequestModal({ item, open, onOpenChange, onRequestCreate
               <h3 className="font-semibold">{item.title}</h3>
               <p className="text-sm text-muted-foreground">{item.year}</p>
               <Badge variant="secondary" className="mt-1">
-                {isMovie ? 'Movie' : 'TV Show'}
+                {isMovie ? 'Movie' : isTvShow ? 'TV Show' : 'Game'}
               </Badge>
               {item.overview && (
                 <p className="text-xs text-muted-foreground mt-2 line-clamp-3">
@@ -242,45 +300,101 @@ export function DownloadRequestModal({ item, open, onOpenChange, onRequestCreate
             </>
           )}
 
-          {/* Quality Preferences */}
-          <div className="space-y-4">
-            <h4 className="font-medium">Quality Preferences</h4>
-            <div className="grid grid-cols-2 gap-3">
-              {QUALITY_OPTIONS.map((quality) => (
-                <div key={quality.value} className="flex items-center space-x-2">
-                  <Checkbox
-                    id={`quality-${quality.value}`}
-                    checked={formData.preferredQualities.includes(quality.value)}
-                    onCheckedChange={(checked) => handleQualityChange(quality.value, checked as boolean)}
-                  />
-                  <Label htmlFor={`quality-${quality.value}`} className="text-sm">
-                    {quality.label}
-                  </Label>
+          {/* Game Specific Options */}
+          {isGame && (
+            <>
+              <div className="space-y-4">
+                <h4 className="font-medium flex items-center gap-2">
+                  <Download className="h-4 w-4" />
+                  Game Options
+                </h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="platform">Platform (optional)</Label>
+                    <Select value={formData.platform} onValueChange={(value) => setFormData(prev => ({ ...prev, platform: value }))}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select platform" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">Any platform</SelectItem>
+                        {loadingPlatforms ? (
+                          <SelectItem value="loading" disabled>
+                            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                            Loading platforms...
+                          </SelectItem>
+                        ) : (
+                          platformOptions.map((platform) => (
+                            <SelectItem key={platform.id} value={platform.id}>
+                              {platform.name}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="genre">Genre (optional)</Label>
+                    <Input
+                      id="genre"
+                      type="text"
+                      placeholder="e.g., Action, RPG"
+                      value={formData.genre}
+                      onChange={(e) => setFormData(prev => ({ ...prev, genre: e.target.value }))}
+                    />
+                  </div>
                 </div>
-              ))}
-            </div>
-          </div>
+                <p className="text-xs text-muted-foreground">
+                  Platform and genre help narrow down search results for better matches.
+                </p>
+              </div>
+              <Separator />
+            </>
+          )}
 
-          {/* Format Preferences */}
-          <div className="space-y-4">
-            <h4 className="font-medium">Format Preferences</h4>
-            <div className="grid grid-cols-2 gap-3">
-              {FORMAT_OPTIONS.map((format) => (
-                <div key={format.value} className="flex items-center space-x-2">
-                  <Checkbox
-                    id={`format-${format.value}`}
-                    checked={formData.preferredFormats.includes(format.value)}
-                    onCheckedChange={(checked) => handleFormatChange(format.value, checked as boolean)}
-                  />
-                  <Label htmlFor={`format-${format.value}`} className="text-sm">
-                    {format.label}
-                  </Label>
+          {/* Quality and Format Preferences - Not applicable for games */}
+          {!isGame && (
+            <>
+              {/* Quality Preferences */}
+              <div className="space-y-4">
+                <h4 className="font-medium">Quality Preferences</h4>
+                <div className="grid grid-cols-2 gap-3">
+                  {QUALITY_OPTIONS.map((quality) => (
+                    <div key={quality.value} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`quality-${quality.value}`}
+                        checked={formData.preferredQualities.includes(quality.value)}
+                        onCheckedChange={(checked) => handleQualityChange(quality.value, checked as boolean)}
+                      />
+                      <Label htmlFor={`quality-${quality.value}`} className="text-sm">
+                        {quality.label}
+                      </Label>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </div>
+              </div>
 
-          <Separator />
+              {/* Format Preferences */}
+              <div className="space-y-4">
+                <h4 className="font-medium">Format Preferences</h4>
+                <div className="grid grid-cols-2 gap-3">
+                  {FORMAT_OPTIONS.map((format) => (
+                    <div key={format.value} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`format-${format.value}`}
+                        checked={formData.preferredFormats.includes(format.value)}
+                        onCheckedChange={(checked) => handleFormatChange(format.value, checked as boolean)}
+                      />
+                      <Label htmlFor={`format-${format.value}`} className="text-sm">
+                        {format.label}
+                      </Label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <Separator />
+            </>
+          )}
+
 
           {/* Advanced Options */}
           <div className="space-y-4">

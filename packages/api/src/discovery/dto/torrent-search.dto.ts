@@ -165,3 +165,35 @@ export class TvTorrentSearchDto extends TorrentSearchDto {
   @IsString()
   imdbId?: string;
 }
+
+export class GameTorrentSearchDto extends TorrentSearchDto {
+  @ApiPropertyOptional({
+    description: 'Game release year',
+    minimum: 1970,
+    maximum: new Date().getFullYear() + 2,
+    example: 2023,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1970)
+  @Max(new Date().getFullYear() + 2)
+  year?: number;
+
+  @ApiPropertyOptional({
+    description: 'Game platform (PC, PlayStation, Xbox, etc.)',
+    example: 'PC',
+  })
+  @IsOptional()
+  @IsString()
+  platform?: string;
+
+  @ApiPropertyOptional({
+    description: 'IGDB ID for more accurate search',
+    example: 1020,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  igdbId?: number;
+}

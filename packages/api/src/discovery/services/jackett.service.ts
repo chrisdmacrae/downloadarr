@@ -3,6 +3,7 @@ import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { BaseExternalApiService } from './base-external-api.service';
 import { TorrentFilterService, FilterCriteria } from './torrent-filter.service';
+import { GamePlatformsService } from '../../config/game-platforms.service';
 import {
   ExternalApiResponse,
   ExternalApiConfig,
@@ -11,7 +12,7 @@ import {
   JackettSearchResponse,
   JackettTorrent,
 } from '../interfaces/external-api.interface';
-import { TorrentSearchDto, MovieTorrentSearchDto, TvTorrentSearchDto } from '../dto/torrent-search.dto';
+import { TorrentSearchDto, MovieTorrentSearchDto, TvTorrentSearchDto, GameTorrentSearchDto } from '../dto/torrent-search.dto';
 
 @Injectable()
 export class JackettService extends BaseExternalApiService {
@@ -20,6 +21,7 @@ export class JackettService extends BaseExternalApiService {
     protected readonly httpService: HttpService,
     protected readonly configService: ConfigService,
     private readonly torrentFilterService: TorrentFilterService,
+    private readonly gamePlatformsService: GamePlatformsService,
   ) {
     super(httpService, configService);
   }
@@ -115,6 +117,29 @@ export class JackettService extends BaseExternalApiService {
     return this.searchTorrents(searchParams);
   }
 
+  async searchGameTorrents(searchDto: GameTorrentSearchDto): Promise<ExternalApiResponse<TorrentResult[]>> {
+    // Determine the appropriate Jackett category based on platform
+    let category = 'PC/Games'; // Default category
+    if (searchDto.platform) {
+      const normalizedPlatform = this.gamePlatformsService.normalizePlatform(searchDto.platform);
+      if (normalizedPlatform) {
+        const jackettCategory = this.gamePlatformsService.getJackettCategoryForPlatform(normalizedPlatform);
+        // Map Jackett category code back to category name for our internal mapping
+        category = this.mapJackettCodeToCategory(jackettCategory);
+      }
+    }
+
+    const searchParams: TorrentSearchParams = {
+      query: this.buildGameQuery(searchDto),
+      category: category,
+      indexers: searchDto.indexers,
+      minSeeders: searchDto.minSeeders,
+      maxSize: searchDto.maxSize,
+    };
+
+    return this.searchTorrents(searchParams);
+  }
+
   private buildMovieQuery(searchDto: MovieTorrentSearchDto): string {
     let query = searchDto.query;
     
@@ -127,12 +152,25 @@ export class JackettService extends BaseExternalApiService {
 
   private buildTvQuery(searchDto: TvTorrentSearchDto): string {
     let query = searchDto.query;
-    
+
     if (searchDto.season && searchDto.episode) {
       query += ` S${searchDto.season.toString().padStart(2, '0')}E${searchDto.episode.toString().padStart(2, '0')}`;
     } else if (searchDto.season) {
       query += ` S${searchDto.season.toString().padStart(2, '0')}`;
     }
+
+    return query;
+  }
+
+  private buildGameQuery(searchDto: GameTorrentSearchDto): string {
+    // For games, we keep the query simple and let Jackett category filtering handle platform specificity
+    // This prevents the search from becoming too restrictive
+    let query = searchDto.query;
+
+    // Don't add platform names to the query - this is now handled by Jackett category filtering
+    // Don't add year to query for games as it often makes searches too specific
+    // Game torrents are usually titled with the game name only, not the release year
+    // The year and platform filtering should be handled by category filtering and post-search filtering
 
     return query;
   }
@@ -146,10 +184,58 @@ export class JackettService extends BaseExternalApiService {
       'Movies/UHD': '2160',
       'TV/HD': '5040',
       'TV/SD': '5030',
+      'PC/Games': '4050',
+      'PC/Mac': '4030',
+      'PC/Mobile-iOS': '4060',
+      'PC/Mobile-Android': '4070',
+      'Console': '1000',
+      'Console/NDS': '1010',
+      'Console/PSP': '1020',
+      'Console/Wii': '1030',
+      'Console/XBox': '1040',
+      'Console/XBox 360': '1050',
+      'Console/PS3': '1080',
+      'Console/3DS': '1110',
+      'Console/PS Vita': '1120',
+      'Console/WiiU': '1130',
+      'Console/XBox One': '1140',
+      'Console/PS4': '1180',
+      'Games': '4050', // Default to PC/Games
       'TV/UHD': '5160',
     };
 
     return category ? categoryMap[category] || '' : '';
+  }
+
+  private mapJackettCodeToCategory(code: string): string {
+    const codeMap: Record<string, string> = {
+      '2000': 'Movies',
+      '5000': 'TV',
+      '2040': 'Movies/HD',
+      '2030': 'Movies/SD',
+      '2160': 'Movies/UHD',
+      '5040': 'TV/HD',
+      '5030': 'TV/SD',
+      '4050': 'PC/Games',
+      '4030': 'PC/Mac',
+      '4060': 'PC/Mobile-iOS',
+      '4070': 'PC/Mobile-Android',
+      '1000': 'Console',
+      '1010': 'Console/NDS',
+      '1020': 'Console/PSP',
+      '1030': 'Console/Wii',
+      '1040': 'Console/XBox',
+      '1050': 'Console/XBox 360',
+      '1080': 'Console/PS3',
+      '1110': 'Console/3DS',
+      '1120': 'Console/PS Vita',
+      '1130': 'Console/WiiU',
+      '1140': 'Console/XBox One',
+      '1180': 'Console/PS4',
+      '5160': 'TV/UHD',
+    };
+
+    return codeMap[code] || 'PC/Games'; // Default to PC/Games
   }
 
 

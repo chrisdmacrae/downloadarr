@@ -7,6 +7,7 @@ import { DownloadModule } from './download/download.module';
 import { VpnModule } from './vpn/vpn.module';
 import { DiscoveryModule } from './discovery/discovery.module';
 import { TorrentsModule } from './torrents/torrents.module';
+import { GameConfigModule } from './config/config.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { TorrentsModule } from './torrents/torrents.module';
     VpnModule,
     DiscoveryModule,
     TorrentsModule,
+    GameConfigModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -94,6 +94,46 @@ export class RequestedTorrentsService {
     });
   }
 
+  async createGameRequest(dto: CreateTorrentRequestDto): Promise<RequestedTorrent> {
+    this.logger.log(`Creating game torrent request for: ${dto.title} (${dto.platform || 'Unknown Platform'})`);
+
+    // Check for existing requests to prevent duplicates
+    const existingRequest = await this.findExistingGameRequest(dto);
+    if (existingRequest) {
+      this.logger.warn(`Duplicate game request detected for: ${dto.title} (${dto.platform || 'Unknown Platform'}). Existing request ID: ${existingRequest.id}`);
+      throw new Error(`A request for "${dto.title}" (${dto.platform || 'Unknown Platform'}) already exists with status: ${existingRequest.status}`);
+    }
+
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 30); // Expire after 30 days
+
+    const nextSearchAt = new Date();
+    nextSearchAt.setMinutes(nextSearchAt.getMinutes() + 1); // Start searching in 1 minute
+
+    return this.prisma.requestedTorrent.create({
+      data: {
+        contentType: ContentType.GAME,
+        title: dto.title,
+        year: dto.year,
+        igdbId: dto.igdbId,
+        platform: dto.platform,
+        genre: dto.genre,
+        preferredQualities: dto.preferredQualities || [TorrentQuality.HD_1080P],
+        preferredFormats: dto.preferredFormats || [TorrentFormat.X265],
+        minSeeders: dto.minSeeders || 5,
+        maxSizeGB: dto.maxSizeGB || 50, // Larger default for games
+        blacklistedWords: dto.blacklistedWords || [],
+        trustedIndexers: dto.trustedIndexers || [],
+        searchIntervalMins: dto.searchIntervalMins || 30,
+        maxSearchAttempts: dto.maxSearchAttempts || 50,
+        priority: dto.priority || 5,
+        expiresAt,
+        nextSearchAt,
+        userId: dto.userId,
+      },
+    });
+  }
+
   async getRequestById(id: string): Promise<RequestedTorrent> {
     const request = await this.prisma.requestedTorrent.findUnique({
       where: { id },
@@ -472,6 +512,46 @@ export class RequestedTorrentsService {
         },
       });
       if (existingByTitleSeason) return existingByTitleSeason;
+    }
+
+    return null;
+  }
+
+  /**
+   * Find existing game request to prevent duplicates
+   */
+  private async findExistingGameRequest(dto: CreateTorrentRequestDto): Promise<RequestedTorrent | null> {
+    // Exclude cancelled, failed, and expired requests from duplicate check
+    const excludedStatuses = [RequestStatus.CANCELLED, RequestStatus.FAILED, RequestStatus.EXPIRED];
+
+    // Build base where clause (no user filtering - prevent all duplicates globally)
+    const baseWhere = {
+      contentType: ContentType.GAME,
+      status: { notIn: excludedStatuses },
+    };
+
+    // First, try to find by IGDB ID if provided (most accurate)
+    if (dto.igdbId) {
+      const existingByIgdb = await this.prisma.requestedTorrent.findFirst({
+        where: {
+          ...baseWhere,
+          igdbId: dto.igdbId,
+        },
+      });
+      if (existingByIgdb) return existingByIgdb;
+    }
+
+    // Then try by title, platform, and year
+    if (dto.title) {
+      const existingByTitle = await this.prisma.requestedTorrent.findFirst({
+        where: {
+          ...baseWhere,
+          title: { equals: dto.title, mode: 'insensitive' },
+          platform: dto.platform || null,
+          year: dto.year || null,
+        },
+      });
+      if (existingByTitle) return existingByTitle;
     }
 
     return null;

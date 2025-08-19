@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { MovieCarousel } from '@/components/MovieCarousel'
 import { MovieCard } from '@/components/MovieCard'
 import { GameDetailModal } from '@/components/GameDetailModal'
@@ -15,11 +15,19 @@ interface Platform {
   id: number
 }
 
+interface Genre {
+  name: string
+}
+
 export default function GamesDiscovery() {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [activeTab, setActiveTab] = useState<'pc' | 'rom'>('pc')
   const [featuredGames, setFeaturedGames] = useState<SearchResult[]>([])
   const [popularGames, setPopularGames] = useState<SearchResult[]>([])
   const [platforms, setPlatforms] = useState<Platform[]>([])
   const [platformGames, setPlatformGames] = useState<Record<string, SearchResult[]>>({})
+  const [pcGenres, setPcGenres] = useState<Genre[]>([])
+  const [pcGenreGames, setPcGenreGames] = useState<Record<string, SearchResult[]>>({})
   const [selectedGame, setSelectedGame] = useState<SearchResult | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
@@ -27,7 +35,7 @@ export default function GamesDiscovery() {
   const { toast } = useToast()
   const navigate = useNavigate()
 
-  // Target platforms from the spec
+  // Target platforms from the spec (for ROM tab)
   const targetPlatforms = [
     'NES', 'SNES', 'N64', 'GameCube', 'Wii', 'Wii U',
     'Game Boy', 'Game Boy Color', 'Game Boy Advance', 'Switch',
@@ -36,44 +44,104 @@ export default function GamesDiscovery() {
     'Xbox', 'Xbox 360'
   ]
 
+  // PC game genres
+  const pcGameGenres = [
+    'Action', 'Adventure', 'Strategy', 'RPG', 'Shooter',
+    'Simulation', 'Sports', 'Racing', 'Puzzle', 'Indie'
+  ]
+
+  // Handle tab changes
+  const handleTabChange = (tab: 'pc' | 'rom') => {
+    setActiveTab(tab)
+    const newParams = new URLSearchParams(searchParams)
+    newParams.set('tab', tab)
+    setSearchParams(newParams)
+  }
+
+  // Initialize from URL parameters
+  useEffect(() => {
+    const tab = searchParams.get('tab') as 'pc' | 'rom'
+    if (tab && ['pc', 'rom'].includes(tab)) {
+      setActiveTab(tab)
+    }
+  }, [searchParams])
+
   useEffect(() => {
     loadDiscoveryData()
-  }, [])
+  }, [activeTab])
 
   const loadDiscoveryData = async () => {
     setIsLoading(true)
     try {
-      // Load popular games first
-      const popularResponse = await apiService.getPopularGames(25)
-      if (popularResponse.success && popularResponse.data) {
-        const games = popularResponse.data
-        setFeaturedGames(games.slice(0, 5)) // Top 5 for featured
-        setPopularGames(games.slice(5)) // Rest for carousel
-      }
+      if (activeTab === 'pc') {
+        // Load PC games by genre
+        // Get PC games from the first genre for featured/popular
+        const firstGenreResponse = await apiService.getPcGamesByGenre(pcGameGenres[0], 25)
+        if (firstGenreResponse.success && firstGenreResponse.data) {
+          const games = firstGenreResponse.data
+          setFeaturedGames(games.slice(0, 5)) // Top 5 for featured
+          setPopularGames(games.slice(5)) // Rest for carousel
+        }
 
-      // Load supported platforms
-      const platformsResponse = await apiService.getSupportedPlatforms()
-      if (platformsResponse.success && platformsResponse.data) {
-        // Filter to only include the platforms we want and in the order we want
-        const filteredPlatforms = targetPlatforms
-          .map(targetName => platformsResponse.data!.find(p => p.name === targetName))
-          .filter(Boolean) as Platform[]
-        
-        setPlatforms(filteredPlatforms)
+        // Set up PC genres
+        const genres = pcGameGenres.map(name => ({ name }))
+        setPcGenres(genres)
 
-        // Load games for each platform
-        const platformGamesData: Record<string, SearchResult[]> = {}
-        for (const platform of filteredPlatforms) {
+        // Load games for each PC genre
+        const genreGamesData: Record<string, SearchResult[]> = {}
+        for (const genreName of pcGameGenres) {
           try {
-            const platformResponse = await apiService.getGamesByPlatform(platform.name, 20)
-            if (platformResponse.success && platformResponse.data) {
-              platformGamesData[platform.name] = platformResponse.data.slice(0, 20) // Limit to 20 per platform
+            const genreResponse = await apiService.getPcGamesByGenre(genreName, 20)
+            if (genreResponse.success && genreResponse.data) {
+              genreGamesData[genreName] = genreResponse.data.slice(0, 20) // Limit to 20 per genre
             }
           } catch (error) {
-            console.error(`Failed to load games for platform ${platform.name}:`, error)
+            console.error(`Failed to load PC games for genre ${genreName}:`, error)
           }
         }
-        setPlatformGames(platformGamesData)
+        setPcGenreGames(genreGamesData)
+
+        // Clear platform data for PC tab
+        setPlatforms([])
+        setPlatformGames({})
+      } else {
+        // ROM tab - load platform-based games
+        // Load popular games first
+        const popularResponse = await apiService.getPopularGames(25)
+        if (popularResponse.success && popularResponse.data) {
+          const games = popularResponse.data
+          setFeaturedGames(games.slice(0, 5)) // Top 5 for featured
+          setPopularGames(games.slice(5)) // Rest for carousel
+        }
+
+        // Load supported platforms
+        const platformsResponse = await apiService.getSupportedPlatforms()
+        if (platformsResponse.success && platformsResponse.data) {
+          // Filter to only include the platforms we want and in the order we want
+          const filteredPlatforms = targetPlatforms
+            .map(targetName => platformsResponse.data!.find(p => p.name === targetName))
+            .filter(Boolean) as Platform[]
+
+          setPlatforms(filteredPlatforms)
+
+          // Load games for each platform
+          const platformGamesData: Record<string, SearchResult[]> = {}
+          for (const platform of filteredPlatforms) {
+            try {
+              const platformResponse = await apiService.getGamesByPlatform(platform.name, 20)
+              if (platformResponse.success && platformResponse.data) {
+                platformGamesData[platform.name] = platformResponse.data.slice(0, 20) // Limit to 20 per platform
+              }
+            } catch (error) {
+              console.error(`Failed to load games for platform ${platform.name}:`, error)
+            }
+          }
+          setPlatformGames(platformGamesData)
+        }
+
+        // Clear PC genre data for ROM tab
+        setPcGenres([])
+        setPcGenreGames({})
       }
     } catch (error) {
       toast({
@@ -96,6 +164,11 @@ export default function GamesDiscovery() {
     }
   }
 
+  const tabs = [
+    { id: 'pc' as const, label: 'PC' },
+    { id: 'rom' as const, label: 'ROM' },
+  ]
+
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       handleSearch()
@@ -108,6 +181,30 @@ export default function GamesDiscovery() {
         <div>
           <h1 className="text-3xl font-bold mb-2">Discover Games</h1>
           <p className="text-muted-foreground">Find your next gaming adventure</p>
+        </div>
+
+        {/* Search Bar Skeleton */}
+        <div className="max-w-2xl">
+          <div className="flex space-x-2">
+            <Skeleton className="flex-1 h-10" />
+            <Skeleton className="h-10 w-20" />
+          </div>
+        </div>
+
+        {/* Tabs Skeleton */}
+        <div className="flex space-x-1 bg-muted p-1 rounded-lg w-fit">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                activeTab === tab.id
+                  ? 'bg-background text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
 
         {/* Featured Section Skeleton */}
@@ -171,6 +268,23 @@ export default function GamesDiscovery() {
         </div>
       </div>
 
+      {/* Tabs */}
+      <div className="flex space-x-1 bg-muted p-1 rounded-lg w-fit">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => handleTabChange(tab.id)}
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+              activeTab === tab.id
+                ? 'bg-background text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
       {/* Featured Section */}
       {featuredGames.length > 0 && (
         <div className="space-y-4">
@@ -192,15 +306,31 @@ export default function GamesDiscovery() {
       {/* Popular Games Carousel */}
       {popularGames.length > 0 && (
         <MovieCarousel
-          title="Popular Games"
+          title={activeTab === 'pc' ? 'Popular PC Games' : 'Popular Games'}
           movies={popularGames}
           onMovieClick={handleGameClick}
           cardSize="medium"
         />
       )}
 
-      {/* Platform Carousels */}
-      {platforms.map((platform) => {
+      {/* PC Genre Carousels - Only show for PC tab */}
+      {activeTab === 'pc' && pcGenres.map((genre) => {
+        const games = pcGenreGames[genre.name]
+        if (!games || games.length === 0) return null
+
+        return (
+          <MovieCarousel
+            key={genre.name}
+            title={genre.name}
+            movies={games}
+            onMovieClick={handleGameClick}
+            cardSize="medium"
+          />
+        )
+      })}
+
+      {/* Platform Carousels - Only show for ROM tab */}
+      {activeTab === 'rom' && platforms.map((platform) => {
         const games = platformGames[platform.name]
         if (!games || games.length === 0) return null
 
