@@ -8,6 +8,7 @@ import { VpnModule } from './vpn/vpn.module';
 import { DiscoveryModule } from './discovery/discovery.module';
 import { TorrentsModule } from './torrents/torrents.module';
 import { GameConfigModule } from './config/config.module';
+import { JackettModule } from './jackett/jackett.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { GameConfigModule } from './config/config.module';
     DiscoveryModule,
     TorrentsModule,
     GameConfigModule,
+    JackettModule,
   ],
   controllers: [AppController],
   providers: [AppService],

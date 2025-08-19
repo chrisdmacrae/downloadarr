@@ -1,6 +1,6 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Play, Pause, X, MoreHorizontal, Loader2 } from 'lucide-react'
+import { Play, Pause, X, Loader2 } from 'lucide-react'
 import { useDownloads, usePauseDownload, useResumeDownload, useCancelDownload } from '@/hooks/useApi'
 import { useToast } from '@/hooks/use-toast'
 
@@ -23,7 +23,6 @@ export default function Downloads() {
       toast({
         title: "Failed to Pause",
         description: "Could not pause the download. Please try again.",
-        variant: "destructive",
       })
     }
   }
@@ -39,7 +38,6 @@ export default function Downloads() {
       toast({
         title: "Failed to Resume",
         description: "Could not resume the download. Please try again.",
-        variant: "destructive",
       })
     }
   }
@@ -55,7 +53,6 @@ export default function Downloads() {
       toast({
         title: "Failed to Cancel",
         description: "Could not cancel the download. Please try again.",
-        variant: "destructive",
       })
     }
   }

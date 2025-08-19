@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
-import { Search as SearchIcon, Download, Loader2, AlertCircle } from 'lucide-react'
+import { Search as SearchIcon, Loader2, AlertCircle } from 'lucide-react'
 import { MovieDetailModal } from '@/components/MovieDetailModal'
 import { GameDetailModal } from '@/components/GameDetailModal'
+import { SearchResultCard } from '@/components/SearchResultCard'
 
 import { DownloadStatusBadge } from '@/components/DownloadStatusBadge'
 
@@ -298,64 +298,14 @@ export default function Search() {
                     : undefined
 
                 return (
-                  <Card
+                  <SearchResultCard
                     key={item.id}
-                    className="overflow-hidden hover:shadow-lg transition-shadow cursor-pointer"
-                    onClick={() => handleItemClick(item)}
-                  >
-                    <div className="aspect-[2/3] bg-muted relative">
-                      {item.poster ? (
-                        <img
-                          src={item.poster}
-                          alt={item.title}
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            const target = e.target as HTMLImageElement
-                            target.style.display = 'none'
-                            target.nextElementSibling?.classList.remove('hidden')
-                          }}
-                        />
-                      ) : null}
-                      <div className={`absolute inset-0 flex items-center justify-center text-muted-foreground ${item.poster ? 'hidden' : ''}`}>
-                        No Image
-                      </div>
-                      <Badge className="absolute top-2 right-2 capitalize">
-                        {item.type === 'game' ? 'Game' : item.type === 'tv' ? 'TV' : 'Movie'}
-                      </Badge>
-                      {torrentRequest && (
-                        <div className="absolute top-2 left-2">
-                          <DownloadStatusBadge request={torrentRequest} />
-                        </div>
-                      )}
-                    </div>
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-lg line-clamp-2" title={item.title}>
-                        {item.title}
-                      </CardTitle>
-                      <CardDescription className="flex items-center justify-between">
-                        <span>{item.year || 'Unknown'}</span>
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="pt-0">
-                      {item.overview && (
-                        <p className="text-xs text-muted-foreground mb-3 line-clamp-2">
-                          {item.overview}
-                        </p>
-                      )}
-                      {/* Show request status if exists */}
-                      {item.type !== 'game' && torrentRequest && (
-                        <div className="flex items-center justify-center py-2">
-                          <DownloadStatusBadge request={torrentRequest} />
-                        </div>
-                      )}
-                      {item.type === 'game' && (
-                        <Button className="w-full" size="sm" variant="outline">
-                          <Download className="h-3 w-3 mr-1" />
-                          View Details
-                        </Button>
-                      )}
-                    </CardContent>
-                  </Card>
+                    item={item}
+                    onClick={handleItemClick}
+                    showOverview={true}
+                    showDownloadButton={item.type === 'game'}
+                    statusBadge={torrentRequest ? <DownloadStatusBadge request={torrentRequest} /> : undefined}
+                  />
                 )
               })}
             </div>

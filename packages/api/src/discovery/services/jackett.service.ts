@@ -47,8 +47,13 @@ export class JackettService extends BaseExternalApiService {
     try {
       const params: Record<string, any> = {
         Query: searchParams.query,
-        Category: this.mapCategoryToJackett(searchParams.category),
       };
+
+      // Only add category if one is specified
+      const categoryCode = searchParams.categoryCode || this.mapCategoryToJackett(searchParams.category);
+      if (categoryCode) {
+        params.Category = categoryCode;
+      }
 
       // Add indexers if specified
       if (searchParams.indexers && searchParams.indexers.length > 0) {
@@ -118,20 +123,26 @@ export class JackettService extends BaseExternalApiService {
   }
 
   async searchGameTorrents(searchDto: GameTorrentSearchDto): Promise<ExternalApiResponse<TorrentResult[]>> {
-    // Determine the appropriate Jackett category based on platform
-    let category = 'PC/Games'; // Default category
+    // Determine the appropriate Jackett category code based on platform
+    let jackettCategoryCode: string | undefined; // No default - search all categories if no platform
+
+    this.logger.debug(`Game search - Platform: ${searchDto.platform}, Query: ${searchDto.query}`);
+
     if (searchDto.platform) {
       const normalizedPlatform = this.gamePlatformsService.normalizePlatform(searchDto.platform);
+      this.logger.debug(`Normalized platform: ${normalizedPlatform}`);
+
       if (normalizedPlatform) {
-        const jackettCategory = this.gamePlatformsService.getJackettCategoryForPlatform(normalizedPlatform);
-        // Map Jackett category code back to category name for our internal mapping
-        category = this.mapJackettCodeToCategory(jackettCategory);
+        jackettCategoryCode = this.gamePlatformsService.getJackettCategoryForPlatform(normalizedPlatform);
+        this.logger.debug(`Jackett category code for ${normalizedPlatform}: ${jackettCategoryCode}`);
       }
+    } else {
+      this.logger.debug('No platform specified, searching all game categories');
     }
 
     const searchParams: TorrentSearchParams = {
       query: this.buildGameQuery(searchDto),
-      category: category,
+      categoryCode: jackettCategoryCode, // Use category code directly
       indexers: searchDto.indexers,
       minSeeders: searchDto.minSeeders,
       maxSize: searchDto.maxSize,

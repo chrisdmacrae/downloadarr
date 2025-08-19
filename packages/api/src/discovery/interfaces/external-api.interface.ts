@@ -89,6 +89,7 @@ export interface TorrentResult {
 export interface TorrentSearchParams {
   query: string;
   category?: string;
+  categoryCode?: string; // Direct Jackett category code
   indexers?: string[];
   minSeeders?: number;
   maxSize?: string;

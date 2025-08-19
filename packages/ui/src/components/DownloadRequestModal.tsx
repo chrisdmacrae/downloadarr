@@ -112,7 +112,6 @@ export function DownloadRequestModal({ item, open, onOpenChange, onRequestCreate
       toast({
         title: "Validation Error",
         description: "Please select at least one quality preference",
-        variant: "destructive",
       })
       return
     }
@@ -122,7 +121,6 @@ export function DownloadRequestModal({ item, open, onOpenChange, onRequestCreate
       toast({
         title: "Validation Error",
         description: "Please select at least one format preference",
-        variant: "destructive",
       })
       return
     }
@@ -158,7 +156,7 @@ export function DownloadRequestModal({ item, open, onOpenChange, onRequestCreate
 
       // Add game specific fields
       if (isGame) {
-        if (formData.platform) {
+        if (formData.platform && formData.platform !== 'any') {
           requestDto.platform = formData.platform
         }
         if (formData.genre) {
@@ -201,7 +199,6 @@ export function DownloadRequestModal({ item, open, onOpenChange, onRequestCreate
         toast({
           title: "Request Failed",
           description: response.error || "Failed to create download request",
-          variant: "destructive",
         })
       }
     } catch (error) {
@@ -209,7 +206,6 @@ export function DownloadRequestModal({ item, open, onOpenChange, onRequestCreate
       toast({
         title: "Request Failed",
         description: "An error occurred while creating the download request",
-        variant: "destructive",
       })
     } finally {
       setIsLoading(false)
@@ -316,7 +312,7 @@ export function DownloadRequestModal({ item, open, onOpenChange, onRequestCreate
                         <SelectValue placeholder="Select platform" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">Any platform</SelectItem>
+                        <SelectItem value="any">Any platform</SelectItem>
                         {loadingPlatforms ? (
                           <SelectItem value="loading" disabled>
                             <Loader2 className="h-4 w-4 animate-spin mr-2" />

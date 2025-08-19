@@ -1,25 +1,25 @@
 import { Carousel, CarouselItem } from '@/components/ui/carousel'
-import { MovieCard } from '@/components/MovieCard'
+import { SearchResultCard } from '@/components/SearchResultCard'
 import { SearchResult } from '@/services/api'
 import { Skeleton } from '@/components/ui/skeleton'
 
-interface MovieCarouselProps {
+interface SearchResultCarouselProps {
   title: string
-  movies: SearchResult[]
-  onMovieClick?: (movie: SearchResult) => void
+  items: SearchResult[]
+  onItemClick?: (item: SearchResult) => void
   isLoading?: boolean
   cardSize?: 'small' | 'medium' | 'large'
   showOverview?: boolean
 }
 
-export function MovieCarousel({ 
+export function SearchResultCarousel({ 
   title, 
-  movies, 
-  onMovieClick, 
+  items, 
+  onItemClick, 
   isLoading = false, 
   cardSize = 'medium',
   showOverview = false 
-}: MovieCarouselProps) {
+}: SearchResultCarouselProps) {
   const cardWidths = {
     small: 128,
     medium: 192,
@@ -47,12 +47,12 @@ export function MovieCarousel({
     )
   }
 
-  if (!movies || movies.length === 0) {
+  if (!items || items.length === 0) {
     return (
       <div className="space-y-4">
         <h2 className="text-xl font-semibold">{title}</h2>
         <div className="text-muted-foreground text-center py-8">
-          No movies found
+          No results found
         </div>
       </div>
     )
@@ -62,11 +62,11 @@ export function MovieCarousel({
     <div className="space-y-4">
       <h2 className="text-xl font-semibold">{title}</h2>
       <Carousel itemWidth={cardWidth} gap={16}>
-        {movies.map((movie) => (
-          <CarouselItem key={movie.id} width={cardWidth}>
-            <MovieCard 
-              movie={movie} 
-              onClick={onMovieClick}
+        {items.map((item) => (
+          <CarouselItem key={item.id} width={cardWidth}>
+            <SearchResultCard 
+              item={item} 
+              onClick={onItemClick}
               size={cardSize}
               showOverview={showOverview}
             />

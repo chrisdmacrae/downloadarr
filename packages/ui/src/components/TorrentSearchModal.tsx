@@ -22,7 +22,6 @@ import {
   Star,
   Loader2,
   AlertCircle,
-  ExternalLink,
   Users,
   Search,
   Magnet,
@@ -84,7 +83,6 @@ export function TorrentSearchModal({
           toast({
             title: "Error",
             description: "Failed to load platform options",
-            variant: "destructive",
           })
         })
         .finally(() => {
@@ -154,13 +152,13 @@ export function TorrentSearchModal({
         response = await apiService.searchMovieTorrents({
           ...searchParams,
           year: searchItem.year,
-          imdbId: searchItem.imdbId,
+          imdbId: (searchItem as any).imdbId,
         })
       } else if (searchItem?.type === 'tv') {
         response = await apiService.searchTvTorrents({
           ...searchParams,
           year: searchItem.year,
-          imdbId: searchItem.imdbId,
+          imdbId: (searchItem as any).imdbId,
         })
       } else if (searchItem?.type === 'game') {
         response = await apiService.searchGameTorrents({
@@ -185,7 +183,6 @@ export function TorrentSearchModal({
         toast({
           title: "Search failed",
           description: response.error || 'An error occurred while searching for torrents',
-          variant: "destructive",
         })
       }
     } catch (err) {
@@ -193,7 +190,6 @@ export function TorrentSearchModal({
       toast({
         title: "Search failed",
         description: 'An error occurred while searching for torrents',
-        variant: "destructive",
       })
       console.error('Torrent search error:', err)
     } finally {

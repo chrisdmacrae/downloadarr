@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -23,7 +23,6 @@ import {
 } from '@/components/ui/dropdown-menu'
 import {
   Search,
-  Filter,
   MoreVertical,
   Trash2,
   XCircle,
@@ -32,9 +31,7 @@ import {
   Film,
   Tv,
   Calendar,
-  Clock,
   AlertCircle,
-  CheckCircle,
   Loader2,
   SearchIcon,
   PlayCircle
@@ -52,7 +49,7 @@ export default function Requests() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [sortBy, setSortBy] = useState<'created' | 'updated' | 'priority'>('created')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
-  const [selectedRequest, setSelectedRequest] = useState<TorrentRequest | null>(null)
+
   const [isDeleting, setIsDeleting] = useState<string | null>(null)
   const [isCancelling, setIsCancelling] = useState<string | null>(null)
   const [isSearching, setIsSearching] = useState<string | null>(null)
@@ -103,7 +100,6 @@ export default function Requests() {
         toast({
           title: "Cancel Failed",
           description: response.error || "Failed to cancel request",
-          variant: "destructive",
         })
       }
     } catch (error) {
@@ -111,7 +107,6 @@ export default function Requests() {
       toast({
         title: "Cancel Failed",
         description: "An error occurred while cancelling the request",
-        variant: "destructive",
       })
     } finally {
       setIsCancelling(null)
@@ -137,7 +132,6 @@ export default function Requests() {
         toast({
           title: "Delete Failed",
           description: response.error || "Failed to delete request",
-          variant: "destructive",
         })
       }
     } catch (error) {
@@ -145,7 +139,6 @@ export default function Requests() {
       toast({
         title: "Delete Failed",
         description: "An error occurred while deleting the request",
-        variant: "destructive",
       })
     } finally {
       setIsDeleting(null)
@@ -168,7 +161,6 @@ export default function Requests() {
         toast({
           title: "Search Failed",
           description: response.error || "Failed to trigger search",
-          variant: "destructive",
         })
       }
     } catch (error) {
@@ -176,7 +168,6 @@ export default function Requests() {
       toast({
         title: "Search Failed",
         description: "An error occurred while triggering the search",
-        variant: "destructive",
       })
     } finally {
       setIsSearching(null)
@@ -199,7 +190,6 @@ export default function Requests() {
         toast({
           title: "Search Failed",
           description: response.error || "Failed to trigger batch search",
-          variant: "destructive",
         })
       }
     } catch (error) {
@@ -207,7 +197,6 @@ export default function Requests() {
       toast({
         title: "Search Failed",
         description: "An error occurred while triggering the batch search",
-        variant: "destructive",
       })
     } finally {
       setIsSearchingAll(false)
@@ -427,7 +416,7 @@ export default function Requests() {
               
               return (
                 <Card key={request.id} className="overflow-hidden">
-                  <CardHeader className="pb-3">
+                  <CardHeader>
                     <div className="flex items-start justify-between">
                       <div className="flex items-start gap-3 flex-1">
                         <ContentIcon className="h-5 w-5 mt-1 text-muted-foreground" />
@@ -579,19 +568,6 @@ export default function Requests() {
                       {request.foundTorrentTitle && (
                         <div className="text-sm text-muted-foreground mb-2">
                           <strong>Found:</strong> {request.foundTorrentTitle}
-                        </div>
-                      )}
-                      {request.downloadProgress !== null && (
-                        <div className="space-y-1">
-                          <div className="flex justify-between text-sm">
-                            <span>Progress: {request.downloadProgress.toFixed(1)}%</span>
-                            {request.downloadSpeed && <span>{request.downloadSpeed}</span>}
-                          </div>
-                          {request.downloadEta && (
-                            <div className="text-sm text-muted-foreground">
-                              ETA: {request.downloadEta}
-                            </div>
-                          )}
                         </div>
                       )}
                     </CardContent>

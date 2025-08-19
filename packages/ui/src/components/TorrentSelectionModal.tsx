@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -20,7 +20,6 @@ import {
   CheckCircle,
   Loader2,
   AlertCircle,
-  ExternalLink,
   Users,
 } from 'lucide-react'
 import { apiService, TorrentSearchResult, TorrentRequest } from '@/services/api'
@@ -90,7 +89,6 @@ export function TorrentSelectionModal({
         toast({
           title: "Selection Failed",
           description: response.error || "Failed to select torrent",
-          variant: "destructive",
         })
       }
     } catch (error) {
@@ -98,7 +96,6 @@ export function TorrentSelectionModal({
       toast({
         title: "Selection Failed",
         description: "An error occurred while selecting the torrent",
-        variant: "destructive",
       })
     } finally {
       setIsSelecting(null)

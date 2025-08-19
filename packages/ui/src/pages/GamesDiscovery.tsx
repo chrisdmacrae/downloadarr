@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { MovieCarousel } from '@/components/MovieCarousel'
-import { MovieCard } from '@/components/MovieCard'
+import { SearchResultCarousel } from '@/components/SearchResultCarousel'
+import { SearchResultCard } from '@/components/SearchResultCard'
 import { GameDetailModal } from '@/components/GameDetailModal'
 import { SearchResult, apiService } from '@/services/api'
 import { useToast } from '@/hooks/use-toast'
@@ -291,9 +291,9 @@ export default function GamesDiscovery() {
           <h2 className="text-2xl font-semibold">Featured</h2>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
             {featuredGames.map((game) => (
-              <MovieCard
+              <SearchResultCard
                 key={game.id}
-                movie={game}
+                item={game}
                 onClick={handleGameClick}
                 size="medium"
                 showOverview={false}
@@ -305,10 +305,10 @@ export default function GamesDiscovery() {
 
       {/* Popular Games Carousel */}
       {popularGames.length > 0 && (
-        <MovieCarousel
+        <SearchResultCarousel
           title={activeTab === 'pc' ? 'Popular PC Games' : 'Popular Games'}
-          movies={popularGames}
-          onMovieClick={handleGameClick}
+          items={popularGames}
+          onItemClick={handleGameClick}
           cardSize="medium"
         />
       )}
@@ -319,11 +319,11 @@ export default function GamesDiscovery() {
         if (!games || games.length === 0) return null
 
         return (
-          <MovieCarousel
+          <SearchResultCarousel
             key={genre.name}
             title={genre.name}
-            movies={games}
-            onMovieClick={handleGameClick}
+            items={games}
+            onItemClick={handleGameClick}
             cardSize="medium"
           />
         )
@@ -335,11 +335,11 @@ export default function GamesDiscovery() {
         if (!games || games.length === 0) return null
 
         return (
-          <MovieCarousel
+          <SearchResultCarousel
             key={platform.name}
             title={platform.name}
-            movies={games}
-            onMovieClick={handleGameClick}
+            items={games}
+            onItemClick={handleGameClick}
             cardSize="medium"
           />
         )

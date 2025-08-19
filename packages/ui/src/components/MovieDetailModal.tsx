@@ -299,7 +299,6 @@ export function MovieDetailModal({ movie, open, onOpenChange }: MovieDetailModal
             toast({
               title: "Download Failed",
               description: "Failed to start the download. Please try again.",
-              variant: "destructive",
             })
           }
         }}

@@ -187,6 +187,8 @@ export class TorrentCheckerService {
           limit: 50,
         });
       } else if (request.contentType === ContentType.GAME) {
+        this.logger.debug(`Searching for game: ${searchQuery}, platform: ${request.platform}`);
+
         searchResult = await this.jackettService.searchGameTorrents({
           query: searchQuery,
           year: request.year,

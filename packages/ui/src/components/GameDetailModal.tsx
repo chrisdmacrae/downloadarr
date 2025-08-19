@@ -225,7 +225,7 @@ export function GameDetailModal({ game, open, onOpenChange }: GameDetailModalPro
                       return (
                         <div className="space-y-2">
                           <DownloadStatusBadge
-                            status={existingRequest.status}
+                            request={existingRequest}
                             className="w-full justify-center"
                           />
                           <Button
@@ -305,7 +305,6 @@ export function GameDetailModal({ game, open, onOpenChange }: GameDetailModalPro
             toast({
               title: "Download Failed",
               description: "Failed to start the download. Please try again.",
-              variant: "destructive",
             })
           }
         }}

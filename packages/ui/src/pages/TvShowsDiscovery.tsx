@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { MovieCarousel } from '@/components/MovieCarousel'
-import { MovieCard } from '@/components/MovieCard'
+import { SearchResultCarousel } from '@/components/SearchResultCarousel'
+import { SearchResultCard } from '@/components/SearchResultCard'
 import { MovieDetailModal } from '@/components/MovieDetailModal'
 import { SearchResult, apiService } from '@/services/api'
 import { useToast } from '@/hooks/use-toast'
@@ -175,9 +175,9 @@ export default function TvShowsDiscovery() {
           <h2 className="text-2xl font-semibold">Featured</h2>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
             {featuredShows.map((show) => (
-              <MovieCard
+              <SearchResultCard
                 key={show.id}
-                movie={show}
+                item={show}
                 onClick={handleShowClick}
                 size="medium"
                 showOverview={false}
@@ -189,10 +189,10 @@ export default function TvShowsDiscovery() {
 
       {/* Popular TV Shows Carousel */}
       {popularShows.length > 0 && (
-        <MovieCarousel
+        <SearchResultCarousel
           title="Popular TV Shows"
-          movies={popularShows}
-          onMovieClick={handleShowClick}
+          items={popularShows}
+          onItemClick={handleShowClick}
           cardSize="medium"
         />
       )}
@@ -203,11 +203,11 @@ export default function TvShowsDiscovery() {
         if (!shows || shows.length === 0) return null
 
         return (
-          <MovieCarousel
+          <SearchResultCarousel
             key={genre.id}
             title={genre.name}
-            movies={shows}
-            onMovieClick={handleShowClick}
+            items={shows}
+            onItemClick={handleShowClick}
             cardSize="medium"
           />
         )

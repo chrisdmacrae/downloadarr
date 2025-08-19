@@ -10,71 +10,31 @@ All-in-one media and ROM downloading tool with VPN integration, built with NestJ
 - **Queue Management**: BullMQ-powered job processing
 - **Docker Deployment**: Complete containerized setup
 
-## Architecture
-
-This is a monorepo containing:
-
-- `packages/api` - NestJS REST API server with BullMQ job processing
-- `packages/ui` - React frontend with shadcn/ui components
-
 ## Quick Start
 
 ### Prerequisites
 
-- Node.js 18+
 - Docker & Docker Compose
 - OpenVPN configuration files (optional)
+- External API keys for discovery services (OMDb, TMDB, IGDB)
+
+### Setup
+
+Run `curl https://raw.githubusercontent.com/your-repo/main/setup.sh | bash`
+
+TODO: Add setup script
 
 ### Development
 
-1. Run the setup script:
-```bash
-./scripts/setup.sh
-```
-
-2. Configure environment variables:
-```bash
-cp .env.example .env
-# Edit .env with your configuration
-```
-
-3. Start development servers:
-```bash
-npm run dev
-```
-
-### Production Deployment
-
-See [DOCKER-SETUP.md](./DOCKER-SETUP.md) for detailed Docker configuration options.
-
-**Quick Start:**
-
-1. Configure environment variables in `.env`
-2. Start all services:
-
-```bash
-# Without VPN (basic setup)
-docker-compose up -d
-
-# With VPN (recommended for torrents)
-docker-compose -f docker-compose.yml -f docker-compose.vpn.yml up -d
-docker-compose up -d
-```
-
-### VPN Setup (Optional)
-
-1. Place your OpenVPN configuration file in `vpn-configs/`
-2. Update `.env`:
-```bash
-VPN_ENABLED=true
-VPN_CONFIG_PATH=/app/vpn/your-config.ovpn
-```
+TODO: add dev script
 
 ## Services
 
 - **API Server**: http://localhost:3001
 - **Frontend**: http://localhost:3000
 - **Jackett**: http://localhost:9117
+- **FlareSolverr**: http://localhost:8191 (Cloudflare bypass)
+- **AriaNG**: http://localhost:6880 (Download manager UI)
 
 ## Environment Variables
 
@@ -84,6 +44,11 @@ Copy `.env.example` to `.env` and configure:
 - `VPN_CONFIG_PATH` - Path to OpenVPN configuration
 - `DOWNLOAD_PATH` - Directory for downloaded files
 - `JACKETT_API_KEY` - Jackett API key for torrent search
+- `FLARESOLVERR_URL` - FlareSolverr URL for Cloudflare bypass
+- `OMDB_API_KEY` - OMDb API key for movie search
+- `TMDB_API_KEY` - TMDB API key for TV show search
+- `IGDB_CLIENT_ID` - IGDB client ID for game search
+- `IGDB_CLIENT_SECRET` - IGDB client secret for game search
 
 ## License
 

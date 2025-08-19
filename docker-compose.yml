@@ -50,7 +50,7 @@ services:
       DOWNLOAD_PATH: /downloads
       JACKETT_URL: http://jackett:9117
       JACKETT_API_KEY: ${JACKETT_API_KEY}
-      # External API Keys for Discovery Services
+      FLARESOLVERR_URL: http://flaresolverr:8191
       OMDB_API_KEY: ${OMDB_API_KEY}
       TMDB_API_KEY: ${TMDB_API_KEY}
       IGDB_CLIENT_ID: ${IGDB_CLIENT_ID}
@@ -62,6 +62,7 @@ services:
       - redis
       - postgres
       - aria2
+      - flaresolverr
     networks:
       - downloadarr
 
@@ -81,6 +82,21 @@ services:
     networks:
       - downloadarr
 
+  # FlareSolverr for bypassing Cloudflare protection
+  flaresolverr:
+    image: ghcr.io/flaresolverr/flaresolverr:latest
+    container_name: downloadarr-flaresolverr
+    restart: unless-stopped
+    environment:
+      LOG_LEVEL: info
+      LOG_HTML: false
+      CAPTCHA_SOLVER: none
+      TZ: ${TZ:-UTC}
+    ports:
+      - "8191:8191"
+    networks:
+      - downloadarr
+
   # Jackett for torrent indexing
   jackett:
     image: lscr.io/linuxserver/jackett:latest
@@ -95,7 +111,10 @@ services:
       - "9117:9117"
     volumes:
       - jackett_config:/config
+      - jackett_config:/jackett-config
       - downloads:/downloads
+    depends_on:
+      - flaresolverr
     networks:
       - downloadarr
 

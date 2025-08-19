@@ -95,7 +95,8 @@ export class RequestedTorrentsService {
   }
 
   async createGameRequest(dto: CreateTorrentRequestDto): Promise<RequestedTorrent> {
-    this.logger.log(`Creating game torrent request for: ${dto.title} (${dto.platform || 'Unknown Platform'})`);
+    this.logger.log(`Creating game torrent request for: ${dto.title} (Platform: "${dto.platform || 'None specified'}")`);
+    this.logger.debug(`Game request DTO:`, { title: dto.title, platform: dto.platform, igdbId: dto.igdbId, genre: dto.genre });
 
     // Check for existing requests to prevent duplicates
     const existingRequest = await this.findExistingGameRequest(dto);

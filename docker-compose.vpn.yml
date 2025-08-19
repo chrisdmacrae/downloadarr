@@ -71,6 +71,7 @@ services:
       REDIS_PORT: 6379
       JACKETT_URL: http://jackett:9117
       JACKETT_API_KEY: ${JACKETT_API_KEY}
+      FLARESOLVERR_URL: http://flaresolverr:8191
       # External API Keys for Discovery Services
       OMDB_API_KEY: ${OMDB_API_KEY}
       TMDB_API_KEY: ${TMDB_API_KEY}
@@ -87,6 +88,7 @@ services:
       - vpn
       - postgres
       - redis
+      - flaresolverr
 
   # Override original Aria2 to route through VPN
   aria2:
@@ -173,6 +175,17 @@ services:
 
   jackett:
     container_name: downloadarr-jackett-vpn
+    environment:
+      PUID: 1000
+      PGID: 1000
+      TZ: ${TZ:-UTC}
+      AUTO_UPDATE: true
+      # FlareSolverr configuration
+      JACKETT__FLARESOLVERR_URL: http://flaresolverr:8191/
+      JACKETT__FLARESOLVERR_MAXTIMEOUT: 60000
+
+  flaresolverr:
+    container_name: downloadarr-flaresolverr-vpn
 
 # Additional volumes for VPN setup
 volumes:
