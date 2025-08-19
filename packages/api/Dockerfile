@@ -1,5 +1,5 @@
 # Build stage
-FROM node:18-alpine AS builder
+FROM node:20-alpine AS builder
 
 WORKDIR /app
 
@@ -15,10 +15,15 @@ COPY packages/api ./packages/api
 
 # Build the application
 WORKDIR /app/packages/api
+
+# Generate Prisma client
+RUN npx prisma generate
+
+# Build the application
 RUN npm run build
 
 # Production stage
-FROM node:18-alpine AS production
+FROM node:20-alpine AS production
 
 # Install system dependencies for VPN, downloading, and Docker
 RUN apk add --no-cache \
@@ -39,6 +44,8 @@ RUN npm install --only=production && npm cache clean --force
 # Copy built application
 COPY --from=builder /app/packages/api/dist ./packages/api/dist
 COPY --from=builder /app/packages/api/node_modules ./packages/api/node_modules
+COPY --from=builder /app/packages/api/generated ./packages/api/generated
+COPY --from=builder /app/packages/api/prisma ./packages/api/prisma
 
 # Create directories
 RUN mkdir -p /downloads /app/vpn

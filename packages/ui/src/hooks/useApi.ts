@@ -6,6 +6,7 @@ export const queryKeys = {
   queueStats: ['queue', 'stats'] as const,
   vpnStatus: ['vpn', 'status'] as const,
   aria2Stats: ['aria2', 'stats'] as const,
+  downloads: ['downloads'] as const,
   activeDownloads: ['downloads', 'active'] as const,
   downloadStatus: (id: string) => ['downloads', id, 'status'] as const,
 };
@@ -40,6 +41,16 @@ export const useAria2Stats = () => {
   });
 };
 
+// Hook for all downloads
+export const useDownloads = () => {
+  return useQuery({
+    queryKey: queryKeys.downloads,
+    queryFn: apiService.getDownloads,
+    refetchInterval: 3000, // Refetch every 3 seconds for real-time updates
+    staleTime: 1000, // Consider data stale after 1 second
+  });
+};
+
 // Hook for active downloads
 export const useActiveDownloads = () => {
   return useQuery({
@@ -64,55 +75,59 @@ export const useDownloadStatus = (id: string) => {
 // Mutation hooks for download actions
 export const useCreateDownload = () => {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: apiService.createDownload,
     onSuccess: () => {
-      // Invalidate and refetch queue stats and active downloads
-      queryClient.invalidateQueries({ queryKey: queryKeys.queueStats });
-      queryClient.invalidateQueries({ queryKey: queryKeys.activeDownloads });
+      // Immediately refetch downloads and stats
+      queryClient.refetchQueries({ queryKey: queryKeys.downloads });
+      queryClient.refetchQueries({ queryKey: queryKeys.queueStats });
+      queryClient.refetchQueries({ queryKey: queryKeys.activeDownloads });
     },
   });
 };
 
 export const usePauseDownload = () => {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: apiService.pauseDownload,
     onSuccess: (_, downloadId) => {
-      // Invalidate specific download status and general stats
+      // Immediately refetch downloads and stats
+      queryClient.refetchQueries({ queryKey: queryKeys.downloads });
+      queryClient.refetchQueries({ queryKey: queryKeys.queueStats });
+      queryClient.refetchQueries({ queryKey: queryKeys.activeDownloads });
       queryClient.invalidateQueries({ queryKey: queryKeys.downloadStatus(downloadId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.queueStats });
-      queryClient.invalidateQueries({ queryKey: queryKeys.activeDownloads });
     },
   });
 };
 
 export const useResumeDownload = () => {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: apiService.resumeDownload,
     onSuccess: (_, downloadId) => {
-      // Invalidate specific download status and general stats
+      // Immediately refetch downloads and stats
+      queryClient.refetchQueries({ queryKey: queryKeys.downloads });
+      queryClient.refetchQueries({ queryKey: queryKeys.queueStats });
+      queryClient.refetchQueries({ queryKey: queryKeys.activeDownloads });
       queryClient.invalidateQueries({ queryKey: queryKeys.downloadStatus(downloadId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.queueStats });
-      queryClient.invalidateQueries({ queryKey: queryKeys.activeDownloads });
     },
   });
 };
 
 export const useCancelDownload = () => {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: apiService.cancelDownload,
     onSuccess: (_, downloadId) => {
-      // Invalidate specific download status and general stats
+      // Immediately refetch downloads and stats
+      queryClient.refetchQueries({ queryKey: queryKeys.downloads });
+      queryClient.refetchQueries({ queryKey: queryKeys.queueStats });
+      queryClient.refetchQueries({ queryKey: queryKeys.activeDownloads });
       queryClient.invalidateQueries({ queryKey: queryKeys.downloadStatus(downloadId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.queueStats });
-      queryClient.invalidateQueries({ queryKey: queryKeys.activeDownloads });
     },
   });
 };

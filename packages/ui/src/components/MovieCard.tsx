@@ -1,15 +1,26 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Download } from 'lucide-react'
 import { SearchResult } from '@/services/api'
 
 interface MovieCardProps {
   movie: SearchResult
   onClick?: (movie: SearchResult) => void
+  onDownloadRequest?: (movie: SearchResult) => void
   size?: 'small' | 'medium' | 'large'
   showOverview?: boolean
+  showDownloadButton?: boolean
 }
 
-export function MovieCard({ movie, onClick, size = 'medium', showOverview = false }: MovieCardProps) {
+export function MovieCard({
+  movie,
+  onClick,
+  onDownloadRequest,
+  size = 'medium',
+  showOverview = false,
+  showDownloadButton = false
+}: MovieCardProps) {
   const sizeClasses = {
     small: {
       container: 'w-32',

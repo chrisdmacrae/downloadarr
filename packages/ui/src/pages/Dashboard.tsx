@@ -51,7 +51,7 @@ export default function Dashboard() {
                 <div className="text-2xl font-bold text-red-500">--</div>
               </div>
             ) : (
-              <div className="text-2xl font-bold">{queueStats?.active || 0}</div>
+              <div className="text-2xl font-bold">{aria2Stats?.numActive || queueStats?.active || 0}</div>
             )}
             <p className="text-xs text-muted-foreground">
               {queueError ? 'Failed to load' : 'Currently downloading'}

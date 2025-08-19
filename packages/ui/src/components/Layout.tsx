@@ -9,7 +9,8 @@ import {
   Activity,
   Film,
   Tv,
-  Gamepad2
+  Gamepad2,
+  List
 } from 'lucide-react'
 
 const navigation = [
@@ -18,6 +19,7 @@ const navigation = [
   { name: 'TV Shows', href: '/tv-shows', icon: Tv },
   { name: 'Games', href: '/games', icon: Gamepad2 },
   { name: 'Downloads', href: '/downloads', icon: Download },
+  { name: 'Requests', href: '/requests', icon: List },
   { name: 'Search', href: '/search', icon: Search },
   { name: 'Settings', href: '/settings', icon: Settings },
 ]

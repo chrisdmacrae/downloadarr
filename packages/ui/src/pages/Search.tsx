@@ -5,7 +5,13 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Search as SearchIcon, Download, Loader2, AlertCircle } from 'lucide-react'
+import { MovieDetailModal } from '@/components/MovieDetailModal'
+import { GameDetailModal } from '@/components/GameDetailModal'
+import { DownloadRequestModal } from '@/components/DownloadRequestModal'
+import { DownloadStatusBadge } from '@/components/DownloadStatusBadge'
+
 import { apiService, SearchResult } from '@/services/api'
+import { useTorrentRequests } from '@/hooks/useTorrentRequests'
 import { useToast } from '@/hooks/use-toast'
 
 export default function Search() {
@@ -15,6 +21,11 @@ export default function Search() {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [selectedItem, setSelectedItem] = useState<SearchResult | null>(null)
+  const [showDetailModal, setShowDetailModal] = useState(false)
+  const [showDownloadModal, setShowDownloadModal] = useState(false)
+
+  const { getRequestForItem, refreshRequests } = useTorrentRequests()
   const { toast } = useToast()
 
   // Update URL when tab changes
@@ -162,6 +173,32 @@ export default function Search() {
     }
   }
 
+  const handleItemClick = (item: SearchResult) => {
+    setSelectedItem(item)
+    if (item.type === 'game') {
+      setShowDetailModal(true)
+    } else {
+      setShowDetailModal(true)
+    }
+  }
+
+  const handleDownloadClick = (item: SearchResult, e: React.MouseEvent) => {
+    e.stopPropagation() // Prevent triggering the card click
+    setSelectedItem(item)
+    setShowDownloadModal(true)
+  }
+
+
+
+  const handleDownloadRequestCreated = () => {
+    toast({
+      title: "Download Requested",
+      description: `${selectedItem?.title} has been added to the download queue`,
+    })
+    // Refresh the torrent requests to show the new status
+    refreshRequests()
+  }
+
   const tabs = [
     { id: 'movies' as const, label: 'Movies' },
     { id: 'tv' as const, label: 'TV Shows' },
@@ -269,53 +306,119 @@ export default function Search() {
 
           {searchResults.length > 0 && (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {searchResults.map((item) => (
-                <Card key={item.id} className="overflow-hidden hover:shadow-lg transition-shadow">
-                  <div className="aspect-[2/3] bg-muted relative">
-                    {item.poster ? (
-                      <img
-                        src={item.poster}
-                        alt={item.title}
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                          const target = e.target as HTMLImageElement
-                          target.style.display = 'none'
-                          target.nextElementSibling?.classList.remove('hidden')
-                        }}
-                      />
-                    ) : null}
-                    <div className={`absolute inset-0 flex items-center justify-center text-muted-foreground ${item.poster ? 'hidden' : ''}`}>
-                      No Image
+              {searchResults.map((item) => {
+                const torrentRequest = getRequestForItem(item.title, item.year)
+
+                return (
+                  <Card
+                    key={item.id}
+                    className="overflow-hidden hover:shadow-lg transition-shadow cursor-pointer"
+                    onClick={() => handleItemClick(item)}
+                  >
+                    <div className="aspect-[2/3] bg-muted relative">
+                      {item.poster ? (
+                        <img
+                          src={item.poster}
+                          alt={item.title}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement
+                            target.style.display = 'none'
+                            target.nextElementSibling?.classList.remove('hidden')
+                          }}
+                        />
+                      ) : null}
+                      <div className={`absolute inset-0 flex items-center justify-center text-muted-foreground ${item.poster ? 'hidden' : ''}`}>
+                        No Image
+                      </div>
+                      <Badge className="absolute top-2 right-2 capitalize">
+                        {item.type === 'game' ? 'Game' : item.type === 'tv' ? 'TV' : 'Movie'}
+                      </Badge>
+                      {torrentRequest && (
+                        <div className="absolute top-2 left-2">
+                          <DownloadStatusBadge request={torrentRequest} />
+                        </div>
+                      )}
                     </div>
-                    <Badge className="absolute top-2 right-2 capitalize">
-                      {item.type === 'game' ? 'Game' : item.type === 'tv' ? 'TV' : 'Movie'}
-                    </Badge>
-                  </div>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-lg line-clamp-2" title={item.title}>
-                      {item.title}
-                    </CardTitle>
-                    <CardDescription className="flex items-center justify-between">
-                      <span>{item.year || 'Unknown'}</span>
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="pt-0">
-                    {item.overview && (
-                      <p className="text-xs text-muted-foreground mb-3 line-clamp-2">
-                        {item.overview}
-                      </p>
-                    )}
-                    <Button className="w-full" size="sm" variant="outline">
-                      <Download className="h-3 w-3 mr-1" />
-                      Find Downloads
-                    </Button>
-                  </CardContent>
-                </Card>
-              ))}
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-lg line-clamp-2" title={item.title}>
+                        {item.title}
+                      </CardTitle>
+                      <CardDescription className="flex items-center justify-between">
+                        <span>{item.year || 'Unknown'}</span>
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="pt-0">
+                      {item.overview && (
+                        <p className="text-xs text-muted-foreground mb-3 line-clamp-2">
+                          {item.overview}
+                        </p>
+                      )}
+                      {item.type !== 'game' && !torrentRequest && (
+                        <Button
+                          className="w-full"
+                          size="sm"
+                          variant="outline"
+                          onClick={(e) => handleDownloadClick(item, e)}
+                        >
+                          <Download className="h-3 w-3 mr-1" />
+                          Request Download
+                        </Button>
+                      )}
+                      {item.type !== 'game' && torrentRequest && (
+                        <Button
+                          className="w-full"
+                          size="sm"
+                          variant="secondary"
+                          disabled
+                        >
+                          <Download className="h-3 w-3 mr-1" />
+                          Already Requested
+                        </Button>
+                      )}
+                      {item.type === 'game' && (
+                        <Button className="w-full" size="sm" variant="outline">
+                          <Download className="h-3 w-3 mr-1" />
+                          View Details
+                        </Button>
+                      )}
+                    </CardContent>
+                  </Card>
+                )
+              })}
             </div>
           )}
         </>
       )}
+
+      {/* Detail Modals */}
+      {selectedItem && selectedItem.type !== 'game' && (
+        <MovieDetailModal
+          movie={selectedItem}
+          open={showDetailModal}
+          onOpenChange={setShowDetailModal}
+        />
+      )}
+
+      {selectedItem && selectedItem.type === 'game' && (
+        <GameDetailModal
+          game={selectedItem}
+          open={showDetailModal}
+          onOpenChange={setShowDetailModal}
+        />
+      )}
+
+      {/* Download Request Modal */}
+      {selectedItem && selectedItem.type !== 'game' && (
+        <DownloadRequestModal
+          item={selectedItem}
+          open={showDownloadModal}
+          onOpenChange={setShowDownloadModal}
+          onRequestCreated={handleDownloadRequestCreated}
+        />
+      )}
+
+
     </div>
   )
 }

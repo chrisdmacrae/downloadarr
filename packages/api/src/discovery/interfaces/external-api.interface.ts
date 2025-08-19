@@ -70,3 +70,45 @@ export interface ExternalApiConfig {
     window: number; // in milliseconds
   };
 }
+
+// Torrent-related interfaces
+export interface TorrentResult {
+  title: string;
+  link: string;
+  magnetUri?: string;
+  size: string;
+  seeders: number;
+  leechers: number;
+  category: string;
+  indexer: string;
+  publishDate: string;
+  quality?: string;
+  format?: string;
+}
+
+export interface TorrentSearchParams {
+  query: string;
+  category?: string;
+  indexers?: string[];
+  minSeeders?: number;
+  maxSize?: string;
+  quality?: string[];
+  format?: string[];
+}
+
+export interface JackettSearchResponse {
+  Results: JackettTorrent[];
+}
+
+export interface JackettTorrent {
+  Title: string;
+  Link: string;
+  MagnetUri?: string;
+  Size: number;
+  Seeders: number;
+  Peers: number;
+  CategoryDesc: string;
+  Tracker: string;
+  PublishDate: string;
+  Details?: string;
+}

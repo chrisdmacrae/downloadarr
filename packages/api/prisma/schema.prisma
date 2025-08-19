@@ -1,0 +1,168 @@
+generator client {
+  provider      = "prisma-client-js"
+  output        = "../generated/prisma"
+  binaryTargets = ["native", "linux-musl-arm64-openssl-3.0.x", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model RequestedTorrent {
+  id                 String             @id @default(cuid())
+  contentType        ContentType
+  title              String
+  year               Int?
+  imdbId             String?
+  tmdbId             Int?
+  season             Int?
+  episode            Int?
+  status             RequestStatus      @default(PENDING)
+  priority           Int                @default(5)
+  preferredQualities TorrentQuality[]
+  preferredFormats   TorrentFormat[]
+  minSeeders         Int                @default(5)
+  maxSizeGB          Int                @default(20)
+  blacklistedWords   String[]           @default([])
+  trustedIndexers    String[]           @default([])
+  searchAttempts     Int                @default(0)
+  maxSearchAttempts  Int                @default(50)
+  lastSearchAt       DateTime?
+  nextSearchAt       DateTime?
+  searchIntervalMins Int                @default(30)
+  foundTorrentTitle  String?
+  foundTorrentLink   String?
+  foundMagnetUri     String?
+  foundTorrentSize   String?
+  foundSeeders       Int?
+  foundIndexer       String?
+  downloadJobId      String?
+  aria2Gid           String?
+  downloadProgress   Float?
+  downloadSpeed      String?
+  downloadEta        String?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  completedAt        DateTime?
+  expiresAt          DateTime
+  userId             String?
+  searchLogs         TorrentSearchLog[]
+  searchResults      TorrentSearchResult[]
+
+  @@map("requested_torrents")
+}
+
+model TorrentSearchLog {
+  id                 String           @id @default(cuid())
+  requestedTorrentId String
+  searchQuery        String
+  indexersSearched   String[]
+  resultsFound       Int
+  bestResultTitle    String?
+  bestResultSeeders  Int?
+  searchDurationMs   Int
+  searchedAt         DateTime         @default(now())
+  requestedTorrent   RequestedTorrent @relation(fields: [requestedTorrentId], references: [id], onDelete: Cascade)
+
+  @@map("torrent_search_logs")
+}
+
+model TorrentSearchResult {
+  id                 String           @id @default(cuid())
+  requestedTorrentId String
+  title              String
+  link               String?
+  magnetUri          String?
+  size               String
+  sizeBytes          BigInt?
+  seeders            Int
+  leechers           Int
+  category           String
+  indexer            String
+  publishDate        String
+  quality            String?
+  format             String?
+  rankingScore       Float            @default(0)
+  isSelected         Boolean          @default(false)
+  isAutoSelected     Boolean          @default(false)
+  createdAt          DateTime         @default(now())
+  requestedTorrent   RequestedTorrent @relation(fields: [requestedTorrentId], references: [id], onDelete: Cascade)
+
+  @@map("torrent_search_results")
+}
+
+model DownloadMetadata {
+  id             String            @id @default(cuid())
+  name           String
+  originalUrl    String
+  type           DownloadType
+  mediaType      MediaType?
+  mediaTitle     String?
+  mediaYear      Int?
+  mediaPoster    String?
+  mediaOverview  String?
+  aria2Gid       String            @unique
+  aria2ChildGids String[]          @default([])
+  status         DownloadStatus    @default(ACTIVE)
+  destination    String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  @@map("download_metadata")
+}
+
+enum DownloadType {
+  MAGNET
+  TORRENT
+  HTTP
+  HTTPS
+}
+
+enum MediaType {
+  MOVIE
+  TV
+  GAME
+}
+
+enum DownloadStatus {
+  ACTIVE
+  WAITING
+  PAUSED
+  ERROR
+  COMPLETE
+  REMOVED
+}
+
+enum ContentType {
+  MOVIE
+  TV_SHOW
+}
+
+enum RequestStatus {
+  PENDING
+  SEARCHING
+  FOUND
+  DOWNLOADING
+  COMPLETED
+  FAILED
+  CANCELLED
+  EXPIRED
+}
+
+enum TorrentQuality {
+  SD
+  HD_720P
+  HD_1080P
+  UHD_4K
+  UHD_8K
+}
+
+enum TorrentFormat {
+  X264
+  X265
+  XVID
+  DIVX
+  AV1
+  HEVC
+}

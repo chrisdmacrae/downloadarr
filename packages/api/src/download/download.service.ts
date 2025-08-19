@@ -1,152 +1,223 @@
 import { Injectable } from '@nestjs/common';
-import { InjectQueue } from '@nestjs/bull';
-import { Queue } from 'bull';
 import { CreateDownloadDto } from './dto/create-download.dto';
 import { Aria2Service } from './aria2.service';
+import { DownloadMetadataService } from './download-metadata.service';
 
 @Injectable()
 export class DownloadService {
   constructor(
-    @InjectQueue('download') private downloadQueue: Queue,
     private aria2Service: Aria2Service,
+    private downloadMetadataService: DownloadMetadataService,
   ) {}
 
   async createDownload(createDownloadDto: CreateDownloadDto) {
-    const job = await this.downloadQueue.add('process-download', {
-      ...createDownloadDto,
-      createdAt: new Date(),
+    const { url, type, destination, name } = createDownloadDto;
+
+    const options = {
+      dir: destination || '/downloads',
+      out: name,
+    };
+
+    let gid: string;
+
+    // Start download directly with Aria2 based on type
+    switch (type) {
+      case 'magnet':
+        gid = await this.aria2Service.addMagnet(url, options);
+        break;
+      case 'torrent':
+        gid = await this.aria2Service.addUri([url], options);
+        break;
+      case 'http':
+      case 'https':
+        gid = await this.aria2Service.addUri([url], options);
+        break;
+      default:
+        throw new Error(`Unsupported download type: ${type}`);
+    }
+
+    // Create metadata entry
+    const metadata = await this.downloadMetadataService.createDownloadMetadata({
+      name: name || 'Unknown',
+      originalUrl: url,
+      type,
+      aria2Gid: gid,
+      destination,
     });
 
+    // TODO: In a real implementation, you might want to:
+    // 1. Extract media info from the name/URL
+    // 2. Look up movie/TV show details from TMDB
+    // 3. Monitor for child downloads and update metadata
+
     return {
-      id: job.id,
-      status: 'queued',
+      id: metadata.id,
+      status: 'active',
+      aria2Gid: gid,
       ...createDownloadDto,
     };
   }
 
   async getDownloads() {
-    const jobs = await this.downloadQueue.getJobs(['waiting', 'active', 'completed', 'failed']);
-    
-    return jobs.map(job => ({
-      id: job.id,
-      status: job.opts.jobId,
-      data: job.data,
-      progress: job.progress(),
-      createdAt: job.timestamp,
-      processedAt: job.processedOn,
-      finishedAt: job.finishedOn,
+    // Return grouped downloads with metadata
+    return this.downloadMetadataService.getGroupedDownloads();
+  }
+
+  // Legacy method for raw Aria2 downloads (kept for compatibility)
+  async getRawDownloads() {
+    // Get all downloads from Aria2
+    const [active, waiting, stopped] = await Promise.all([
+      this.aria2Service.getActiveDownloads(),
+      this.aria2Service.getWaitingDownloads(),
+      this.aria2Service.getStoppedDownloads(),
+    ]);
+
+    const allDownloads = [...active, ...waiting, ...stopped];
+
+    return allDownloads.map(download => ({
+      id: download.gid,
+      status: download.status,
+      data: {
+        url: download.files?.[0]?.uris?.[0]?.uri || 'Unknown',
+        name: download.files?.[0]?.path || 'Unknown',
+        totalLength: download.totalLength,
+        completedLength: download.completedLength,
+      },
+      progress: parseInt(download.totalLength) > 0 ?
+        Math.round((parseInt(download.completedLength) / parseInt(download.totalLength)) * 100) : 0,
+      createdAt: Date.now(), // Aria2 doesn't provide creation time
+      processedAt: download.status === 'active' ? Date.now() : null,
+      finishedAt: download.status === 'complete' ? Date.now() : null,
     }));
   }
 
   async getDownload(id: string) {
-    const job = await this.downloadQueue.getJob(id);
-    
-    if (!job) {
-      throw new Error('Download job not found');
-    }
+    try {
+      const download = await this.aria2Service.getStatus(id);
 
-    return {
-      id: job.id,
-      status: await job.getState(),
-      data: job.data,
-      progress: job.progress(),
-      createdAt: job.timestamp,
-      processedAt: job.processedOn,
-      finishedAt: job.finishedOn,
-    };
+      return {
+        id: download.gid,
+        status: download.status,
+        data: {
+          url: download.files?.[0]?.uris?.[0]?.uri || 'Unknown',
+          name: download.files?.[0]?.path || 'Unknown',
+          totalLength: download.totalLength,
+          completedLength: download.completedLength,
+        },
+        progress: parseInt(download.totalLength) > 0 ?
+          Math.round((parseInt(download.completedLength) / parseInt(download.totalLength)) * 100) : 0,
+        createdAt: Date.now(), // Aria2 doesn't provide creation time
+        processedAt: download.status === 'active' ? Date.now() : null,
+        finishedAt: download.status === 'complete' ? Date.now() : null,
+      };
+    } catch (error) {
+      throw new Error('Download not found');
+    }
   }
 
   async getDownloadStatus(id: string) {
-    const job = await this.downloadQueue.getJob(id);
+    try {
+      const download = await this.aria2Service.getStatus(id);
 
-    if (!job) {
-      throw new Error('Download job not found');
+      return {
+        id: download.gid,
+        status: download.status,
+        progress: parseInt(download.totalLength) > 0 ?
+          Math.round((parseInt(download.completedLength) / parseInt(download.totalLength)) * 100) : 0,
+      };
+    } catch (error) {
+      throw new Error('Download not found');
     }
-
-    return {
-      id: job.id,
-      status: await job.getState(),
-      progress: job.progress(),
-    };
   }
 
   async pauseDownload(id: string) {
-    const job = await this.downloadQueue.getJob(id);
+    try {
+      // Try to pause using metadata service first (for grouped downloads)
+      await this.downloadMetadataService.pauseDownload(id);
 
-    if (!job) {
-      throw new Error('Download job not found');
-    }
-
-    // If the job has an aria2 GID, pause it in aria2
-    if (job.data.aria2Gid) {
+      return {
+        success: true,
+        message: 'Download paused',
+      };
+    } catch (metadataError) {
+      // Fallback to direct Aria2 pause (for legacy compatibility)
       try {
-        await this.aria2Service.pause(job.data.aria2Gid);
-      } catch (error) {
-        // Log error but don't fail the operation
-        console.error('Failed to pause download in aria2:', error);
+        await this.aria2Service.pause(id);
+
+        return {
+          success: true,
+          message: 'Download paused',
+        };
+      } catch (aria2Error) {
+        throw new Error('Failed to pause download');
       }
     }
-
-    return { success: true, message: 'Download paused' };
   }
 
   async resumeDownload(id: string) {
-    const job = await this.downloadQueue.getJob(id);
+    try {
+      // Try to resume using metadata service first (for grouped downloads)
+      await this.downloadMetadataService.resumeDownload(id);
 
-    if (!job) {
-      throw new Error('Download job not found');
-    }
-
-    // If the job has an aria2 GID, resume it in aria2
-    if (job.data.aria2Gid) {
+      return {
+        success: true,
+        message: 'Download resumed',
+      };
+    } catch (metadataError) {
+      // Fallback to direct Aria2 resume (for legacy compatibility)
       try {
-        await this.aria2Service.unpause(job.data.aria2Gid);
-      } catch (error) {
-        // Log error but don't fail the operation
-        console.error('Failed to resume download in aria2:', error);
+        await this.aria2Service.unpause(id);
+
+        return {
+          success: true,
+          message: 'Download resumed',
+        };
+      } catch (aria2Error) {
+        throw new Error('Failed to resume download');
       }
     }
-
-    return { success: true, message: 'Download resumed' };
   }
 
   async cancelDownload(id: string) {
-    const job = await this.downloadQueue.getJob(id);
+    try {
+      // Try to cancel using metadata service first (for grouped downloads)
+      await this.downloadMetadataService.deleteDownloadMetadata(id);
 
-    if (!job) {
-      throw new Error('Download job not found');
-    }
-
-    // Remove the job from the queue
-    await job.remove();
-
-    // If the job has an aria2 GID, remove it from aria2 as well
-    if (job.data.aria2Gid) {
+      return {
+        success: true,
+        message: 'Download cancelled',
+      };
+    } catch (metadataError) {
+      // Fallback to direct Aria2 removal (for legacy compatibility)
       try {
-        await this.aria2Service.remove(job.data.aria2Gid);
-      } catch (error) {
-        // Log error but don't fail the operation
-        console.error('Failed to cancel download in aria2:', error);
+        await this.aria2Service.remove(id);
+
+        return {
+          success: true,
+          message: 'Download cancelled',
+        };
+      } catch (aria2Error) {
+        throw new Error('Failed to cancel download');
       }
     }
-
-    return { success: true, message: 'Download cancelled' };
   }
 
   async getQueueStats() {
-    const [waiting, active, completed, failed] = await Promise.all([
-      this.downloadQueue.getJobs(['waiting']),
-      this.downloadQueue.getJobs(['active']),
-      this.downloadQueue.getJobs(['completed']),
-      this.downloadQueue.getJobs(['failed']),
-    ]);
+    // Get grouped downloads from metadata service
+    const groupedDownloads = await this.downloadMetadataService.getGroupedDownloads();
+
+    // Count downloads by status
+    const active = groupedDownloads.filter(d => d.status === 'active').length;
+    const waiting = groupedDownloads.filter(d => d.status === 'waiting').length;
+    const completed = groupedDownloads.filter(d => d.status === 'complete').length;
+    const failed = groupedDownloads.filter(d => d.status === 'error').length;
 
     return {
-      waiting: waiting.length,
-      active: active.length,
-      completed: completed.length,
-      failed: failed.length,
-      total: waiting.length + active.length + completed.length + failed.length,
+      waiting,
+      active,
+      completed,
+      failed,
+      total: groupedDownloads.length,
     };
   }
 

@@ -3,6 +3,7 @@ import { Toaster } from '@/components/ui/toaster'
 import Layout from '@/components/Layout'
 import Dashboard from '@/pages/Dashboard'
 import Downloads from '@/pages/Downloads'
+import Requests from '@/pages/Requests'
 import Search from '@/pages/Search'
 import MoviesDiscovery from '@/pages/MoviesDiscovery'
 import TvShowsDiscovery from '@/pages/TvShowsDiscovery'
@@ -16,6 +17,7 @@ function App() {
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/downloads" element={<Downloads />} />
+          <Route path="/requests" element={<Requests />} />
           <Route path="/search" element={<Search />} />
           <Route path="/movies" element={<MoviesDiscovery />} />
           <Route path="/tv-shows" element={<TvShowsDiscovery />} />

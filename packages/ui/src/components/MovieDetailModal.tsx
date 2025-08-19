@@ -3,8 +3,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Download, Calendar, Clock, Star, User, Film } from 'lucide-react'
+import { Download, Calendar, Clock, Star, User, Film, Search } from 'lucide-react'
 import { SearchResult, MovieDetails } from '@/services/api'
+import { useCreateDownload } from '@/hooks/useApi'
+import { DownloadRequestModal } from './DownloadRequestModal'
+import { TorrentSearchModal } from './TorrentSearchModal'
 import { useToast } from '@/hooks/use-toast'
 
 interface MovieDetailModalProps {
@@ -17,7 +20,10 @@ export function MovieDetailModal({ movie, open, onOpenChange }: MovieDetailModal
   const [movieDetails, setMovieDetails] = useState<MovieDetails | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isDownloading, setIsDownloading] = useState(false)
+  const [showDownloadModal, setShowDownloadModal] = useState(false)
+  const [showTorrentSearchModal, setShowTorrentSearchModal] = useState(false)
   const { toast } = useToast()
+  const createDownloadMutation = useCreateDownload()
 
   useEffect(() => {
     if (movie && open) {
@@ -54,26 +60,19 @@ export function MovieDetailModal({ movie, open, onOpenChange }: MovieDetailModal
     }
   }
 
-  const handleDownload = async () => {
-    if (!movieDetails) return
+  const handleDownload = () => {
+    setShowDownloadModal(true)
+  }
 
-    setIsDownloading(true)
-    try {
-      // TODO: Implement actual download functionality
-      // This would typically create a download job
-      toast({
-        title: "Download Started",
-        description: `Added "${movieDetails.title}" to download queue`,
-      })
-      onOpenChange(false)
-    } catch (error) {
-      toast({
-        title: "Download Failed",
-        description: "Failed to start download",
-      })
-    } finally {
-      setIsDownloading(false)
-    }
+  const handleTorrentSearch = () => {
+    setShowTorrentSearchModal(true)
+  }
+
+  const handleDownloadRequestCreated = (request: any) => {
+    toast({
+      title: "Download Requested",
+      description: `${movie?.title} has been added to the download queue`,
+    })
   }
 
   if (!movie) return null
@@ -188,15 +187,22 @@ export function MovieDetailModal({ movie, open, onOpenChange }: MovieDetailModal
                   </div>
                 )}
 
-                {/* Download Button */}
-                <div className="pt-4">
-                  <Button 
-                    onClick={handleDownload} 
-                    disabled={isDownloading}
-                    className="w-full md:w-auto"
+                {/* Action Buttons */}
+                <div className="pt-4 flex flex-col sm:flex-row gap-2">
+                  <Button
+                    onClick={handleDownload}
+                    className="flex-1 sm:flex-none"
                   >
                     <Download className="h-4 w-4 mr-2" />
-                    {isDownloading ? 'Adding to Queue...' : 'Download'}
+                    Request Download
+                  </Button>
+                  <Button
+                    onClick={handleTorrentSearch}
+                    variant="outline"
+                    className="flex-1 sm:flex-none"
+                  >
+                    <Search className="h-4 w-4 mr-2" />
+                    View Torrents
                   </Button>
                 </div>
               </>
@@ -204,6 +210,50 @@ export function MovieDetailModal({ movie, open, onOpenChange }: MovieDetailModal
           </div>
         </div>
       </DialogContent>
+
+      {/* Download Request Modal */}
+      <DownloadRequestModal
+        item={movie}
+        open={showDownloadModal}
+        onOpenChange={setShowDownloadModal}
+        onRequestCreated={handleDownloadRequestCreated}
+      />
+
+      {/* Torrent Search Modal */}
+      <TorrentSearchModal
+        searchItem={movie}
+        isOpen={showTorrentSearchModal}
+        onClose={() => setShowTorrentSearchModal(false)}
+        onTorrentDownload={async (torrent) => {
+          try {
+            // Determine download type and URL
+            const downloadUrl = torrent.magnetUri || torrent.link
+            const downloadType = torrent.magnetUri ? 'magnet' : 'torrent'
+
+            // Create download job using the mutation
+            await createDownloadMutation.mutateAsync({
+              url: downloadUrl,
+              type: downloadType,
+              name: torrent.title,
+              destination: undefined // Use default destination
+            })
+
+            toast({
+              title: "Download Started",
+              description: `Successfully started downloading "${torrent.title}"`,
+            })
+
+            setShowTorrentSearchModal(false)
+          } catch (error) {
+            console.error('Failed to start download:', error)
+            toast({
+              title: "Download Failed",
+              description: "Failed to start the download. Please try again.",
+              variant: "destructive",
+            })
+          }
+        }}
+      />
     </Dialog>
   )
 }

@@ -31,39 +31,16 @@ All-in-one media and ROM downloading tool with VPN integration, NestJS API with 
 - [ ] Error handling and rate limiting
 - [ ] Basic search UI with images
 
-## Phase 4: Torrent Integration
-- [ ] Jackett API service integration
-- [ ] Torrent search and filtering logic
-- [ ] Movie/TV torrent discovery endpoints
-- [ ] Quality and format filtering
+## Phase 4: Torrent Integration ✅
+- [x] Jackett API service integration
+- [x] Torrent search and filtering logic
+- [x] Movie/TV torrent discovery endpoints
+- [x] Quality and format filtering
 
 ## Phase 5: ROM Management System
 - [ ] SQLite database schema for ROM sources
 - [ ] ROM scraping service (dedicated Docker container)
 - [ ] YAML configuration system for sources
 - [ ] Cron job scheduler for periodic scraping
-- [ ] Initial Myrient.erista.me scraper implementation
+- [ ] Initial Myrient.erista.me scraper implementation (utilize playwright MCP server in LLM to understand markup)
 - [ ] ROM database API endpoints
-
-## Phase 6: Frontend Development
-- [ ] React UI with shadcn/ui components
-- [ ] Search interfaces:
-  - [ ] Movie discovery
-  - [ ] TV show discovery
-  - [ ] ROM discovery
-- [ ] Download management dashboard
-- [ ] Job queue monitoring interface
-- [ ] Settings and configuration pages
-
-## Phase 7: Integration & Queue Management
-- [ ] Download job creation from discovery results
-- [ ] Queue prioritization and management
-- [ ] Failed job retry logic
-- [ ] Download completion notifications
-
-## Phase 8: Deployment & Testing
-- [ ] Complete Docker Compose orchestration
-- [ ] Container networking and volume management
-- [ ] Integration testing across all services
-- [ ] API documentation
-- [ ] Production deployment guide

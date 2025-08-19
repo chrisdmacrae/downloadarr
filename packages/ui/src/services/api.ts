@@ -38,15 +38,27 @@ export interface Aria2Stats {
 
 export interface DownloadJob {
   id: string;
+  name: string;
+  originalUrl: string;
+  type: string;
+  mediaType?: string;
+  mediaTitle?: string;
+  mediaYear?: number;
+  mediaPoster?: string;
+  mediaOverview?: string;
   status: string;
+  totalSize: number;
+  completedSize: number;
   progress: number;
-  data?: {
-    url: string;
-    type: string;
-    name?: string;
-    destination?: string;
-    aria2Gid?: string;
-  };
+  downloadSpeed: number;
+  files: Array<{
+    name: string;
+    size: number;
+    completed: number;
+    progress: number;
+  }>;
+  createdAt: string;
+  updatedAt: string;
 }
 
 // Discovery service types
@@ -98,6 +110,99 @@ export interface GameDetails extends SearchResult {
   screenshots?: string[];
 }
 
+// Torrent Request Types
+export interface TorrentRequest {
+  id: string;
+  contentType: 'MOVIE' | 'TV_SHOW';
+  title: string;
+  year?: number;
+  season?: number;
+  episode?: number;
+  imdbId?: string;
+  tmdbId?: number;
+  status: 'PENDING' | 'SEARCHING' | 'FOUND' | 'DOWNLOADING' | 'COMPLETED' | 'FAILED' | 'CANCELLED' | 'EXPIRED';
+  priority: number;
+  preferredQualities: string[];
+  preferredFormats: string[];
+  minSeeders: number;
+  maxSizeGB: number;
+  searchAttempts: number;
+  foundTorrentTitle?: string;
+  downloadProgress?: number;
+  downloadSpeed?: string;
+  downloadEta?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TorrentSearchResult {
+  id: string;
+  requestedTorrentId: string;
+  title: string;
+  link: string;
+  magnetUri?: string;
+  size: string;
+  sizeBytes?: string;
+  seeders: number;
+  leechers: number;
+  category: string;
+  indexer: string;
+  publishDate: string;
+  quality?: string;
+  format?: string;
+  rankingScore: number;
+  isSelected: boolean;
+  isAutoSelected: boolean;
+  createdAt: string;
+}
+
+export interface TorrentResult {
+  id: string;
+  title: string;
+  link: string;
+  magnetUri?: string;
+  size: string;
+  sizeBytes?: number;
+  seeders: number;
+  leechers: number;
+  category: string;
+  indexer: string;
+  publishDate: string;
+  quality?: string;
+  format?: string;
+  rankingScore: number;
+}
+
+export interface CreateTorrentRequestDto {
+  title: string;
+  year?: number;
+  season?: number;
+  episode?: number;
+  imdbId?: string;
+  tmdbId?: number;
+  preferredQualities?: string[];
+  preferredFormats?: string[];
+  minSeeders?: number;
+  maxSizeGB?: number;
+  priority?: number;
+  searchIntervalMins?: number;
+  maxSearchAttempts?: number;
+  blacklistedWords?: string[];
+  trustedIndexers?: string[];
+}
+
+export interface TorrentRequestStats {
+  total: number;
+  pending: number;
+  searching: number;
+  found: number;
+  downloading: number;
+  completed: number;
+  failed: number;
+  cancelled: number;
+  expired: number;
+}
+
 // API service functions
 export const apiService = {
   // Get queue statistics
@@ -118,12 +223,18 @@ export const apiService = {
     return response.data;
   },
 
-  // Get active downloads (this would need to be implemented in the API)
+  // Get all downloads
+  getDownloads: async (): Promise<DownloadJob[]> => {
+    const response = await api.get('/downloads');
+    return response.data;
+  },
+
+  // Get active downloads (filters all downloads for active ones)
   getActiveDownloads: async (): Promise<DownloadJob[]> => {
-    // For now, we'll use queue stats to get active count
-    // In a real implementation, you'd want a dedicated endpoint
-    await api.get('/downloads/queue/stats');
-    return []; // Placeholder - would return actual active downloads
+    const response = await api.get('/downloads');
+    return response.data.filter((download: DownloadJob) =>
+      download.status === 'active' || download.status === 'downloading'
+    );
   },
 
   // Create a new download
@@ -254,6 +365,152 @@ export const apiService = {
   getGamesByPlatform: async (platformName: string, limit?: number): Promise<{ success: boolean; data?: SearchResult[]; error?: string }> => {
     const params = limit ? `?limit=${limit}` : '';
     const response = await api.get(`/games/platforms/${encodeURIComponent(platformName)}${params}`);
+    return response.data;
+  },
+
+  // Torrent Request Services
+  requestMovieDownload: async (dto: CreateTorrentRequestDto): Promise<{ success: boolean; data?: TorrentRequest; error?: string }> => {
+    const response = await api.post('/torrent-requests/movies', dto);
+    return response.data;
+  },
+
+  requestTvShowDownload: async (dto: CreateTorrentRequestDto): Promise<{ success: boolean; data?: TorrentRequest; error?: string }> => {
+    const response = await api.post('/torrent-requests/tv-shows', dto);
+    return response.data;
+  },
+
+  getTorrentRequests: async (status?: string, userId?: string): Promise<{ success: boolean; data?: TorrentRequest[]; error?: string }> => {
+    const params = new URLSearchParams();
+    if (status) params.append('status', status);
+    if (userId) params.append('userId', userId);
+
+    const response = await api.get(`/torrent-requests?${params}`);
+    return response.data;
+  },
+
+  getTorrentRequest: async (id: string): Promise<{ success: boolean; data?: TorrentRequest; error?: string }> => {
+    const response = await api.get(`/torrent-requests/${id}`);
+    return response.data;
+  },
+
+  cancelTorrentRequest: async (id: string): Promise<{ success: boolean; data?: TorrentRequest; error?: string }> => {
+    const response = await api.put(`/torrent-requests/${id}/cancel`);
+    return response.data;
+  },
+
+  deleteTorrentRequest: async (id: string): Promise<{ success: boolean; message?: string; error?: string }> => {
+    const response = await api.delete(`/torrent-requests/${id}`);
+    return response.data;
+  },
+
+  getTorrentRequestStats: async (userId?: string): Promise<{ success: boolean; data?: TorrentRequestStats; error?: string }> => {
+    const params = userId ? `?userId=${userId}` : '';
+    const response = await api.get(`/torrent-requests/stats${params}`);
+    return response.data;
+  },
+
+  triggerTorrentSearch: async (): Promise<{ success: boolean; message?: string; error?: string }> => {
+    const response = await api.post('/torrent-requests/trigger-search');
+    return response.data;
+  },
+
+  triggerRequestSearch: async (id: string): Promise<{ success: boolean; message?: string; error?: string }> => {
+    const response = await api.post(`/torrent-requests/${id}/search`);
+    return response.data;
+  },
+
+  triggerAllRequestsSearch: async (): Promise<{ success: boolean; message?: string; searchedCount?: number; error?: string }> => {
+    const response = await api.post('/torrent-requests/search-all');
+    return response.data;
+  },
+
+  getSearchResults: async (requestId: string): Promise<{ success: boolean; data?: TorrentSearchResult[]; error?: string }> => {
+    const response = await api.get(`/torrent-requests/${requestId}/search-results`);
+    return response.data;
+  },
+
+  // Direct torrent search endpoints
+  searchTorrents: async (params: {
+    query: string;
+    category?: string;
+    indexers?: string[];
+    minSeeders?: number;
+    maxSize?: string;
+    quality?: string[];
+    format?: string[];
+    limit?: number;
+  }): Promise<{ success: boolean; data?: TorrentResult[]; error?: string }> => {
+    const searchParams = new URLSearchParams();
+    searchParams.append('query', params.query);
+    if (params.category) searchParams.append('category', params.category);
+    if (params.indexers) params.indexers.forEach(indexer => searchParams.append('indexers', indexer));
+    if (params.minSeeders) searchParams.append('minSeeders', params.minSeeders.toString());
+    if (params.maxSize) searchParams.append('maxSize', params.maxSize);
+    if (params.quality) params.quality.forEach(q => searchParams.append('quality', q));
+    if (params.format) params.format.forEach(f => searchParams.append('format', f));
+    if (params.limit) searchParams.append('limit', params.limit.toString());
+
+    const response = await api.get(`/torrents/search?${searchParams}`);
+    return response.data;
+  },
+
+  searchMovieTorrents: async (params: {
+    query: string;
+    year?: number;
+    imdbId?: string;
+    indexers?: string[];
+    minSeeders?: number;
+    maxSize?: string;
+    quality?: string[];
+    format?: string[];
+    limit?: number;
+  }): Promise<{ success: boolean; data?: TorrentResult[]; error?: string }> => {
+    const searchParams = new URLSearchParams();
+    searchParams.append('query', params.query);
+    if (params.year) searchParams.append('year', params.year.toString());
+    if (params.imdbId) searchParams.append('imdbId', params.imdbId);
+    if (params.indexers) params.indexers.forEach(indexer => searchParams.append('indexers', indexer));
+    if (params.minSeeders) searchParams.append('minSeeders', params.minSeeders.toString());
+    if (params.maxSize) searchParams.append('maxSize', params.maxSize);
+    if (params.quality) params.quality.forEach(q => searchParams.append('quality', q));
+    if (params.format) params.format.forEach(f => searchParams.append('format', f));
+    if (params.limit) searchParams.append('limit', params.limit.toString());
+
+    const response = await api.get(`/torrents/movies/search?${searchParams}`);
+    return response.data;
+  },
+
+  searchTvTorrents: async (params: {
+    query: string;
+    season?: number;
+    episode?: number;
+    year?: number;
+    imdbId?: string;
+    indexers?: string[];
+    minSeeders?: number;
+    maxSize?: string;
+    quality?: string[];
+    format?: string[];
+    limit?: number;
+  }): Promise<{ success: boolean; data?: TorrentResult[]; error?: string }> => {
+    const searchParams = new URLSearchParams();
+    searchParams.append('query', params.query);
+    if (params.season) searchParams.append('season', params.season.toString());
+    if (params.episode) searchParams.append('episode', params.episode.toString());
+    if (params.imdbId) searchParams.append('imdbId', params.imdbId);
+    if (params.indexers) params.indexers.forEach(indexer => searchParams.append('indexers', indexer));
+    if (params.minSeeders) searchParams.append('minSeeders', params.minSeeders.toString());
+    if (params.maxSize) searchParams.append('maxSize', params.maxSize);
+    if (params.quality) params.quality.forEach(q => searchParams.append('quality', q));
+    if (params.format) params.format.forEach(f => searchParams.append('format', f));
+    if (params.limit) searchParams.append('limit', params.limit.toString());
+
+    const response = await api.get(`/torrents/tv/search?${searchParams}`);
+    return response.data;
+  },
+
+  selectTorrent: async (requestId: string, resultId: string): Promise<{ success: boolean; message?: string; error?: string }> => {
+    const response = await api.post(`/torrent-requests/${requestId}/select-torrent/${resultId}`);
     return response.data;
   },
 };
