@@ -34,10 +34,12 @@ import {
   AlertCircle,
   Loader2,
   SearchIcon,
-  PlayCircle
+  PlayCircle,
+  Edit
 } from 'lucide-react'
 import { DownloadStatusBadge } from '@/components/DownloadStatusBadge'
 import { TorrentSelectionModal } from '@/components/TorrentSelectionModal'
+import { EditRequestModal } from '@/components/EditRequestModal'
 import { apiService, TorrentRequest } from '@/services/api'
 import { useTorrentRequests } from '@/hooks/useTorrentRequests'
 import { useToast } from '@/hooks/use-toast'
@@ -55,6 +57,7 @@ export default function Requests() {
   const [isSearching, setIsSearching] = useState<string | null>(null)
   const [isSearchingAll, setIsSearchingAll] = useState(false)
   const [torrentSelectionRequest, setTorrentSelectionRequest] = useState<TorrentRequest | null>(null)
+  const [editRequest, setEditRequest] = useState<TorrentRequest | null>(null)
   
   const { requests, isLoading, error, refreshRequests } = useTorrentRequests()
   const { toast } = useToast()
@@ -208,6 +211,14 @@ export default function Requests() {
   }
 
   const handleTorrentSelected = () => {
+    refreshRequests()
+  }
+
+  const handleEditRequest = (request: TorrentRequest) => {
+    setEditRequest(request)
+  }
+
+  const handleRequestUpdated = () => {
     refreshRequests()
   }
 
@@ -415,6 +426,7 @@ export default function Requests() {
               const canDelete = true // Allow deletion of all requests - backend will handle download cancellation
               const canSearch = ['PENDING', 'FAILED', 'EXPIRED'].includes(request.status)
               const canViewResults = request.status === 'FOUND'
+              const canEdit = request.status === 'PENDING' // Only allow editing before search begins
 
               return (
                 <Card key={request.id} className="overflow-hidden">
@@ -465,6 +477,14 @@ export default function Requests() {
                                     >
                                       <PlayCircle className="h-4 w-4 mr-2" />
                                       View Results
+                                    </DropdownMenuItem>
+                                  )}
+                                  {canEdit && (
+                                    <DropdownMenuItem
+                                      onClick={() => handleEditRequest(request)}
+                                    >
+                                      <Edit className="h-4 w-4 mr-2" />
+                                      Edit Request
                                     </DropdownMenuItem>
                                   )}
                                   {canCancel && (
@@ -648,6 +668,14 @@ export default function Requests() {
                                 View Results
                               </DropdownMenuItem>
                             )}
+                            {canEdit && (
+                              <DropdownMenuItem
+                                onClick={() => handleEditRequest(request)}
+                              >
+                                <Edit className="h-4 w-4 mr-2" />
+                                Edit Request
+                              </DropdownMenuItem>
+                            )}
                             {canCancel && (
                               <AlertDialog>
                                 <AlertDialogTrigger asChild>
@@ -755,6 +783,14 @@ export default function Requests() {
         onClose={() => setTorrentSelectionRequest(null)}
         request={torrentSelectionRequest}
         onTorrentSelected={handleTorrentSelected}
+      />
+
+      {/* Edit Request Modal */}
+      <EditRequestModal
+        request={editRequest}
+        open={!!editRequest}
+        onOpenChange={(open) => !open && setEditRequest(null)}
+        onRequestUpdated={handleRequestUpdated}
       />
     </div>
   )

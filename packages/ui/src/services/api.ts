@@ -208,6 +208,18 @@ export interface CreateTorrentRequestDto {
   trustedIndexers?: string[];
 }
 
+export interface UpdateTorrentRequestDto {
+  preferredQualities?: string[];
+  preferredFormats?: string[];
+  minSeeders?: number;
+  maxSizeGB?: number;
+  priority?: number;
+  searchIntervalMins?: number;
+  maxSearchAttempts?: number;
+  blacklistedWords?: string[];
+  trustedIndexers?: string[];
+}
+
 export interface TorrentRequestStats {
   total: number;
   pending: number;
@@ -428,6 +440,11 @@ export const apiService = {
 
   deleteTorrentRequest: async (id: string): Promise<{ success: boolean; message?: string; error?: string }> => {
     const response = await api.delete(`/torrent-requests/${id}`);
+    return response.data;
+  },
+
+  updateTorrentRequest: async (id: string, dto: UpdateTorrentRequestDto): Promise<{ success: boolean; data?: TorrentRequest; error?: string }> => {
+    const response = await api.put(`/torrent-requests/${id}`, dto);
     return response.data;
   },
 

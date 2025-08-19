@@ -224,7 +224,12 @@ export class RequestedTorrentsService {
 
   async updateRequest(id: string, dto: UpdateTorrentRequestDto): Promise<RequestedTorrent> {
     const request = await this.getRequestById(id);
-    
+
+    // Only allow updates for requests that haven't started searching yet
+    if (request.status !== RequestStatus.PENDING) {
+      throw new Error(`Cannot update request in ${request.status} status. Only PENDING requests can be edited.`);
+    }
+
     this.logger.log(`Updating torrent request ${id}: ${JSON.stringify(dto)}`);
 
     return this.prisma.requestedTorrent.update({
