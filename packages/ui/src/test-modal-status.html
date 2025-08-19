@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Modal Status Logic</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .test-case {
+            border: 1px solid #ccc;
+            margin: 10px 0;
+            padding: 15px;
+            border-radius: 5px;
+        }
+        .test-case.pass {
+            border-color: green;
+            background-color: #f0fff0;
+        }
+        .test-case.fail {
+            border-color: red;
+            background-color: #fff0f0;
+        }
+        .result {
+            font-weight: bold;
+            margin-top: 10px;
+        }
+        .pass { color: green; }
+        .fail { color: red; }
+    </style>
+</head>
+<body>
+    <h1>Test Modal Status Logic</h1>
+    <p>This page tests the improved request matching logic for movie and TV show modals.</p>
+    
+    <div id="test-results"></div>
+
+    <script>
+        // Mock TorrentRequest interface
+        const mockRequests = [
+            {
+                id: '1',
+                contentType: 'MOVIE',
+                title: 'The Matrix',
+                year: 1999,
+                status: 'DOWNLOADING',
+                downloadProgress: 45.5
+            },
+            {
+                id: '2',
+                contentType: 'TV_SHOW',
+                title: 'Breaking Bad',
+                year: 2008,
+                season: 1,
+                episode: null,
+                status: 'COMPLETED'
+            },
+            {
+                id: '3',
+                contentType: 'TV_SHOW',
+                title: 'Breaking Bad',
+                year: 2008,
+                season: 2,
+                episode: 5,
+                status: 'PENDING'
+            },
+            {
+                id: '4',
+                contentType: 'MOVIE',
+                title: 'Inception',
+                year: 2010,
+                status: 'SEARCHING'
+            }
+        ];
+
+        // Mock the improved request matching functions
+        function getRequestForItem(title, year, season, episode, contentType) {
+            return mockRequests.find(request => {
+                const titleMatch = request.title.toLowerCase() === title.toLowerCase();
+                const yearMatch = !year || request.year === year;
+                const seasonMatch = !season || request.season === season;
+                const episodeMatch = !episode || request.episode === episode;
+                const contentTypeMatch = !contentType || request.contentType === contentType;
+                
+                return titleMatch && yearMatch && seasonMatch && episodeMatch && contentTypeMatch;
+            });
+        }
+
+        function getRequestForShow(title, year) {
+            return mockRequests.find(request => {
+                const titleMatch = request.title.toLowerCase() === title.toLowerCase();
+                const yearMatch = !year || request.year === year;
+                const isShow = request.contentType === 'TV_SHOW';
+                
+                return titleMatch && yearMatch && isShow;
+            });
+        }
+
+        // Test cases
+        const testCases = [
+            {
+                name: 'Movie - Exact match should find request',
+                test: () => {
+                    const result = getRequestForItem('The Matrix', 1999, undefined, undefined, 'MOVIE');
+                    return result && result.id === '1';
+                }
+            },
+            {
+                name: 'Movie - Different content type should not match',
+                test: () => {
+                    const result = getRequestForItem('Breaking Bad', 2008, undefined, undefined, 'MOVIE');
+                    return !result;
+                }
+            },
+            {
+                name: 'TV Show - Should find any request for the show',
+                test: () => {
+                    const result = getRequestForShow('Breaking Bad', 2008);
+                    return result && (result.id === '2' || result.id === '3');
+                }
+            },
+            {
+                name: 'TV Show - Should not find movie with same title',
+                test: () => {
+                    // Add a movie with same title as TV show
+                    mockRequests.push({
+                        id: '5',
+                        contentType: 'MOVIE',
+                        title: 'Breaking Bad',
+                        year: 2008,
+                        status: 'COMPLETED'
+                    });
+                    
+                    const result = getRequestForShow('Breaking Bad', 2008);
+                    return result && result.contentType === 'TV_SHOW';
+                }
+            },
+            {
+                name: 'Movie - Case insensitive matching',
+                test: () => {
+                    const result = getRequestForItem('the matrix', 1999, undefined, undefined, 'MOVIE');
+                    return result && result.id === '1';
+                }
+            },
+            {
+                name: 'TV Show - Case insensitive matching',
+                test: () => {
+                    const result = getRequestForShow('BREAKING BAD', 2008);
+                    return result && result.contentType === 'TV_SHOW';
+                }
+            },
+            {
+                name: 'Non-existent content should return undefined',
+                test: () => {
+                    const result = getRequestForItem('Non-existent Movie', 2023, undefined, undefined, 'MOVIE');
+                    return !result;
+                }
+            }
+        ];
+
+        // Run tests and display results
+        function runTests() {
+            const resultsContainer = document.getElementById('test-results');
+            let passCount = 0;
+            let totalCount = testCases.length;
+
+            testCases.forEach((testCase, index) => {
+                const testDiv = document.createElement('div');
+                testDiv.className = 'test-case';
+                
+                let passed = false;
+                let error = null;
+                
+                try {
+                    passed = testCase.test();
+                } catch (e) {
+                    error = e.message;
+                }
+                
+                if (passed) {
+                    testDiv.classList.add('pass');
+                    passCount++;
+                } else {
+                    testDiv.classList.add('fail');
+                }
+                
+                testDiv.innerHTML = `
+                    <h3>Test ${index + 1}: ${testCase.name}</h3>
+                    <div class="result ${passed ? 'pass' : 'fail'}">
+                        ${passed ? 'PASS' : 'FAIL'}
+                        ${error ? ` - Error: ${error}` : ''}
+                    </div>
+                `;
+                
+                resultsContainer.appendChild(testDiv);
+            });
+
+            // Add summary
+            const summaryDiv = document.createElement('div');
+            summaryDiv.className = 'test-case';
+            summaryDiv.innerHTML = `
+                <h2>Test Summary</h2>
+                <div class="result ${passCount === totalCount ? 'pass' : 'fail'}">
+                    ${passCount}/${totalCount} tests passed
+                </div>
+            `;
+            resultsContainer.appendChild(summaryDiv);
+        }
+
+        // Run tests when page loads
+        window.onload = runTests;
+    </script>
+</body>
+</html>

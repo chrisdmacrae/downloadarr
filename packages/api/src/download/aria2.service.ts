@@ -273,6 +273,36 @@ export class Aria2Service implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  async forceRemove(gid: string): Promise<string> {
+    if (!this.isConnected) {
+      throw new Error('Aria2 RPC not connected');
+    }
+
+    try {
+      // Try regular remove first
+      try {
+        const result = await this.aria2.call('remove', gid);
+        this.logger.log(`Removed active download with GID: ${gid}`);
+        return result;
+      } catch (removeError) {
+        // If regular remove fails, try force remove
+        const result = await this.aria2.call('forceRemove', gid);
+        this.logger.log(`Force removed download with GID: ${gid}`);
+        return result;
+      }
+    } catch (error) {
+      // If both fail, try to remove from download results (completed/stopped downloads)
+      try {
+        const result = await this.aria2.call('removeDownloadResult', gid);
+        this.logger.log(`Removed download result with GID: ${gid}`);
+        return result;
+      } catch (resultError) {
+        this.logger.error(`Failed to remove download ${gid} completely:`, error);
+        throw error;
+      }
+    }
+  }
+
   async getGlobalStat() {
     if (!this.isConnected) {
       throw new Error('Aria2 RPC not connected');

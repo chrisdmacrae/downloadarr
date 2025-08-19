@@ -34,14 +34,26 @@ export function useTorrentRequests() {
     return () => clearInterval(interval)
   }, [])
 
-  const getRequestForItem = (title: string, year?: number, season?: number, episode?: number): TorrentRequest | undefined => {
+  const getRequestForItem = (title: string, year?: number, season?: number, episode?: number, contentType?: 'MOVIE' | 'TV_SHOW'): TorrentRequest | undefined => {
     return requests.find(request => {
       const titleMatch = request.title.toLowerCase() === title.toLowerCase()
       const yearMatch = !year || request.year === year
       const seasonMatch = !season || request.season === season
       const episodeMatch = !episode || request.episode === episode
-      
-      return titleMatch && yearMatch && seasonMatch && episodeMatch
+      const contentTypeMatch = !contentType || request.contentType === contentType
+
+      return titleMatch && yearMatch && seasonMatch && episodeMatch && contentTypeMatch
+    })
+  }
+
+  const getRequestForShow = (title: string, year?: number): TorrentRequest | undefined => {
+    // For TV shows, find any request for this show regardless of season/episode
+    return requests.find(request => {
+      const titleMatch = request.title.toLowerCase() === title.toLowerCase()
+      const yearMatch = !year || request.year === year
+      const isShow = request.contentType === 'TV_SHOW'
+
+      return titleMatch && yearMatch && isShow
     })
   }
 
@@ -58,6 +70,7 @@ export function useTorrentRequests() {
     isLoading,
     error,
     getRequestForItem,
+    getRequestForShow,
     getRequestsByStatus,
     refreshRequests,
   }

@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Search as SearchIcon, Download, Loader2, AlertCircle } from 'lucide-react'
 import { MovieDetailModal } from '@/components/MovieDetailModal'
 import { GameDetailModal } from '@/components/GameDetailModal'
-import { DownloadRequestModal } from '@/components/DownloadRequestModal'
+
 import { DownloadStatusBadge } from '@/components/DownloadStatusBadge'
 
 import { apiService, SearchResult } from '@/services/api'
@@ -23,9 +23,8 @@ export default function Search() {
   const [error, setError] = useState<string | null>(null)
   const [selectedItem, setSelectedItem] = useState<SearchResult | null>(null)
   const [showDetailModal, setShowDetailModal] = useState(false)
-  const [showDownloadModal, setShowDownloadModal] = useState(false)
 
-  const { getRequestForItem, refreshRequests } = useTorrentRequests()
+  const { getRequestForItem, getRequestForShow } = useTorrentRequests()
   const { toast } = useToast()
 
   // Update URL when tab changes
@@ -182,22 +181,7 @@ export default function Search() {
     }
   }
 
-  const handleDownloadClick = (item: SearchResult, e: React.MouseEvent) => {
-    e.stopPropagation() // Prevent triggering the card click
-    setSelectedItem(item)
-    setShowDownloadModal(true)
-  }
 
-
-
-  const handleDownloadRequestCreated = () => {
-    toast({
-      title: "Download Requested",
-      description: `${selectedItem?.title} has been added to the download queue`,
-    })
-    // Refresh the torrent requests to show the new status
-    refreshRequests()
-  }
 
   const tabs = [
     { id: 'movies' as const, label: 'Movies' },
@@ -307,7 +291,11 @@ export default function Search() {
           {searchResults.length > 0 && (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {searchResults.map((item) => {
-                const torrentRequest = getRequestForItem(item.title, item.year)
+                const torrentRequest = item.type === 'tv'
+                  ? getRequestForShow(item.title, item.year)
+                  : item.type === 'movie'
+                    ? getRequestForItem(item.title, item.year, undefined, undefined, 'MOVIE')
+                    : undefined
 
                 return (
                   <Card
@@ -354,27 +342,11 @@ export default function Search() {
                           {item.overview}
                         </p>
                       )}
-                      {item.type !== 'game' && !torrentRequest && (
-                        <Button
-                          className="w-full"
-                          size="sm"
-                          variant="outline"
-                          onClick={(e) => handleDownloadClick(item, e)}
-                        >
-                          <Download className="h-3 w-3 mr-1" />
-                          Request Download
-                        </Button>
-                      )}
+                      {/* Show request status if exists */}
                       {item.type !== 'game' && torrentRequest && (
-                        <Button
-                          className="w-full"
-                          size="sm"
-                          variant="secondary"
-                          disabled
-                        >
-                          <Download className="h-3 w-3 mr-1" />
-                          Already Requested
-                        </Button>
+                        <div className="flex items-center justify-center py-2">
+                          <DownloadStatusBadge request={torrentRequest} />
+                        </div>
                       )}
                       {item.type === 'game' && (
                         <Button className="w-full" size="sm" variant="outline">
@@ -407,17 +379,6 @@ export default function Search() {
           onOpenChange={setShowDetailModal}
         />
       )}
-
-      {/* Download Request Modal */}
-      {selectedItem && selectedItem.type !== 'game' && (
-        <DownloadRequestModal
-          item={selectedItem}
-          open={showDownloadModal}
-          onOpenChange={setShowDownloadModal}
-          onRequestCreated={handleDownloadRequestCreated}
-        />
-      )}
-
 
     </div>
   )

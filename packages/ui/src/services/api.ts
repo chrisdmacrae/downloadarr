@@ -127,6 +127,7 @@ export interface TorrentRequest {
   minSeeders: number;
   maxSizeGB: number;
   searchAttempts: number;
+  maxSearchAttempts: number;
   foundTorrentTitle?: string;
   downloadProgress?: number;
   downloadSpeed?: string;

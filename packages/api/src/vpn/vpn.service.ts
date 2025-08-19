@@ -43,6 +43,19 @@ export class VpnService {
 
   async getPublicIP(): Promise<string | null> {
     try {
+      // First try to get IP from VPN container if VPN is enabled
+      const vpnEnabled = this.configService.get<string>('VPN_ENABLED', 'true') === 'true';
+
+      if (vpnEnabled) {
+        const vpnIP = await this.getVpnContainerIP();
+        if (vpnIP) {
+          return vpnIP;
+        }
+        // If VPN is enabled but we can't get IP from container, fall back to direct call
+        this.logger.warn('VPN enabled but could not get IP from VPN container, falling back to direct call');
+      }
+
+      // Fallback: Direct call (for non-VPN setups or when VPN container method fails)
       const https = await import('https');
 
       return new Promise((resolve) => {
@@ -60,6 +73,50 @@ export class VpnService {
       });
     } catch (error) {
       this.logger.error('Error getting public IP:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Get the public IP from the shared volume written by the VPN-routed Aria2 container
+   */
+  private async getVpnContainerIP(): Promise<string | null> {
+    try {
+      const fs = await import('fs/promises');
+      const path = '/tmp/vpn-ip/external_ip';
+
+      // Check if the IP file exists and read it
+      const ipData = await fs.readFile(path, 'utf8');
+      const ip = ipData.trim();
+
+      // Basic IP validation
+      if (ip && ip !== 'unknown' && /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(ip)) {
+        // Optionally check if the IP is recent (within last 5 minutes)
+        try {
+          const lastUpdatePath = '/tmp/vpn-ip/last_update';
+          const lastUpdateData = await fs.readFile(lastUpdatePath, 'utf8');
+          const lastUpdateTime = new Date(lastUpdateData.split(': ')[0]);
+          const now = new Date();
+          const ageMinutes = (now.getTime() - lastUpdateTime.getTime()) / (1000 * 60);
+
+          if (ageMinutes > 5) {
+            this.logger.warn(`VPN IP data is ${ageMinutes.toFixed(1)} minutes old, may be stale`);
+          }
+        } catch (updateError) {
+          // Ignore errors reading update time
+        }
+
+        return ip;
+      } else {
+        this.logger.debug(`Invalid or missing VPN IP in shared volume: "${ip}"`);
+        return null;
+      }
+    } catch (error) {
+      if (error.code === 'ENOENT') {
+        this.logger.debug('VPN IP file not found in shared volume, VPN container may not be ready');
+      } else {
+        this.logger.debug('Error reading VPN IP from shared volume:', error.message);
+      }
       return null;
     }
   }

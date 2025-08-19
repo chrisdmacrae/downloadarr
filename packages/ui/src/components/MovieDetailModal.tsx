@@ -8,6 +8,8 @@ import { SearchResult, MovieDetails } from '@/services/api'
 import { useCreateDownload } from '@/hooks/useApi'
 import { DownloadRequestModal } from './DownloadRequestModal'
 import { TorrentSearchModal } from './TorrentSearchModal'
+import { DownloadStatusBadge } from './DownloadStatusBadge'
+import { useTorrentRequests } from '@/hooks/useTorrentRequests'
 import { useToast } from '@/hooks/use-toast'
 
 interface MovieDetailModalProps {
@@ -19,17 +21,22 @@ interface MovieDetailModalProps {
 export function MovieDetailModal({ movie, open, onOpenChange }: MovieDetailModalProps) {
   const [movieDetails, setMovieDetails] = useState<MovieDetails | null>(null)
   const [isLoading, setIsLoading] = useState(false)
-  const [isDownloading, setIsDownloading] = useState(false)
   const [showDownloadModal, setShowDownloadModal] = useState(false)
   const [showTorrentSearchModal, setShowTorrentSearchModal] = useState(false)
   const { toast } = useToast()
   const createDownloadMutation = useCreateDownload()
+  const { getRequestForItem, getRequestForShow, refreshRequests, requests } = useTorrentRequests()
 
   useEffect(() => {
     if (movie && open) {
       fetchMovieDetails()
     }
   }, [movie, open])
+
+  // Force re-render when requests change to update the status display
+  useEffect(() => {
+    // This effect will trigger a re-render when requests change
+  }, [requests])
 
   const fetchMovieDetails = async () => {
     if (!movie) return
@@ -68,11 +75,13 @@ export function MovieDetailModal({ movie, open, onOpenChange }: MovieDetailModal
     setShowTorrentSearchModal(true)
   }
 
-  const handleDownloadRequestCreated = (request: any) => {
+  const handleDownloadRequestCreated = () => {
     toast({
       title: "Download Requested",
       description: `${movie?.title} has been added to the download queue`,
     })
+    // Refresh the torrent requests to show the new status
+    refreshRequests()
   }
 
   if (!movie) return null
@@ -188,22 +197,63 @@ export function MovieDetailModal({ movie, open, onOpenChange }: MovieDetailModal
                 )}
 
                 {/* Action Buttons */}
-                <div className="pt-4 flex flex-col sm:flex-row gap-2">
-                  <Button
-                    onClick={handleDownload}
-                    className="flex-1 sm:flex-none"
-                  >
-                    <Download className="h-4 w-4 mr-2" />
-                    Request Download
-                  </Button>
-                  <Button
-                    onClick={handleTorrentSearch}
-                    variant="outline"
-                    className="flex-1 sm:flex-none"
-                  >
-                    <Search className="h-4 w-4 mr-2" />
-                    View Torrents
-                  </Button>
+                <div className="pt-4 space-y-3">
+                  {(() => {
+                    // For TV shows, check for any existing request for this show (regardless of season/episode)
+                    // For movies, check for exact match
+                    const existingRequest = movie.type === 'tv'
+                      ? getRequestForShow(movie.title, movie.year)
+                      : getRequestForItem(movie.title, movie.year, undefined, undefined, 'MOVIE')
+
+                    if (existingRequest) {
+                      return (
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-center">
+                            <DownloadStatusBadge request={existingRequest} />
+                          </div>
+                          <div className="flex flex-col sm:flex-row gap-2">
+                            <Button
+                              onClick={handleDownload}
+                              className="flex-1 sm:flex-none"
+                              disabled
+                              variant="secondary"
+                            >
+                              <Download className="h-4 w-4 mr-2" />
+                              Already Requested
+                            </Button>
+                            <Button
+                              onClick={handleTorrentSearch}
+                              variant="outline"
+                              className="flex-1 sm:flex-none"
+                            >
+                              <Search className="h-4 w-4 mr-2" />
+                              View Torrents
+                            </Button>
+                          </div>
+                        </div>
+                      )
+                    } else {
+                      return (
+                        <div className="flex flex-col sm:flex-row gap-2">
+                          <Button
+                            onClick={handleDownload}
+                            className="flex-1 sm:flex-none"
+                          >
+                            <Download className="h-4 w-4 mr-2" />
+                            Request Download
+                          </Button>
+                          <Button
+                            onClick={handleTorrentSearch}
+                            variant="outline"
+                            className="flex-1 sm:flex-none"
+                          >
+                            <Search className="h-4 w-4 mr-2" />
+                            View Torrents
+                          </Button>
+                        </div>
+                      )
+                    }
+                  })()}
                 </div>
               </>
             )}

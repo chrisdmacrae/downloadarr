@@ -15,12 +15,18 @@ import {
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: Home },
+  { name: 'Requests', href: '/requests', icon: List },
+  { name: 'Downloads', href: '/downloads', icon: Download },
+]
+
+const findNavigation = [
+  { name: 'Search', href: '/search', icon: Search },
   { name: 'Movies', href: '/movies', icon: Film },
   { name: 'TV Shows', href: '/tv-shows', icon: Tv },
   { name: 'Games', href: '/games', icon: Gamepad2 },
-  { name: 'Downloads', href: '/downloads', icon: Download },
-  { name: 'Requests', href: '/requests', icon: List },
-  { name: 'Search', href: '/search', icon: Search },
+]
+
+const settingsNavigation = [
   { name: 'Settings', href: '/settings', icon: Settings },
 ]
 
@@ -40,26 +46,80 @@ export default function Layout({ children }: LayoutProps) {
           <span className="ml-2 text-xl font-bold">Downloadarr</span>
         </div>
         
-        <nav className="flex-1 px-4 py-6 space-y-2">
-          {navigation.map((item) => {
-            const Icon = item.icon
-            const isActive = location.pathname === item.href
-            
-            return (
-              <Link key={item.name} to={item.href}>
-                <Button
-                  variant={isActive ? "default" : "ghost"}
-                  className={cn(
-                    "w-full justify-start",
-                    isActive && "bg-primary text-primary-foreground"
-                  )}
-                >
-                  <Icon className="w-4 h-4 mr-2" />
-                  {item.name}
-                </Button>
-              </Link>
-            )
-          })}
+        <nav className="flex-1 flex flex-col px-4 py-6">
+          <div className="space-y-6">
+            {/* Main Navigation */}
+            <div className="space-y-2">
+              {navigation.map((item) => {
+                const Icon = item.icon
+                const isActive = location.pathname === item.href
+
+                return (
+                  <Link key={item.name} to={item.href}>
+                    <Button
+                      variant={isActive ? "default" : "ghost"}
+                      className={cn(
+                        "w-full justify-start",
+                        isActive && "bg-primary text-primary-foreground"
+                      )}
+                    >
+                      <Icon className="w-4 h-4 mr-2" />
+                      {item.name}
+                    </Button>
+                  </Link>
+                )
+              })}
+            </div>
+
+            {/* Find Section */}
+            <div className="space-y-2">
+              <h3 className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                Find
+              </h3>
+              {findNavigation.map((item) => {
+                const Icon = item.icon
+                const isActive = location.pathname === item.href
+
+                return (
+                  <Link key={item.name} to={item.href}>
+                    <Button
+                      variant={isActive ? "default" : "ghost"}
+                      className={cn(
+                        "w-full justify-start",
+                        isActive && "bg-primary text-primary-foreground"
+                      )}
+                    >
+                      <Icon className="w-4 h-4 mr-2" />
+                      {item.name}
+                    </Button>
+                  </Link>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Settings at bottom */}
+          <div className="mt-auto space-y-2">
+            {settingsNavigation.map((item) => {
+              const Icon = item.icon
+              const isActive = location.pathname === item.href
+
+              return (
+                <Link key={item.name} to={item.href}>
+                  <Button
+                    variant={isActive ? "default" : "ghost"}
+                    className={cn(
+                      "w-full justify-start",
+                      isActive && "bg-primary text-primary-foreground"
+                    )}
+                  >
+                    <Icon className="w-4 h-4 mr-2" />
+                    {item.name}
+                  </Button>
+                </Link>
+              )
+            })}
+          </div>
         </nav>
       </div>
 

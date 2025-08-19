@@ -15,6 +15,14 @@ WORKDIR /app
 COPY package.json ./
 COPY packages/api/package.json ./packages/api/
 
+# Verify package.json files are valid and show their content for debugging
+RUN echo "=== Verifying package.json files ===" && \
+    echo "Root package.json size: $(wc -c < ./package.json) bytes" && \
+    echo "API package.json size: $(wc -c < ./packages/api/package.json) bytes" && \
+    node -e "JSON.parse(require('fs').readFileSync('./package.json', 'utf8')); console.log('✓ Root package.json is valid');" && \
+    node -e "JSON.parse(require('fs').readFileSync('./packages/api/package.json', 'utf8')); console.log('✓ API package.json is valid');" && \
+    echo "=== Package.json verification complete ==="
+
 # Install all dependencies (including dev dependencies for development)
 RUN npm install && npm cache clean --force
 

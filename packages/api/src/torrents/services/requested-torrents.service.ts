@@ -17,6 +17,13 @@ export class RequestedTorrentsService {
   async createMovieRequest(dto: CreateTorrentRequestDto): Promise<RequestedTorrent> {
     this.logger.log(`Creating movie torrent request for: ${dto.title} (${dto.year})`);
 
+    // Check for existing requests to prevent duplicates
+    const existingRequest = await this.findExistingMovieRequest(dto);
+    if (existingRequest) {
+      this.logger.warn(`Duplicate movie request detected for: ${dto.title} (${dto.year}). Existing request ID: ${existingRequest.id}`);
+      throw new Error(`A request for "${dto.title}" (${dto.year}) already exists with status: ${existingRequest.status}`);
+    }
+
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 30); // Expire after 30 days
 
@@ -48,6 +55,13 @@ export class RequestedTorrentsService {
 
   async createTvShowRequest(dto: CreateTorrentRequestDto): Promise<RequestedTorrent> {
     this.logger.log(`Creating TV show torrent request for: ${dto.title} S${dto.season}${dto.episode ? `E${dto.episode}` : ''}`);
+
+    // Check for existing requests to prevent duplicates
+    const existingRequest = await this.findExistingTvShowRequest(dto);
+    if (existingRequest) {
+      this.logger.warn(`Duplicate TV show request detected for: ${dto.title} S${dto.season}${dto.episode ? `E${dto.episode}` : ''}. Existing request ID: ${existingRequest.id}`);
+      throw new Error(`A request for "${dto.title}" S${dto.season}${dto.episode ? `E${dto.episode}` : ''} already exists with status: ${existingRequest.status}`);
+    }
 
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 30); // Expire after 30 days
@@ -360,5 +374,106 @@ export class RequestedTorrentsService {
       cancelled,
       expired,
     };
+  }
+
+  /**
+   * Find existing movie request to prevent duplicates
+   */
+  private async findExistingMovieRequest(dto: CreateTorrentRequestDto): Promise<RequestedTorrent | null> {
+    // Exclude cancelled, failed, and expired requests from duplicate check
+    const excludedStatuses = [RequestStatus.CANCELLED, RequestStatus.FAILED, RequestStatus.EXPIRED];
+
+    // Build base where clause (no user filtering - prevent all duplicates globally)
+    const baseWhere = {
+      contentType: ContentType.MOVIE,
+      status: { notIn: excludedStatuses },
+    };
+
+    // First, try to find by IMDB ID if provided (most accurate)
+    if (dto.imdbId) {
+      const existingByImdb = await this.prisma.requestedTorrent.findFirst({
+        where: {
+          ...baseWhere,
+          imdbId: dto.imdbId,
+        },
+      });
+      if (existingByImdb) return existingByImdb;
+    }
+
+    // Then try by TMDB ID if provided
+    if (dto.tmdbId) {
+      const existingByTmdb = await this.prisma.requestedTorrent.findFirst({
+        where: {
+          ...baseWhere,
+          tmdbId: dto.tmdbId,
+        },
+      });
+      if (existingByTmdb) return existingByTmdb;
+    }
+
+    // Finally, try by title and year (less accurate but catches most duplicates)
+    if (dto.title && dto.year) {
+      const existingByTitleYear = await this.prisma.requestedTorrent.findFirst({
+        where: {
+          ...baseWhere,
+          title: { equals: dto.title, mode: 'insensitive' },
+          year: dto.year,
+        },
+      });
+      if (existingByTitleYear) return existingByTitleYear;
+    }
+
+    return null;
+  }
+
+  /**
+   * Find existing TV show request to prevent duplicates
+   */
+  private async findExistingTvShowRequest(dto: CreateTorrentRequestDto): Promise<RequestedTorrent | null> {
+    // Exclude cancelled, failed, and expired requests from duplicate check
+    const excludedStatuses = [RequestStatus.CANCELLED, RequestStatus.FAILED, RequestStatus.EXPIRED];
+
+    // Build base where clause (no user filtering - prevent all duplicates globally)
+    const baseWhere = {
+      contentType: ContentType.TV_SHOW,
+      status: { notIn: excludedStatuses },
+      season: dto.season,
+      episode: dto.episode,
+    };
+
+    // First, try to find by IMDB ID if provided (most accurate)
+    if (dto.imdbId) {
+      const existingByImdb = await this.prisma.requestedTorrent.findFirst({
+        where: {
+          ...baseWhere,
+          imdbId: dto.imdbId,
+        },
+      });
+      if (existingByImdb) return existingByImdb;
+    }
+
+    // Then try by TMDB ID if provided
+    if (dto.tmdbId) {
+      const existingByTmdb = await this.prisma.requestedTorrent.findFirst({
+        where: {
+          ...baseWhere,
+          tmdbId: dto.tmdbId,
+        },
+      });
+      if (existingByTmdb) return existingByTmdb;
+    }
+
+    // Finally, try by title, season, and episode
+    if (dto.title && dto.season) {
+      const existingByTitleSeason = await this.prisma.requestedTorrent.findFirst({
+        where: {
+          ...baseWhere,
+          title: { equals: dto.title, mode: 'insensitive' },
+        },
+      });
+      if (existingByTitleSeason) return existingByTitleSeason;
+    }
+
+    return null;
   }
 }

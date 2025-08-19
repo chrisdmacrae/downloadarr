@@ -283,6 +283,7 @@ export class TorrentCheckerService {
       await this.requestedTorrentsService.markAsDownloading(
         request.id,
         downloadJob.id.toString(),
+        downloadJob.aria2Gid,
       );
 
       this.logger.log(`Successfully initiated download for: ${request.title}`);

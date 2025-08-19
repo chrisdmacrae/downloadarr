@@ -24,30 +24,53 @@ services:
     environment:
       TZ: ${TZ:-UTC}
     entrypoint: ["/sbin/tini", "--", "/usr/bin/openvpn.sh"]
-    command: '-p "6800" -p "6888" -p "6888;udp" -p "3001" -f ""'
+    # Forward Aria2 ports through VPN
+    command: '-p "6800" -p "6888" -p "6888;udp" -f ""'
     ports:
-      - "3001:3001"  # API port
+      - "6800:6800"  # Aria2 RPC port through VPN
+      - "6888:6888"  # Aria2 BT port through VPN
     restart: unless-stopped
     networks:
       - downloadarr
+    healthcheck:
+      test: |
+        sh -c '
+          # Check if OpenVPN process is running
+          if ! pgrep openvpn > /dev/null; then
+            echo "OpenVPN process not running"
+            exit 1
+          fi
 
-  # Override API service to run through VPN
+          # Simple connectivity test
+          if curl -s --max-time 10 https://api.ipify.org > /dev/null; then
+            echo "VPN connected and internet accessible"
+            exit 0
+          else
+            echo "VPN process running but no internet connectivity"
+            exit 1
+          fi
+        '
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 60s
+
+  # Override API service to connect to VPN-routed Aria2
   api:
-    image: downloadarr-api:latest
     container_name: downloadarr-api-vpn
-    restart: unless-stopped
-    ports: !reset []  # Remove ports when using network_mode
     environment:
       NODE_ENV: production
       VPN_ENABLED: "true"
-      VPN_NETWORK_MODE: "true"
-      ARIA2_HOST: localhost
+      # Connect to Aria2 through VPN container
+      ARIA2_HOST: vpn
       ARIA2_PORT: 6800
       ARIA2_SECRET: ${ARIA2_RPC_SECRET:-downloadarr}
-      DATABASE_URL: postgresql://downloadarr:downloadarr@host.docker.internal:5432/downloadarr
-      REDIS_URL: redis://host.docker.internal:6379
-      JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-key}
-      JACKETT_URL: http://host.docker.internal:9117
+      # Keep normal Docker networking for database/redis
+      DATABASE_URL: postgresql://downloadarr:${POSTGRES_PASSWORD:-downloadarr}@postgres:5432/downloadarr
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JACKETT_URL: http://jackett:9117
+      JACKETT_API_KEY: ${JACKETT_API_KEY}
       # External API Keys for Discovery Services
       OMDB_API_KEY: ${OMDB_API_KEY}
       TMDB_API_KEY: ${TMDB_API_KEY}
@@ -55,21 +78,22 @@ services:
       IGDB_ACCESS_TOKEN: ${IGDB_ACCESS_TOKEN}
     volumes:
       - downloads:/downloads
-    network_mode: "service:vpn"
-    networks: !reset []  # Remove networks when using network_mode
+      - vpn_ip_share:/tmp/vpn-ip:ro  # Read-only access to VPN IP data
+    # Keep normal networking - don't use network_mode
+    networks:
+      - downloadarr
     depends_on:
       - vpn
+      - postgres
+      - redis
 
-  # Disable the original aria2 service
+  # Override original Aria2 to route through VPN
   aria2:
-    deploy:
-      replicas: 0
-
-  # New Aria2 service that routes through VPN
-  aria2-vpn:
-    image: p3terx/aria2-pro:latest
     container_name: downloadarr-aria2-vpn
-    restart: unless-stopped
+    # Use VPN network mode to route all traffic through VPN
+    network_mode: "service:vpn"
+    ports: !reset []  # Remove direct port exposure
+    networks: !reset []  # Remove from normal network
     environment:
       PUID: 1000
       PGID: 1000
@@ -85,20 +109,70 @@ services:
     volumes:
       - aria2_config:/config
       - downloads:/downloads
-    network_mode: "service:vpn"
+      - vpn_ip_share:/tmp/vpn-ip  # Shared volume for VPN IP
     depends_on:
       - vpn
 
-  # Override AriaNG to connect through VPN
-  ariang:
-    links:
-      - vpn:aria2
-
-  # Override frontend to connect to API through VPN
-  frontend:
-    environment:
-      VITE_API_URL: http://vpn:3001
+  # Add a separate service to monitor and write VPN IP
+  vpn-ip-monitor:
+    image: alpine:latest
+    container_name: downloadarr-vpn-ip-monitor
+    restart: unless-stopped
+    network_mode: "service:vpn"  # Use same VPN connection as Aria2
     volumes:
-      - ./packages/ui/nginx.vpn.conf:/etc/nginx/conf.d/default.conf:ro
-    links:
-      - vpn:api
+      - vpn_ip_share:/tmp/vpn-ip  # Shared volume for writing VPN IP
+    depends_on:
+      - vpn
+    command: |
+      sh -c '
+        # Install curl
+        apk add --no-cache curl
+
+        # Create directory if it doesn not exist
+        mkdir -p /tmp/vpn-ip
+
+        # Function to get and write external IP
+        while true; do
+          echo "Checking VPN IP..."
+
+          # Get external IP through VPN
+          EXTERNAL_IP=$$(curl -s --max-time 10 https://api.ipify.org 2>/dev/null || curl -s --max-time 10 https://ipinfo.io/ip 2>/dev/null || echo "unknown")
+
+          if [ "$$EXTERNAL_IP" != "unknown" ] && [ -n "$$EXTERNAL_IP" ]; then
+            echo "$$EXTERNAL_IP" > /tmp/vpn-ip/external_ip
+            echo "$$(date): $$EXTERNAL_IP" > /tmp/vpn-ip/last_update
+            echo "VPN IP updated: $$EXTERNAL_IP"
+          else
+            echo "Failed to get VPN IP"
+          fi
+
+          # Update every 60 seconds
+          sleep 60
+        done
+      '
+
+  # Override AriaNG to connect to Aria2 through VPN
+  ariang:
+    container_name: downloadarr-ariang-vpn
+    # AriaNG will connect to Aria2 via the VPN container's exposed port
+    # No additional configuration needed as it connects via browser
+
+  # Override frontend configuration
+  frontend:
+    container_name: downloadarr-frontend-vpn
+    environment:
+      VITE_API_URL: http://localhost:3001
+
+  # Override other services with VPN-specific container names
+  redis:
+    container_name: downloadarr-redis-vpn
+
+  postgres:
+    container_name: downloadarr-postgres-vpn
+
+  jackett:
+    container_name: downloadarr-jackett-vpn
+
+# Additional volumes for VPN setup
+volumes:
+  vpn_ip_share:  # Shared volume for VPN IP information

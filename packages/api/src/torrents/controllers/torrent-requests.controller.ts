@@ -40,10 +40,11 @@ export class TorrentRequestsController {
   })
   @ApiResponse({ status: 201, description: 'Movie request created successfully' })
   @ApiResponse({ status: 400, description: 'Invalid request data' })
+  @ApiResponse({ status: 409, description: 'Duplicate request - movie already requested' })
   async requestMovie(@Body() dto: CreateTorrentRequestDto): Promise<{ success: boolean; data: RequestedTorrent }> {
     try {
       this.logger.log(`Creating movie request: ${dto.title} (${dto.year})`);
-      
+
       const request = await this.requestedTorrentsService.createMovieRequest(dto);
 
       return {
@@ -52,7 +53,15 @@ export class TorrentRequestsController {
       };
     } catch (error) {
       this.logger.error(`Error creating movie request: ${error.message}`, error.stack);
-      
+
+      // Handle duplicate request error
+      if (error.message.includes('already exists')) {
+        throw new HttpException(
+          error.message,
+          HttpStatus.CONFLICT,
+        );
+      }
+
       throw new HttpException(
         'Failed to create movie request',
         HttpStatus.INTERNAL_SERVER_ERROR,
@@ -67,10 +76,11 @@ export class TorrentRequestsController {
   })
   @ApiResponse({ status: 201, description: 'TV show request created successfully' })
   @ApiResponse({ status: 400, description: 'Invalid request data' })
+  @ApiResponse({ status: 409, description: 'Duplicate request - TV show already requested' })
   async requestTvShow(@Body() dto: CreateTorrentRequestDto): Promise<{ success: boolean; data: RequestedTorrent }> {
     try {
       this.logger.log(`Creating TV show request: ${dto.title} S${dto.season}${dto.episode ? `E${dto.episode}` : ''}`);
-      
+
       const request = await this.requestedTorrentsService.createTvShowRequest(dto);
 
       return {
@@ -79,7 +89,15 @@ export class TorrentRequestsController {
       };
     } catch (error) {
       this.logger.error(`Error creating TV show request: ${error.message}`, error.stack);
-      
+
+      // Handle duplicate request error
+      if (error.message.includes('already exists')) {
+        throw new HttpException(
+          error.message,
+          HttpStatus.CONFLICT,
+        );
+      }
+
       throw new HttpException(
         'Failed to create TV show request',
         HttpStatus.INTERNAL_SERVER_ERROR,
