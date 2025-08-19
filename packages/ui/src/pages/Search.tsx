@@ -190,7 +190,7 @@ export default function Search() {
   ]
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6">
       <div>
         <h1 className="text-3xl font-bold">Search</h1>
         <p className="text-muted-foreground">
@@ -289,7 +289,7 @@ export default function Search() {
           )}
 
           {searchResults.length > 0 && (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
               {searchResults.map((item) => {
                 const torrentRequest = item.type === 'tv'
                   ? getRequestForShow(item.title, item.year)

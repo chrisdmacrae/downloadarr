@@ -121,13 +121,17 @@ export interface GamePlatform {
 // Torrent Request Types
 export interface TorrentRequest {
   id: string;
-  contentType: 'MOVIE' | 'TV_SHOW';
+  contentType: 'MOVIE' | 'TV_SHOW' | 'GAME';
   title: string;
   year?: number;
   season?: number;
   episode?: number;
   imdbId?: string;
   tmdbId?: number;
+  // Game-specific fields
+  igdbId?: number;
+  platform?: string;
+  genre?: string;
   status: 'PENDING' | 'SEARCHING' | 'FOUND' | 'DOWNLOADING' | 'COMPLETED' | 'FAILED' | 'CANCELLED' | 'EXPIRED';
   priority: number;
   preferredQualities: string[];

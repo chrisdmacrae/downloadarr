@@ -25,19 +25,19 @@ export function SearchResultCard({
 }: SearchResultCardProps) {
   const sizeClasses = {
     small: {
-      container: 'w-32',
+      container: 'w-full',
       aspect: item.type === 'game' ? 'aspect-[3/4]' : 'aspect-[2/3]',
       title: 'text-xs',
       year: 'text-xs'
     },
     medium: {
-      container: 'w-48',
+      container: 'w-full',
       aspect: item.type === 'game' ? 'aspect-[3/4]' : 'aspect-[2/3]',
       title: 'text-sm',
       year: 'text-xs'
     },
     large: {
-      container: 'w-64',
+      container: 'w-full',
       aspect: item.type === 'game' ? 'aspect-[3/4]' : 'aspect-[2/3]',
       title: 'text-base',
       year: 'text-sm'

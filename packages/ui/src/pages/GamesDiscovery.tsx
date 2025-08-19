@@ -177,7 +177,7 @@ export default function GamesDiscovery() {
 
   if (isLoading) {
     return (
-      <div className="space-y-8 p-6">
+      <div className="space-y-4 md:space-y-8">
         <div>
           <h1 className="text-3xl font-bold mb-2">Discover Games</h1>
           <p className="text-muted-foreground">Find your next gaming adventure</p>
@@ -241,7 +241,7 @@ export default function GamesDiscovery() {
   }
 
   return (
-    <div className="space-y-8 p-6">
+    <div className="space-y-4 md:space-y-8">
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold mb-2">Discover Games</h1>

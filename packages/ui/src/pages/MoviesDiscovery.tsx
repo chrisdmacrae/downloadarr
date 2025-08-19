@@ -142,7 +142,7 @@ export default function MoviesDiscovery() {
   }
 
   return (
-    <div className="space-y-8 p-6">
+    <div className="space-y-4 md:space-y-8">
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold mb-2">Discover Movies</h1>

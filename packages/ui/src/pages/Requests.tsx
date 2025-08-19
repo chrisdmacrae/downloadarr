@@ -266,13 +266,13 @@ export default function Requests() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="flex flex-col gap-6">
+    <div className="space-y-4 md:space-y-6">
+      <div className="flex flex-col gap-4 md:gap-6">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between md:gap-4">
           <div>
-            <h1 className="text-3xl font-bold">Download Requests</h1>
-            <p className="text-muted-foreground">
+            <h1 className="text-2xl md:text-3xl font-bold">Download Requests</h1>
+            <p className="text-sm md:text-base text-muted-foreground">
               Manage your torrent download requests
             </p>
           </div>
@@ -281,71 +281,73 @@ export default function Requests() {
               onClick={handleSearchAll}
               disabled={isSearchingAll || isLoading}
               variant="outline"
+              size="sm"
+              className="flex-1 md:flex-none"
             >
-              <PlayCircle className={`h-4 w-4 mr-2 ${isSearchingAll ? 'animate-spin' : ''}`} />
-              {isSearchingAll ? 'Searching...' : 'Search All'}
+              <PlayCircle className={`h-4 w-4 md:mr-2 ${isSearchingAll ? 'animate-spin' : ''}`} />
+              <span className="hidden md:inline">{isSearchingAll ? 'Searching...' : 'Search All'}</span>
             </Button>
-            <Button onClick={refreshRequests} disabled={isLoading}>
-              <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-              Refresh
+            <Button onClick={refreshRequests} disabled={isLoading} size="sm" className="flex-1 md:flex-none">
+              <RefreshCw className={`h-4 w-4 md:mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+              <span className="hidden md:inline">Refresh</span>
             </Button>
           </div>
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
+        <div className="hidden md:grid grid-cols-4 lg:grid-cols-8 gap-4">
           <Card className="cursor-pointer hover:bg-accent" onClick={() => setStatusFilter('all')}>
-            <CardContent className="p-4 text-center">
-              <div className="text-2xl font-bold">{statusCounts.all}</div>
+            <CardContent className="p-2 md:p-4 text-center">
+              <div className="text-lg md:text-2xl font-bold">{statusCounts.all}</div>
               <div className="text-xs text-muted-foreground">Total</div>
             </CardContent>
           </Card>
           <Card className="cursor-pointer hover:bg-accent" onClick={() => setStatusFilter('PENDING')}>
-            <CardContent className="p-4 text-center">
-              <div className="text-2xl font-bold text-yellow-600">{statusCounts.PENDING}</div>
+            <CardContent className="p-2 md:p-4 text-center">
+              <div className="text-lg md:text-2xl font-bold text-yellow-600">{statusCounts.PENDING}</div>
               <div className="text-xs text-muted-foreground">Pending</div>
             </CardContent>
           </Card>
           <Card className="cursor-pointer hover:bg-accent" onClick={() => setStatusFilter('SEARCHING')}>
-            <CardContent className="p-4 text-center">
-              <div className="text-2xl font-bold text-blue-600">{statusCounts.SEARCHING}</div>
+            <CardContent className="p-2 md:p-4 text-center">
+              <div className="text-lg md:text-2xl font-bold text-blue-600">{statusCounts.SEARCHING}</div>
               <div className="text-xs text-muted-foreground">Searching</div>
             </CardContent>
           </Card>
           <Card className="cursor-pointer hover:bg-accent" onClick={() => setStatusFilter('DOWNLOADING')}>
-            <CardContent className="p-4 text-center">
-              <div className="text-2xl font-bold text-blue-600">{statusCounts.DOWNLOADING}</div>
+            <CardContent className="p-2 md:p-4 text-center">
+              <div className="text-lg md:text-2xl font-bold text-blue-600">{statusCounts.DOWNLOADING}</div>
               <div className="text-xs text-muted-foreground">Downloading</div>
             </CardContent>
           </Card>
           <Card className="cursor-pointer hover:bg-accent" onClick={() => setStatusFilter('COMPLETED')}>
-            <CardContent className="p-4 text-center">
-              <div className="text-2xl font-bold text-green-600">{statusCounts.COMPLETED}</div>
+            <CardContent className="p-2 md:p-4 text-center">
+              <div className="text-lg md:text-2xl font-bold text-green-600">{statusCounts.COMPLETED}</div>
               <div className="text-xs text-muted-foreground">Completed</div>
             </CardContent>
           </Card>
           <Card className="cursor-pointer hover:bg-accent" onClick={() => setStatusFilter('FAILED')}>
-            <CardContent className="p-4 text-center">
-              <div className="text-2xl font-bold text-red-600">{statusCounts.FAILED}</div>
+            <CardContent className="p-2 md:p-4 text-center">
+              <div className="text-lg md:text-2xl font-bold text-red-600">{statusCounts.FAILED}</div>
               <div className="text-xs text-muted-foreground">Failed</div>
             </CardContent>
           </Card>
           <Card className="cursor-pointer hover:bg-accent" onClick={() => setStatusFilter('CANCELLED')}>
-            <CardContent className="p-4 text-center">
-              <div className="text-2xl font-bold text-gray-600">{statusCounts.CANCELLED}</div>
+            <CardContent className="p-2 md:p-4 text-center">
+              <div className="text-lg md:text-2xl font-bold text-gray-600">{statusCounts.CANCELLED}</div>
               <div className="text-xs text-muted-foreground">Cancelled</div>
             </CardContent>
           </Card>
           <Card className="cursor-pointer hover:bg-accent" onClick={() => setStatusFilter('EXPIRED')}>
-            <CardContent className="p-4 text-center">
-              <div className="text-2xl font-bold text-gray-600">{statusCounts.EXPIRED}</div>
+            <CardContent className="p-2 md:p-4 text-center">
+              <div className="text-lg md:text-2xl font-bold text-gray-600">{statusCounts.EXPIRED}</div>
               <div className="text-xs text-muted-foreground">Expired</div>
             </CardContent>
           </Card>
         </div>
 
         {/* Filters and Search */}
-        <div className="flex flex-col sm:flex-row gap-4">
+        <div className="flex flex-col gap-3 md:flex-row md:gap-4">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
@@ -356,7 +358,7 @@ export default function Requests() {
             />
           </div>
           <Select value={statusFilter} onValueChange={(value: StatusFilter) => setStatusFilter(value)}>
-            <SelectTrigger className="w-full sm:w-48">
+            <SelectTrigger className="w-full md:w-48">
               <SelectValue placeholder="Filter by status" />
             </SelectTrigger>
             <SelectContent>
@@ -376,7 +378,7 @@ export default function Requests() {
             setSortBy(field as typeof sortBy)
             setSortOrder(order as typeof sortOrder)
           }}>
-            <SelectTrigger className="w-full sm:w-48">
+            <SelectTrigger className="w-full md:w-48">
               <SelectValue placeholder="Sort by" />
             </SelectTrigger>
             <SelectContent>
@@ -413,40 +415,205 @@ export default function Requests() {
               const canDelete = true // Allow deletion of all requests - backend will handle download cancellation
               const canSearch = ['PENDING', 'FAILED', 'EXPIRED'].includes(request.status)
               const canViewResults = request.status === 'FOUND'
-              
+
               return (
                 <Card key={request.id} className="overflow-hidden">
-                  <CardHeader>
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-start gap-3 flex-1">
-                        <ContentIcon className="h-5 w-5 mt-1 text-muted-foreground" />
+                  <CardHeader className="p-3 md:p-6 pb-2 md:pb-6">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start gap-2 md:gap-3 flex-1 min-w-0">
+                        <ContentIcon className="h-4 w-4 md:h-5 md:w-5 mt-1 text-muted-foreground flex-shrink-0" />
                         <div className="flex-1 min-w-0">
-                          <CardTitle className="text-lg line-clamp-1">
-                            {request.title}
-                            {request.year && (
-                              <span className="text-muted-foreground font-normal ml-2">
-                                ({request.year})
-                              </span>
-                            )}
-                          </CardTitle>
-                          <CardDescription className="flex items-center gap-4 mt-1">
-                            <span className="flex items-center gap-1">
-                              <Calendar className="h-3 w-3" />
-                              {formatDate(request.createdAt)}
+                          <div className="flex items-start justify-between gap-2">
+                            <CardTitle className="text-base md:text-lg line-clamp-2 md:line-clamp-1 flex-1">
+                              {request.title}
+                              {request.year && (
+                                <span className="text-muted-foreground font-normal ml-1 md:ml-2">
+                                  ({request.year})
+                                </span>
+                              )}
+                            </CardTitle>
+                            {/* Mobile: Dropdown menu right of title */}
+                            <div className="md:hidden">
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="sm">
+                                    <MoreVertical className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  {canSearch && (
+                                    <DropdownMenuItem
+                                      onClick={() => handleSearchRequest(request)}
+                                      disabled={isSearching === request.id}
+                                    >
+                                      {isSearching === request.id ? (
+                                        <>
+                                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                          Searching...
+                                        </>
+                                      ) : (
+                                        <>
+                                          <SearchIcon className="h-4 w-4 mr-2" />
+                                          Search Now
+                                        </>
+                                      )}
+                                    </DropdownMenuItem>
+                                  )}
+                                  {canViewResults && (
+                                    <DropdownMenuItem
+                                      onClick={() => handleViewResults(request)}
+                                    >
+                                      <PlayCircle className="h-4 w-4 mr-2" />
+                                      View Results
+                                    </DropdownMenuItem>
+                                  )}
+                                  {canCancel && (
+                                    <AlertDialog>
+                                      <AlertDialogTrigger asChild>
+                                        <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                                          <XCircle className="h-4 w-4 mr-2" />
+                                          Cancel Request
+                                        </DropdownMenuItem>
+                                      </AlertDialogTrigger>
+                                      <AlertDialogContent>
+                                        <AlertDialogHeader>
+                                          <AlertDialogTitle>Cancel Request</AlertDialogTitle>
+                                          <AlertDialogDescription>
+                                            Are you sure you want to cancel the download request for "{request.title}"?
+                                            This action cannot be undone.
+                                          </AlertDialogDescription>
+                                        </AlertDialogHeader>
+                                        <AlertDialogFooter>
+                                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                          <AlertDialogAction
+                                            onClick={() => handleCancelRequest(request)}
+                                            disabled={isCancelling === request.id}
+                                          >
+                                            {isCancelling === request.id ? (
+                                              <>
+                                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                                Cancelling...
+                                              </>
+                                            ) : (
+                                              'Cancel Request'
+                                            )}
+                                          </AlertDialogAction>
+                                        </AlertDialogFooter>
+                                      </AlertDialogContent>
+                                    </AlertDialog>
+                                  )}
+                                  {canDelete && (
+                                    <AlertDialog>
+                                      <AlertDialogTrigger asChild>
+                                        <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                                          <Trash2 className="h-4 w-4 mr-2" />
+                                          Delete Request
+                                        </DropdownMenuItem>
+                                      </AlertDialogTrigger>
+                                      <AlertDialogContent>
+                                        <AlertDialogHeader>
+                                          <AlertDialogTitle>Delete Request</AlertDialogTitle>
+                                          <AlertDialogDescription>
+                                            Are you sure you want to permanently delete the request for{' '}
+                                            <span className="font-semibold">
+                                              "{request.title}"
+                                              {request.year && ` (${request.year})`}
+                                              {request.season && ` Season ${request.season}`}
+                                              {request.episode && ` Episode ${request.episode}`}
+                                            </span>
+                                            ?{' '}
+                                            {request.status === 'DOWNLOADING' && (
+                                              <span className="text-destructive font-medium">
+                                                This will also stop the active download.{' '}
+                                              </span>
+                                            )}
+                                            This action cannot be undone and will remove all associated data.
+                                          </AlertDialogDescription>
+                                        </AlertDialogHeader>
+                                        <AlertDialogFooter>
+                                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                          <AlertDialogAction
+                                            onClick={() => handleDeleteRequest(request)}
+                                            disabled={isDeleting === request.id}
+                                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                          >
+                                            {isDeleting === request.id ? (
+                                              <>
+                                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                                Deleting...
+                                              </>
+                                            ) : (
+                                              'Delete Request'
+                                            )}
+                                          </AlertDialogAction>
+                                        </AlertDialogFooter>
+                                      </AlertDialogContent>
+                                    </AlertDialog>
+                                  )}
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
+                          </div>
+                          <CardDescription className="flex flex-col md:flex-row md:items-center gap-1 md:gap-4 mt-0.5 md:mt-1">
+                            <span className="flex items-center gap-1 text-xs">
+                              <Calendar className="h-3 w-3 flex-shrink-0" />
+                              <span>{formatDate(request.createdAt)}</span>
                             </span>
-                            {request.season && (
-                              <span>Season {request.season}</span>
-                            )}
-                            {request.episode && (
-                              <span>Episode {request.episode}</span>
-                            )}
-                            <Badge variant="outline" className="capitalize">
-                              {request.contentType.toLowerCase().replace('_', ' ')}
-                            </Badge>
+                            <div className="flex flex-wrap items-center gap-1 md:gap-2">
+                              {/* Mobile: Status badge as first badge */}
+                              <div className="md:hidden">
+                                <DownloadStatusBadge request={request} />
+                              </div>
+                              {request.season && (
+                                <span className="text-xs">Season {request.season}</span>
+                              )}
+                              {request.episode && (
+                                <span className="text-xs">Episode {request.episode}</span>
+                              )}
+                              <Badge variant="outline" className="capitalize text-xs">
+                                {request.contentType.toLowerCase().replace('_', ' ')}
+                              </Badge>
+                              {request.platform && (
+                                <Badge variant="secondary" className="text-xs">
+                                  {request.platform}
+                                </Badge>
+                              )}
+                              {/* Display qualities for movies/TV shows */}
+                              {(request.contentType === 'MOVIE' || request.contentType === 'TV_SHOW') && request.preferredQualities && request.preferredQualities.length > 0 && (
+                                <>
+                                  {request.preferredQualities.slice(0, 2).map((quality, index) => (
+                                    <Badge key={index} variant="secondary" className="text-xs">
+                                      {quality.replace('HD_', '').replace('UHD_', '')}
+                                    </Badge>
+                                  ))}
+                                  {request.preferredQualities.length > 2 && (
+                                    <Badge variant="secondary" className="text-xs">
+                                      +{request.preferredQualities.length - 2}
+                                    </Badge>
+                                  )}
+                                </>
+                              )}
+                              {/* Display formats for movies/TV shows */}
+                              {(request.contentType === 'MOVIE' || request.contentType === 'TV_SHOW') && request.preferredFormats && request.preferredFormats.length > 0 && (
+                                <>
+                                  {request.preferredFormats.slice(0, 2).map((format, index) => (
+                                    <Badge key={index} variant="outline" className="text-xs">
+                                      {format}
+                                    </Badge>
+                                  ))}
+                                  {request.preferredFormats.length > 2 && (
+                                    <Badge variant="outline" className="text-xs">
+                                      +{request.preferredFormats.length - 2}
+                                    </Badge>
+                                  )}
+                                </>
+                              )}
+                            </div>
                           </CardDescription>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
+                      {/* Desktop: Status badge and menu on the right */}
+                      <div className="hidden md:flex items-center gap-2">
                         <DownloadStatusBadge request={request} />
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -561,12 +728,15 @@ export default function Requests() {
                         </DropdownMenu>
                       </div>
                     </div>
+
+
+
                   </CardHeader>
                   
                   {(request.foundTorrentTitle || request.downloadProgress !== null) && (
-                    <CardContent className="pt-0">
+                    <CardContent className="pt-0 px-3 md:px-6">
                       {request.foundTorrentTitle && (
-                        <div className="text-sm text-muted-foreground mb-2">
+                        <div className="text-xs md:text-sm text-muted-foreground mb-2">
                           <strong>Found:</strong> {request.foundTorrentTitle}
                         </div>
                       )}

@@ -320,7 +320,7 @@ export function DownloadRequestModal({ item, open, onOpenChange, onRequestCreate
                           </SelectItem>
                         ) : (
                           platformOptions.map((platform) => (
-                            <SelectItem key={platform.id} value={platform.id}>
+                            <SelectItem key={platform.id} value={platform.name}>
                               {platform.name}
                             </SelectItem>
                           ))

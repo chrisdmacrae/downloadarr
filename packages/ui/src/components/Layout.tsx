@@ -40,13 +40,13 @@ export default function Layout({ children }: LayoutProps) {
   return (
     <div className="flex h-screen bg-background">
       {/* Sidebar */}
-      <div className="flex flex-col w-64 bg-card border-r">
+      <div className="flex flex-col w-16 md:w-64 bg-card border-r">
         <div className="flex items-center h-16 px-6 border-b">
           <Activity className="w-8 h-8 text-primary" />
-          <span className="ml-2 text-xl font-bold">Downloadarr</span>
+          <span className="ml-2 text-xl font-bold hidden md:block">Downloadarr</span>
         </div>
         
-        <nav className="flex-1 flex flex-col px-4 py-6">
+        <nav className="flex-1 flex flex-col px-2 md:px-4 py-6">
           <div className="space-y-6">
             {/* Main Navigation */}
             <div className="space-y-2">
@@ -59,12 +59,12 @@ export default function Layout({ children }: LayoutProps) {
                     <Button
                       variant={isActive ? "default" : "ghost"}
                       className={cn(
-                        "w-full justify-start",
+                        "w-full justify-center md:justify-start",
                         isActive && "bg-primary text-primary-foreground"
                       )}
                     >
-                      <Icon className="w-4 h-4 mr-2" />
-                      {item.name}
+                      <Icon className="w-4 h-4 md:mr-2" />
+                      <span className="hidden md:inline">{item.name}</span>
                     </Button>
                   </Link>
                 )
@@ -73,7 +73,7 @@ export default function Layout({ children }: LayoutProps) {
 
             {/* Find Section */}
             <div className="space-y-2">
-              <h3 className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+              <h3 className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 hidden md:block">
                 Find
               </h3>
               {findNavigation.map((item) => {
@@ -85,12 +85,12 @@ export default function Layout({ children }: LayoutProps) {
                     <Button
                       variant={isActive ? "default" : "ghost"}
                       className={cn(
-                        "w-full justify-start",
+                        "w-full justify-center md:justify-start",
                         isActive && "bg-primary text-primary-foreground"
                       )}
                     >
-                      <Icon className="w-4 h-4 mr-2" />
-                      {item.name}
+                      <Icon className="w-4 h-4 md:mr-2" />
+                      <span className="hidden md:inline">{item.name}</span>
                     </Button>
                   </Link>
                 )
@@ -109,12 +109,12 @@ export default function Layout({ children }: LayoutProps) {
                   <Button
                     variant={isActive ? "default" : "ghost"}
                     className={cn(
-                      "w-full justify-start",
+                      "w-full justify-center md:justify-start",
                       isActive && "bg-primary text-primary-foreground"
                     )}
                   >
-                    <Icon className="w-4 h-4 mr-2" />
-                    {item.name}
+                    <Icon className="w-4 h-4 md:mr-2" />
+                    <span className="hidden md:inline">{item.name}</span>
                   </Button>
                 </Link>
               )
@@ -125,7 +125,7 @@ export default function Layout({ children }: LayoutProps) {
 
       {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        <main className="flex-1 overflow-auto p-6">
+        <main className="flex-1 overflow-auto p-3 md:p-6">
           {children}
         </main>
       </div>

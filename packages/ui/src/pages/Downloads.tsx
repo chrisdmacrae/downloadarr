@@ -138,122 +138,168 @@ export default function Downloads() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold">Downloads</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-2xl md:text-3xl font-bold">Downloads</h1>
+          <p className="text-sm md:text-base text-muted-foreground">
             Manage your active and queued downloads
           </p>
         </div>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Downloads</CardTitle>
-          <CardDescription>
-            All downloads from Aria2
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="flex items-center justify-center p-8">
-              <Loader2 className="h-8 w-8 animate-spin" />
-              <span className="ml-2">Loading downloads...</span>
-            </div>
-          ) : !downloads || downloads.length === 0 ? (
-            <div className="text-center text-muted-foreground p-8">
-              <p>No downloads found. Start downloading something to see it here!</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
+      {isLoading ? (
+        <div className="flex items-center justify-center p-8">
+          <Loader2 className="h-8 w-8 animate-spin" />
+          <span className="ml-2">Loading downloads...</span>
+        </div>
+      ) : !downloads || downloads.length === 0 ? (
+        <div className="text-center text-muted-foreground p-8">
+          <p>No downloads found. Start downloading something to see it here!</p>
+        </div>
+      ) : (
+            <div className="space-y-3 md:space-y-4">
               {downloads.map((download) => (
-                <div key={download.id} className="flex items-center space-x-4 p-4 border rounded-lg">
-                  <div className={`w-3 h-3 rounded-full ${getStatusColor(download.status)}`}></div>
+                <div key={download.id} className="border rounded-lg p-3 md:p-4">
+                  <div className="flex gap-3">
+                    {/* Main content */}
+                    <div className="flex items-start gap-2 md:gap-3 flex-1 min-w-0">
+                      <div className={`w-3 h-3 rounded-full mt-0.5 flex-shrink-0 ${getStatusColor(download.status)}`}></div>
+                      <div className="flex-1 min-w-0">
+                        {/* Title and metadata */}
+                        <div className="flex items-start justify-between gap-2 mb-2 md:mb-0">
+                          <div className="flex flex-col md:flex-row md:items-center gap-1 md:gap-2 flex-1">
+                            <p className="text-sm md:text-base font-medium line-clamp-2 md:line-clamp-1">
+                              {download.mediaTitle || download.name}
+                            </p>
+                            <div className="flex items-center gap-2">
+                              {download.mediaYear && (
+                                <span className="text-xs text-muted-foreground">({download.mediaYear})</span>
+                              )}
+                              {download.mediaType && (
+                                <span className="text-xs bg-secondary px-2 py-1 rounded">
+                                  {download.mediaType.toUpperCase()}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          {/* Mobile: Action buttons on top right */}
+                          <div className="flex items-center gap-1 md:hidden">
+                            {download.status === 'active' && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handlePauseDownload(download.id)}
+                                disabled={pauseDownloadMutation.isPending}
+                              >
+                                {pauseDownloadMutation.isPending ? (
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : (
+                                  <Pause className="h-3 w-3" />
+                                )}
+                              </Button>
+                            )}
+                            {download.status === 'paused' && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleResumeDownload(download.id)}
+                                disabled={resumeDownloadMutation.isPending}
+                              >
+                                {resumeDownloadMutation.isPending ? (
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : (
+                                  <Play className="h-3 w-3" />
+                                )}
+                              </Button>
+                            )}
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleCancelDownload(download.id)}
+                              disabled={cancelDownloadMutation.isPending}
+                            >
+                              {cancelDownloadMutation.isPending ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <X className="h-3 w-3" />
+                              )}
+                            </Button>
+                          </div>
+                        </div>
 
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center space-x-2">
-                      <p className="text-sm font-medium truncate">
-                        {download.mediaTitle || download.name}
-                      </p>
-                      {download.mediaYear && (
-                        <span className="text-xs text-muted-foreground">({download.mediaYear})</span>
+                        {/* Download metadata */}
+                        <div className="flex flex-wrap items-center gap-2 md:gap-4 text-xs text-muted-foreground mb-2">
+                          <span>{formatFileSize(download.totalSize)}</span>
+                          <span>{formatDownloadSpeed(download.downloadSpeed)}</span>
+                          <span className="hidden md:inline">Status: {getStatusText(download.status)}</span>
+                          <span>ETA: {getETA(download)}</span>
+                          <span className="hidden md:inline">{download.files.length} files</span>
+                        </div>
+
+                        {/* Progress bar */}
+                        <div className="w-full bg-secondary rounded-full h-2 mb-1">
+                          <div
+                            className="bg-primary h-2 rounded-full transition-all duration-300"
+                            style={{ width: `${download.progress}%` }}
+                          ></div>
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {download.progress}% complete ({formatFileSize(download.completedSize)} / {formatFileSize(download.totalSize)})
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Desktop: Action buttons on the right */}
+                    <div className="hidden md:flex items-center gap-2">
+                      {download.status === 'active' && (
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={() => handlePauseDownload(download.id)}
+                          disabled={pauseDownloadMutation.isPending}
+                        >
+                          {pauseDownloadMutation.isPending ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Pause className="h-4 w-4" />
+                          )}
+                        </Button>
                       )}
-                      {download.mediaType && (
-                        <span className="text-xs bg-secondary px-2 py-1 rounded">
-                          {download.mediaType.toUpperCase()}
-                        </span>
+                      {download.status === 'paused' && (
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={() => handleResumeDownload(download.id)}
+                          disabled={resumeDownloadMutation.isPending}
+                        >
+                          {resumeDownloadMutation.isPending ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Play className="h-4 w-4" />
+                          )}
+                        </Button>
                       )}
-                    </div>
-
-                    <div className="flex items-center space-x-4 text-xs text-muted-foreground mt-1">
-                      <span>{formatFileSize(download.totalSize)}</span>
-                      <span>{formatDownloadSpeed(download.downloadSpeed)}</span>
-                      <span>Status: {getStatusText(download.status)}</span>
-                      <span>ETA: {getETA(download)}</span>
-                      <span>{download.files.length} files</span>
-                    </div>
-
-                    {/* Progress bar */}
-                    <div className="w-full bg-secondary rounded-full h-2 mt-2">
-                      <div
-                        className="bg-primary h-2 rounded-full transition-all duration-300"
-                        style={{ width: `${download.progress}%` }}
-                      ></div>
-                    </div>
-                    <div className="text-xs text-muted-foreground mt-1">
-                      {download.progress}% complete ({formatFileSize(download.completedSize)} / {formatFileSize(download.totalSize)})
-                    </div>
-                  </div>
-
-                  <div className="flex items-center space-x-2">
-                    {download.status === 'active' && (
                       <Button
                         variant="outline"
                         size="icon"
-                        onClick={() => handlePauseDownload(download.id)}
-                        disabled={pauseDownloadMutation.isPending}
+                        onClick={() => handleCancelDownload(download.id)}
+                        disabled={cancelDownloadMutation.isPending}
                       >
-                        {pauseDownloadMutation.isPending ? (
+                        {cancelDownloadMutation.isPending ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
                         ) : (
-                          <Pause className="h-4 w-4" />
+                          <X className="h-4 w-4" />
                         )}
                       </Button>
-                    )}
-                    {download.status === 'paused' && (
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        onClick={() => handleResumeDownload(download.id)}
-                        disabled={resumeDownloadMutation.isPending}
-                      >
-                        {resumeDownloadMutation.isPending ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Play className="h-4 w-4" />
-                        )}
-                      </Button>
-                    )}
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() => handleCancelDownload(download.id)}
-                      disabled={cancelDownloadMutation.isPending}
-                    >
-                      {cancelDownloadMutation.isPending ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <X className="h-4 w-4" />
-                      )}
-                    </Button>
+                    </div>
                   </div>
+
+
                 </div>
               ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+        </div>
+      )}
     </div>
   )
 }
