@@ -1,4 +1,4 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Play, Pause, X, Loader2 } from 'lucide-react'
 import { useDownloads, usePauseDownload, useResumeDownload, useCancelDownload } from '@/hooks/useApi'

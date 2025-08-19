@@ -128,6 +128,10 @@ export interface TorrentRequest {
   episode?: number;
   imdbId?: string;
   tmdbId?: number;
+  // TV Show specific fields for ongoing requests
+  isOngoing?: boolean;
+  totalSeasons?: number;
+  totalEpisodes?: number;
   // Game-specific fields
   igdbId?: number;
   platform?: string;
@@ -146,6 +150,56 @@ export interface TorrentRequest {
   downloadEta?: string;
   createdAt: string;
   updatedAt: string;
+  // TV Show management relationships
+  tvShowSeasons?: TvShowSeason[];
+  torrentDownloads?: TorrentDownload[];
+}
+
+// TV Show Season Management Types
+export interface TvShowSeason {
+  id: string;
+  requestedTorrentId: string;
+  seasonNumber: number;
+  totalEpisodes?: number;
+  status: 'PENDING' | 'SEARCHING' | 'FOUND' | 'DOWNLOADING' | 'COMPLETED' | 'FAILED';
+  createdAt: string;
+  updatedAt: string;
+  episodes?: TvShowEpisode[];
+  torrentDownloads?: TorrentDownload[];
+}
+
+export interface TvShowEpisode {
+  id: string;
+  tvShowSeasonId: string;
+  episodeNumber: number;
+  title?: string;
+  airDate?: string;
+  status: 'PENDING' | 'SEARCHING' | 'FOUND' | 'DOWNLOADING' | 'COMPLETED' | 'FAILED';
+  createdAt: string;
+  updatedAt: string;
+  torrentDownloads?: TorrentDownload[];
+}
+
+export interface TorrentDownload {
+  id: string;
+  requestedTorrentId: string;
+  tvShowSeasonId?: string;
+  tvShowEpisodeId?: string;
+  torrentTitle: string;
+  torrentLink?: string;
+  magnetUri?: string;
+  torrentSize?: string;
+  seeders?: number;
+  indexer?: string;
+  downloadJobId?: string;
+  aria2Gid?: string;
+  downloadProgress?: number;
+  downloadSpeed?: string;
+  downloadEta?: string;
+  status: 'PENDING' | 'DOWNLOADING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
+  createdAt: string;
+  updatedAt: string;
+  completedAt?: string;
 }
 
 export interface TorrentSearchResult {
@@ -193,6 +247,10 @@ export interface CreateTorrentRequestDto {
   episode?: number;
   imdbId?: string;
   tmdbId?: number;
+  // TV Show specific fields for ongoing requests
+  isOngoing?: boolean;
+  totalSeasons?: number;
+  totalEpisodes?: number;
   // Game-specific fields
   igdbId?: number;
   platform?: string;
@@ -471,6 +529,27 @@ export const apiService = {
 
   getSearchResults: async (requestId: string): Promise<{ success: boolean; data?: TorrentSearchResult[]; error?: string }> => {
     const response = await api.get(`/torrent-requests/${requestId}/search-results`);
+    return response.data;
+  },
+
+  // TV Show Season Management
+  getTvShowSeasons: async (requestId: string): Promise<{ success: boolean; data?: TvShowSeason[]; error?: string }> => {
+    const response = await api.get(`/torrent-requests/${requestId}/seasons`);
+    return response.data;
+  },
+
+  getTvShowSeason: async (requestId: string, seasonNumber: number): Promise<{ success: boolean; data?: TvShowSeason; error?: string }> => {
+    const response = await api.get(`/torrent-requests/${requestId}/seasons/${seasonNumber}`);
+    return response.data;
+  },
+
+  getTvShowEpisodes: async (requestId: string, seasonNumber: number): Promise<{ success: boolean; data?: TvShowEpisode[]; error?: string }> => {
+    const response = await api.get(`/torrent-requests/${requestId}/seasons/${seasonNumber}/episodes`);
+    return response.data;
+  },
+
+  getTorrentDownloads: async (requestId: string): Promise<{ success: boolean; data?: TorrentDownload[]; error?: string }> => {
+    const response = await api.get(`/torrent-requests/${requestId}/downloads`);
     return response.data;
   },
 

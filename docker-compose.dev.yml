@@ -24,6 +24,8 @@ services:
     volumes:
       # Mount source code for hot reloading
       - ./packages/api/src:/app/packages/api/src:ro
+      # Mount Prisma directory for migrations and schema changes
+      - ./packages/api/prisma:/app/packages/api/prisma
       # Override downloads volume for dev
       - downloads_dev:/downloads
 

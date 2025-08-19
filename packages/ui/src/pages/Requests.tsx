@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { 
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -15,7 +15,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
-import { 
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -40,6 +40,8 @@ import {
 import { DownloadStatusBadge } from '@/components/DownloadStatusBadge'
 import { TorrentSelectionModal } from '@/components/TorrentSelectionModal'
 import { EditRequestModal } from '@/components/EditRequestModal'
+import { TvShowSeasonBadges } from '@/components/TvShowSeasonBadges'
+import { TvShowSeasonModal } from '@/components/TvShowSeasonModal'
 import { apiService, TorrentRequest } from '@/services/api'
 import { useTorrentRequests } from '@/hooks/useTorrentRequests'
 import { useToast } from '@/hooks/use-toast'
@@ -58,8 +60,10 @@ export default function Requests() {
   const [isSearchingAll, setIsSearchingAll] = useState(false)
   const [torrentSelectionRequest, setTorrentSelectionRequest] = useState<TorrentRequest | null>(null)
   const [editRequest, setEditRequest] = useState<TorrentRequest | null>(null)
-  
-  const { requests, isLoading, error, refreshRequests } = useTorrentRequests()
+  const [seasonModalRequest, setSeasonModalRequest] = useState<TorrentRequest | null>(null)
+  const [seasonModalSeasonNumber, setSeasonModalSeasonNumber] = useState<number | null>(null)
+
+  const { requests, isLoading, error, refreshRequests, isOngoingTvShow } = useTorrentRequests()
   const { toast } = useToast()
 
   // Filter and sort requests
@@ -71,7 +75,7 @@ export default function Requests() {
     })
     .sort((a, b) => {
       let comparison = 0
-      
+
       switch (sortBy) {
         case 'created':
           comparison = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
@@ -83,16 +87,16 @@ export default function Requests() {
           comparison = a.priority - b.priority
           break
       }
-      
+
       return sortOrder === 'asc' ? comparison : -comparison
     })
 
   const handleCancelRequest = async (request: TorrentRequest) => {
     setIsCancelling(request.id)
-    
+
     try {
       const response = await apiService.cancelTorrentRequest(request.id)
-      
+
       if (response.success) {
         toast({
           title: "Request Cancelled",
@@ -222,6 +226,16 @@ export default function Requests() {
     refreshRequests()
   }
 
+  const handleSeasonClick = (request: TorrentRequest, seasonNumber: number) => {
+    setSeasonModalRequest(request)
+    setSeasonModalSeasonNumber(seasonNumber)
+  }
+
+  const handleSeasonModalClose = () => {
+    setSeasonModalRequest(null)
+    setSeasonModalSeasonNumber(null)
+  }
+
   const getStatusCounts = () => {
     const counts = {
       all: requests.length,
@@ -234,11 +248,11 @@ export default function Requests() {
       CANCELLED: 0,
       EXPIRED: 0,
     }
-    
+
     requests.forEach(request => {
       counts[request.status]++
     })
-    
+
     return counts
   }
 
@@ -412,7 +426,7 @@ export default function Requests() {
             <Download className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
             <h3 className="text-lg font-semibold mb-2">No requests found</h3>
             <p className="text-muted-foreground">
-              {requests.length === 0 
+              {requests.length === 0
                 ? "You haven't made any download requests yet."
                 : "No requests match your current filters."
               }
@@ -437,12 +451,16 @@ export default function Requests() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between gap-2">
                             <CardTitle className="text-base md:text-lg line-clamp-2 md:line-clamp-1 flex-1">
-                              {request.title}
-                              {request.year && (
-                                <span className="text-muted-foreground font-normal ml-1 md:ml-2">
-                                  ({request.year})
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span>
+                                  {request.title}
+                                  {request.year && (
+                                    <span className="text-muted-foreground font-normal ml-1 md:ml-2">
+                                      ({request.year})
+                                    </span>
+                                  )}
                                 </span>
-                              )}
+                              </div>
                             </CardTitle>
                             {/* Mobile: Dropdown menu right of title */}
                             <div className="md:hidden">
@@ -584,14 +602,11 @@ export default function Requests() {
                               <div className="md:hidden">
                                 <DownloadStatusBadge request={request} />
                               </div>
-                              {request.season && (
-                                <span className="text-xs">Season {request.season}</span>
-                              )}
-                              {request.episode && (
-                                <span className="text-xs">Episode {request.episode}</span>
-                              )}
                               <Badge variant="outline" className="capitalize text-xs">
-                                {request.contentType.toLowerCase().replace('_', ' ')}
+                                {isOngoingTvShow(request)
+                                  ? 'Ongoing Series'
+                                  : request.contentType.toLowerCase().replace('_', ' ')
+                                }
                               </Badge>
                               {request.platform && (
                                 <Badge variant="secondary" className="text-xs">
@@ -760,8 +775,27 @@ export default function Requests() {
 
 
                   </CardHeader>
-                  
-                  {(request.foundTorrentTitle || request.downloadProgress !== null) && (
+
+                  {request.contentType === 'TV_SHOW' && isOngoingTvShow(request) ? (
+                    <CardContent className="pt-0 px-3 md:px-6">
+                      <TvShowSeasonBadges
+                        request={request}
+                        onSeasonClick={(seasonNumber) => handleSeasonClick(request, seasonNumber)}
+                        className="flex-wrap"
+                      />
+                    </CardContent>
+                  ) : (
+                    <CardContent className="pt-0 px-3 md:px-6">
+                      {request.season && (
+                        <span className="text-xs">Season {request.season}</span>
+                      )}
+                      {request.episode && (
+                        <span className="text-xs">Episode {request.episode}</span>
+                      )}
+                    </CardContent>
+                  )}
+
+                  {!request.isOngoing && (request.foundTorrentTitle || request.downloadProgress !== null) && (
                     <CardContent className="pt-0 px-3 md:px-6">
                       {request.foundTorrentTitle && (
                         <div className="text-xs md:text-sm text-muted-foreground mb-2">
@@ -791,6 +825,14 @@ export default function Requests() {
         open={!!editRequest}
         onOpenChange={(open) => !open && setEditRequest(null)}
         onRequestUpdated={handleRequestUpdated}
+      />
+
+      {/* TV Show Season Modal */}
+      <TvShowSeasonModal
+        isOpen={!!seasonModalRequest}
+        onClose={handleSeasonModalClose}
+        request={seasonModalRequest}
+        seasonNumber={seasonModalSeasonNumber}
       />
     </div>
   )

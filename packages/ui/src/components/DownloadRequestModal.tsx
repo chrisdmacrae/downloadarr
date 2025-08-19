@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Download, Loader2, Settings, Film, Tv } from 'lucide-react'
@@ -39,6 +40,9 @@ export function DownloadRequestModal({ item, open, onOpenChange, onRequestCreate
   const [formData, setFormData] = useState({
     season: '',
     episode: '',
+    isOngoing: false,
+    totalSeasons: '',
+    totalEpisodes: '',
     platform: '',
     genre: '',
     preferredQualities: ['HD_1080P'],
@@ -60,9 +64,9 @@ export function DownloadRequestModal({ item, open, onOpenChange, onRequestCreate
     if (open && item) {
       setFormData(prev => ({
         ...prev,
-        preferredQualities: isGame ? [] : ['HD_1080P'],
-        preferredFormats: isGame ? [] : ['X265'],
-        minSeeders: isGame ? 1 : 5, // Games often have lower seeder counts
+        preferredQualities: isGame ? [] : ['HD_1080P', 'UHD_4K'],
+        preferredFormats: isGame ? [] : ['X264', 'X265'],
+        minSeeders: 1,
       }))
     }
   }, [open, item, isGame])
@@ -146,11 +150,24 @@ export function DownloadRequestModal({ item, open, onOpenChange, onRequestCreate
 
       // Add TV show specific fields
       if (isTvShow) {
-        if (formData.season) {
-          requestDto.season = parseInt(formData.season)
-        }
-        if (formData.episode) {
-          requestDto.episode = parseInt(formData.episode)
+        requestDto.isOngoing = formData.isOngoing
+
+        if (formData.isOngoing) {
+          // For ongoing requests, don't set specific season/episode
+          if (formData.totalSeasons) {
+            requestDto.totalSeasons = parseInt(formData.totalSeasons)
+          }
+          if (formData.totalEpisodes) {
+            requestDto.totalEpisodes = parseInt(formData.totalEpisodes)
+          }
+        } else {
+          // For specific season/episode requests
+          if (formData.season) {
+            requestDto.season = parseInt(formData.season)
+          }
+          if (formData.episode) {
+            requestDto.episode = parseInt(formData.episode)
+          }
         }
       }
 
@@ -185,6 +202,9 @@ export function DownloadRequestModal({ item, open, onOpenChange, onRequestCreate
         setFormData({
           season: '',
           episode: '',
+          isOngoing: false,
+          totalSeasons: '',
+          totalEpisodes: '',
           platform: '',
           genre: '',
           preferredQualities: isGame ? [] : ['HD_1080P'],
@@ -264,30 +284,94 @@ export function DownloadRequestModal({ item, open, onOpenChange, onRequestCreate
                   <Tv className="h-4 w-4" />
                   TV Show Options
                 </h4>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="season">Season (optional)</Label>
-                    <Input
-                      id="season"
-                      type="number"
-                      min="1"
-                      placeholder="e.g., 1"
-                      value={formData.season}
-                      onChange={(e) => setFormData(prev => ({ ...prev, season: e.target.value }))}
-                    />
+
+                {/* Ongoing Request Toggle */}
+                <div className="flex items-center justify-between p-4 border rounded-lg">
+                  <div className="space-y-1">
+                    <Label htmlFor="isOngoing" className="text-sm font-medium">
+                      Ongoing Request
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Automatically search for new episodes as they become available
+                    </p>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="episode">Episode (optional)</Label>
-                    <Input
-                      id="episode"
-                      type="number"
-                      min="1"
-                      placeholder="e.g., 5"
-                      value={formData.episode}
-                      onChange={(e) => setFormData(prev => ({ ...prev, episode: e.target.value }))}
-                    />
-                  </div>
+                  <Switch
+                    id="isOngoing"
+                    checked={formData.isOngoing}
+                    onCheckedChange={(checked) => setFormData(prev => ({
+                      ...prev,
+                      isOngoing: checked,
+                      // Clear season/episode when switching to ongoing
+                      season: checked ? '' : prev.season,
+                      episode: checked ? '' : prev.episode,
+                    }))}
+                  />
                 </div>
+
+                {formData.isOngoing ? (
+                  /* Ongoing Request Fields */
+                  <div className="space-y-4 p-4 bg-muted/50 rounded-lg">
+                    <p className="text-sm text-muted-foreground">
+                      This will create an ongoing request that automatically searches for new episodes.
+                    </p>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="totalSeasons">Total Seasons (optional)</Label>
+                        <Input
+                          id="totalSeasons"
+                          type="number"
+                          min="1"
+                          placeholder="e.g., 5"
+                          value={formData.totalSeasons}
+                          onChange={(e) => setFormData(prev => ({ ...prev, totalSeasons: e.target.value }))}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          If known, helps track completion
+                        </p>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="totalEpisodes">Total Episodes (optional)</Label>
+                        <Input
+                          id="totalEpisodes"
+                          type="number"
+                          min="1"
+                          placeholder="e.g., 100"
+                          value={formData.totalEpisodes}
+                          onChange={(e) => setFormData(prev => ({ ...prev, totalEpisodes: e.target.value }))}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          If known, helps track completion
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  /* Specific Season/Episode Fields */
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="season">Season (optional)</Label>
+                      <Input
+                        id="season"
+                        type="number"
+                        min="1"
+                        placeholder="e.g., 1"
+                        value={formData.season}
+                        onChange={(e) => setFormData(prev => ({ ...prev, season: e.target.value }))}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="episode">Episode (optional)</Label>
+                      <Input
+                        id="episode"
+                        type="number"
+                        min="1"
+                        placeholder="e.g., 5"
+                        value={formData.episode}
+                        onChange={(e) => setFormData(prev => ({ ...prev, episode: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+                )}
                 <p className="text-xs text-muted-foreground">
                   Leave empty to download the entire series. Specify season only to download a full season.
                 </p>

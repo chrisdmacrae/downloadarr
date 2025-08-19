@@ -13,11 +13,22 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery } from '@nestjs/swagger';
 import { RequestedTorrentsService } from '../services/requested-torrents.service';
+import { TvShowMetadataService } from '../services/tv-show-metadata.service';
 import { TorrentSearchLogService } from '../services/torrent-search-log.service';
 import { TorrentSearchResultsService } from '../services/torrent-search-results.service';
 import { TorrentCheckerService } from '../services/torrent-checker.service';
 import { DownloadProgressTrackerService } from '../services/download-progress-tracker.service';
 import { CreateTorrentRequestDto, UpdateTorrentRequestDto, TorrentRequestQueryDto } from '../dto/torrent-request.dto';
+import {
+  CreateTvShowSeasonDto,
+  UpdateTvShowSeasonDto,
+  CreateTvShowEpisodeDto,
+  UpdateTvShowEpisodeDto,
+  CreateTorrentDownloadDto,
+  UpdateTorrentDownloadDto,
+  TvShowSeasonQueryDto,
+  TvShowEpisodeQueryDto
+} from '../dto/tv-show-season.dto';
 import { RequestedTorrent, RequestStatus } from '../../../generated/prisma';
 
 @ApiTags('Torrent Requests')
@@ -31,6 +42,7 @@ export class TorrentRequestsController {
     private readonly searchResultsService: TorrentSearchResultsService,
     private readonly torrentCheckerService: TorrentCheckerService,
     private readonly downloadProgressTrackerService: DownloadProgressTrackerService,
+    private readonly tvShowMetadataService: TvShowMetadataService,
   ) {}
 
   @Post('movies')
@@ -500,10 +512,8 @@ export class TorrentRequestsController {
         );
       }
 
-      // Update the request to SEARCHING status and reset search attempts
-      await this.requestedTorrentsService.updateRequestStatus(id, 'SEARCHING');
-
       // Trigger the torrent checker for this specific request
+      // Note: processRequest will handle updating the status to SEARCHING via incrementSearchAttempt
       await this.torrentCheckerService.searchForSpecificRequest(id);
 
       return {
@@ -546,13 +556,8 @@ export class TorrentRequestsController {
         };
       }
 
-      // Update all searchable requests to SEARCHING status
-      const updatePromises = searchableRequests.map(request =>
-        this.requestedTorrentsService.updateRequestStatus(request.id, 'SEARCHING')
-      );
-      await Promise.all(updatePromises);
-
       // Trigger the torrent checker for all requests
+      // Note: processRequest will handle updating the status to SEARCHING via incrementSearchAttempt
       await this.torrentCheckerService.searchForAllRequests();
 
       return {
@@ -646,6 +651,190 @@ export class TorrentRequestsController {
 
       throw new HttpException(
         'Failed to select torrent',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  // TV Show Season Management Endpoints
+
+  @Get(':id/seasons')
+  @ApiOperation({
+    summary: 'Get TV show seasons',
+    description: 'Get all seasons for a TV show request',
+  })
+  @ApiParam({ name: 'id', description: 'Torrent request ID' })
+  @ApiQuery({ name: 'status', required: false, description: 'Filter by season status' })
+  @ApiQuery({ name: 'includeEpisodes', required: false, description: 'Include episode details' })
+  @ApiQuery({ name: 'includeDownloads', required: false, description: 'Include download details' })
+  @ApiResponse({ status: 200, description: 'TV show seasons retrieved successfully' })
+  @ApiResponse({ status: 404, description: 'Torrent request not found' })
+  async getTvShowSeasons(
+    @Param('id') id: string,
+    @Query() query: TvShowSeasonQueryDto,
+  ): Promise<{ success: boolean; data: any[] }> {
+    try {
+      this.logger.log(`Getting TV show seasons for request ${id}`);
+
+      // This will be implemented in the service
+      const seasons = await this.requestedTorrentsService.getTvShowSeasons(id, query);
+
+      return {
+        success: true,
+        data: seasons,
+      };
+    } catch (error) {
+      this.logger.error(`Error getting TV show seasons for ${id}: ${error.message}`, error.stack);
+
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      throw new HttpException(
+        'Failed to get TV show seasons',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Get(':id/seasons/:seasonNumber')
+  @ApiOperation({
+    summary: 'Get TV show season details',
+    description: 'Get details for a specific season of a TV show request',
+  })
+  @ApiParam({ name: 'id', description: 'Torrent request ID' })
+  @ApiParam({ name: 'seasonNumber', description: 'Season number' })
+  @ApiResponse({ status: 200, description: 'TV show season retrieved successfully' })
+  @ApiResponse({ status: 404, description: 'Season not found' })
+  async getTvShowSeason(
+    @Param('id') id: string,
+    @Param('seasonNumber') seasonNumber: string,
+  ): Promise<{ success: boolean; data: any }> {
+    try {
+      const seasonNum = parseInt(seasonNumber, 10);
+      this.logger.log(`Getting TV show season ${seasonNum} for request ${id}`);
+
+      const season = await this.requestedTorrentsService.getTvShowSeason(id, seasonNum);
+
+      return {
+        success: true,
+        data: season,
+      };
+    } catch (error) {
+      this.logger.error(`Error getting TV show season ${seasonNumber} for ${id}: ${error.message}`, error.stack);
+
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      throw new HttpException(
+        'Failed to get TV show season',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Get(':id/seasons/:seasonNumber/episodes')
+  @ApiOperation({
+    summary: 'Get TV show episodes',
+    description: 'Get all episodes for a specific season of a TV show request',
+  })
+  @ApiParam({ name: 'id', description: 'Torrent request ID' })
+  @ApiParam({ name: 'seasonNumber', description: 'Season number' })
+  @ApiQuery({ name: 'status', required: false, description: 'Filter by episode status' })
+  @ApiQuery({ name: 'includeDownloads', required: false, description: 'Include download details' })
+  @ApiResponse({ status: 200, description: 'TV show episodes retrieved successfully' })
+  @ApiResponse({ status: 404, description: 'Season not found' })
+  async getTvShowEpisodes(
+    @Param('id') id: string,
+    @Param('seasonNumber') seasonNumber: string,
+    @Query() query: TvShowEpisodeQueryDto,
+  ): Promise<{ success: boolean; data: any[] }> {
+    try {
+      const seasonNum = parseInt(seasonNumber, 10);
+      this.logger.log(`Getting TV show episodes for season ${seasonNum} of request ${id}`);
+
+      const episodes = await this.requestedTorrentsService.getTvShowEpisodes(id, seasonNum, query);
+
+      return {
+        success: true,
+        data: episodes,
+      };
+    } catch (error) {
+      this.logger.error(`Error getting TV show episodes for season ${seasonNumber} of ${id}: ${error.message}`, error.stack);
+
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      throw new HttpException(
+        'Failed to get TV show episodes',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Get(':id/downloads')
+  @ApiOperation({
+    summary: 'Get torrent downloads',
+    description: 'Get all torrent downloads for a TV show request',
+  })
+  @ApiParam({ name: 'id', description: 'Torrent request ID' })
+  @ApiResponse({ status: 200, description: 'Torrent downloads retrieved successfully' })
+  @ApiResponse({ status: 404, description: 'Torrent request not found' })
+  async getTorrentDownloads(
+    @Param('id') id: string,
+  ): Promise<{ success: boolean; data: any[] }> {
+    try {
+      this.logger.log(`Getting torrent downloads for request ${id}`);
+
+      const downloads = await this.requestedTorrentsService.getTorrentDownloads(id);
+
+      return {
+        success: true,
+        data: downloads,
+      };
+    } catch (error) {
+      this.logger.error(`Error getting torrent downloads for ${id}: ${error.message}`, error.stack);
+
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      throw new HttpException(
+        'Failed to get torrent downloads',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Post(':id/populate-metadata')
+  @ApiOperation({
+    summary: 'Populate TV show metadata',
+    description: 'Manually trigger metadata population for an ongoing TV show request',
+  })
+  @ApiParam({ name: 'id', description: 'Torrent request ID' })
+  @ApiResponse({ status: 200, description: 'Metadata population triggered successfully' })
+  @ApiResponse({ status: 404, description: 'Torrent request not found' })
+  async populateMetadata(@Param('id') id: string): Promise<{ success: boolean; message: string }> {
+    try {
+      this.logger.log(`Manually triggering metadata population for request ${id}`);
+
+      await this.tvShowMetadataService.populateSeasonData(id);
+
+      return {
+        success: true,
+        message: 'Metadata population completed successfully',
+      };
+    } catch (error) {
+      this.logger.error(`Error populating metadata for ${id}: ${error.message}`, error.stack);
+
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      throw new HttpException(
+        'Failed to populate metadata',
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }

@@ -281,9 +281,9 @@ export class DownloadMetadataService {
             data: { status: statusMap[overallStatus] as any },
           });
 
-          // If download just completed, mark related torrent request as complete
+          // If download just completed, handle completion properly
           if (wasNotComplete && isNowComplete) {
-            await this.markRelatedTorrentRequestComplete(metadata.id);
+            await this.handleDownloadCompletion(metadata.id, metadata.aria2Gid);
           }
         }
 
@@ -314,34 +314,55 @@ export class DownloadMetadataService {
     return groupedDownloads;
   }
 
-  private async markRelatedTorrentRequestComplete(downloadMetadataId: string): Promise<void> {
+  private async handleDownloadCompletion(downloadMetadataId: string, aria2Gid: string): Promise<void> {
     try {
-      // Find torrent request that references this download metadata ID
+      // Find any TorrentDownload records associated with this aria2Gid
+      const torrentDownloads = await this.prisma.torrentDownload.findMany({
+        where: {
+          aria2Gid: aria2Gid,
+          status: 'DOWNLOADING',
+        },
+        include: {
+          tvShowSeason: true,
+          tvShowEpisode: {
+            include: {
+              tvShowSeason: true,
+            },
+          },
+        },
+      });
+
+      if (torrentDownloads.length > 0) {
+        // Let the DownloadProgressTrackerService handle TorrentDownload completion
+        // This avoids race conditions between services
+        this.logger.debug(`TorrentDownload records found for aria2Gid ${aria2Gid}, letting DownloadProgressTrackerService handle completion`);
+        return;
+      }
+
+      // Handle legacy completion for downloads without TorrentDownload records
       const torrentRequest = await this.prisma.requestedTorrent.findFirst({
         where: {
           downloadJobId: downloadMetadataId,
-          status: 'DOWNLOADING' // Only update if still in downloading status
+          status: 'DOWNLOADING'
         }
       });
 
       if (torrentRequest) {
-        // Mark the torrent request as complete
         await this.prisma.requestedTorrent.update({
           where: { id: torrentRequest.id },
           data: {
             status: 'COMPLETED',
-            downloadProgress: 100,
             completedAt: new Date(),
             updatedAt: new Date(),
           }
         });
 
-        this.logger.log(`Marked torrent request ${torrentRequest.id} (${torrentRequest.title}) as complete`);
+        this.logger.log(`Marked legacy torrent request ${torrentRequest.id} (${torrentRequest.title}) as complete`);
       } else {
         this.logger.debug(`No related torrent request found for download metadata ${downloadMetadataId}`);
       }
     } catch (error) {
-      this.logger.error(`Error marking related torrent request complete for download ${downloadMetadataId}:`, error);
+      this.logger.error(`Error handling download completion for download ${downloadMetadataId}:`, error);
     }
   }
 

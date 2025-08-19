@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsArray, IsNumber, IsEnum, Min, Max, IsInt } from 'class-validator';
+import { IsString, IsOptional, IsArray, IsNumber, IsEnum, Min, Max, IsInt, IsBoolean } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
 import { TorrentQuality, TorrentFormat, RequestStatus } from '../../../generated/prisma';
@@ -59,6 +59,35 @@ export class CreateTorrentRequestDto {
   @IsInt()
   @Min(1)
   episode?: number;
+
+  @ApiPropertyOptional({
+    description: 'Whether this is an ongoing TV show request that should continue searching for new episodes',
+    example: true,
+  })
+  @IsOptional()
+  @Type(() => Boolean)
+  @IsBoolean()
+  isOngoing?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Total number of seasons (if known, for completed shows)',
+    example: 5,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  totalSeasons?: number;
+
+  @ApiPropertyOptional({
+    description: 'Total number of episodes (if known, for completed shows)',
+    example: 100,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  totalEpisodes?: number;
 
   @ApiPropertyOptional({
     description: 'IGDB ID for games',

@@ -65,6 +65,35 @@ export function useTorrentRequests() {
     fetchRequests()
   }
 
+  // TV Show season summary helpers
+  const getTvShowSeasonSummary = (request: TorrentRequest) => {
+    if (request.contentType !== 'TV_SHOW' || !request.tvShowSeasons) {
+      return null
+    }
+
+    const seasons = request.tvShowSeasons.map(season => ({
+      seasonNumber: season.seasonNumber,
+      totalEpisodes: season.totalEpisodes || 0,
+      completedEpisodes: season.episodes?.filter(ep => ep.status === 'COMPLETED').length || 0,
+      downloadingEpisodes: season.episodes?.filter(ep => ep.status === 'DOWNLOADING').length || 0,
+      status: season.status,
+    }))
+
+    return {
+      totalSeasons: seasons.length,
+      seasons: seasons.sort((a, b) => a.seasonNumber - b.seasonNumber),
+      overallProgress: {
+        totalEpisodes: seasons.reduce((sum, s) => sum + s.totalEpisodes, 0),
+        completedEpisodes: seasons.reduce((sum, s) => sum + s.completedEpisodes, 0),
+        downloadingEpisodes: seasons.reduce((sum, s) => sum + s.downloadingEpisodes, 0),
+      }
+    }
+  }
+
+  const isOngoingTvShow = (request: TorrentRequest): boolean => {
+    return request.contentType === 'TV_SHOW' && request.isOngoing === true
+  }
+
   return {
     requests,
     isLoading,
@@ -73,5 +102,7 @@ export function useTorrentRequests() {
     getRequestForShow,
     getRequestsByStatus,
     refreshRequests,
+    getTvShowSeasonSummary,
+    isOngoingTvShow,
   }
 }

@@ -1,13 +1,19 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { CreateDownloadDto } from './dto/create-download.dto';
 import { Aria2Service } from './aria2.service';
 import { DownloadMetadataService } from './download-metadata.service';
+import { RequestedTorrentsService } from '../torrents/services/requested-torrents.service';
+import { RequestStatus } from '../../generated/prisma';
 
 @Injectable()
 export class DownloadService {
+  private readonly logger = new Logger(DownloadService.name);
+
   constructor(
     private aria2Service: Aria2Service,
     private downloadMetadataService: DownloadMetadataService,
+    @Inject(forwardRef(() => RequestedTorrentsService))
+    private requestedTorrentsService: RequestedTorrentsService,
   ) {}
 
   async createDownload(createDownloadDto: CreateDownloadDto) {
@@ -45,10 +51,8 @@ export class DownloadService {
       destination,
     });
 
-    // TODO: In a real implementation, you might want to:
-    // 1. Extract media info from the name/URL
-    // 2. Look up movie/TV show details from TMDB
-    // 3. Monitor for child downloads and update metadata
+    // Check if this download matches any existing torrent requests
+    await this.checkAndUpdateMatchingTorrentRequests(url, name, metadata.id.toString(), gid);
 
     return {
       id: metadata.id,
@@ -227,5 +231,187 @@ export class DownloadService {
     } catch (error) {
       throw new Error('Failed to get Aria2 statistics');
     }
+  }
+
+  /**
+   * Check if a manual download matches any existing torrent requests and update their status
+   */
+  private async checkAndUpdateMatchingTorrentRequests(
+    url: string,
+    name: string | undefined,
+    downloadId: string,
+    aria2Gid: string
+  ): Promise<void> {
+    try {
+      // Only check for torrent/magnet downloads
+      if (!url.startsWith('magnet:') && !url.includes('.torrent')) {
+        return;
+      }
+
+      // Get all pending/searching/failed requests that could match
+      const searchableStates: RequestStatus[] = ['PENDING', 'SEARCHING', 'FAILED'];
+      const requests = await this.requestedTorrentsService.getRequestsByStatuses(searchableStates);
+
+      if (requests.length === 0) {
+        return;
+      }
+
+      // Try to find a matching request
+      const matchingRequest = await this.findMatchingTorrentRequest(requests, url, name);
+
+      if (matchingRequest) {
+        this.logger.log(`Found matching torrent request for manual download: ${matchingRequest.title}`);
+
+        // Extract torrent info from the download
+        const torrentInfo = this.extractTorrentInfoFromDownload(url, name);
+
+        // Mark the request as found with the torrent info
+        await this.requestedTorrentsService.markAsFound(matchingRequest.id, torrentInfo);
+
+        // Mark the request as downloading
+        await this.requestedTorrentsService.markAsDownloading(
+          matchingRequest.id,
+          downloadId,
+          aria2Gid
+        );
+
+        this.logger.log(`Updated torrent request ${matchingRequest.title} status to DOWNLOADING`);
+      }
+    } catch (error) {
+      this.logger.error('Error checking for matching torrent requests:', error);
+      // Don't throw - we don't want to fail the download if request matching fails
+    }
+  }
+
+  /**
+   * Find a torrent request that matches the manual download
+   */
+  private async findMatchingTorrentRequest(
+    requests: any[],
+    url: string,
+    name?: string
+  ): Promise<any | null> {
+    // If we have a name, try to match by title similarity
+    if (name) {
+      const normalizedName = this.normalizeTitle(name);
+
+      for (const request of requests) {
+        const normalizedRequestTitle = this.normalizeTitle(request.title);
+
+        // Check for title similarity
+        if (this.isTitleMatch(normalizedName, normalizedRequestTitle)) {
+          // Additional checks based on content type
+          if (await this.isContentTypeMatch(request, name)) {
+            return request;
+          }
+        }
+      }
+    }
+
+    // If we have a magnet link, try to match by exact magnet URI
+    if (url.startsWith('magnet:')) {
+      for (const request of requests) {
+        // Check if any previous search results had this exact magnet
+        if (request.foundMagnetUri === url) {
+          return request;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Normalize title for comparison
+   */
+  private normalizeTitle(title: string): string {
+    return title
+      .toLowerCase()
+      .replace(/[^\w\s]/g, '') // Remove special characters
+      .replace(/\s+/g, ' ') // Normalize whitespace
+      .trim();
+  }
+
+  /**
+   * Check if two titles are similar enough to be considered a match
+   */
+  private isTitleMatch(title1: string, title2: string): boolean {
+    // Exact match
+    if (title1 === title2) {
+      return true;
+    }
+
+    // Check if one title contains the other (for cases like "Movie Title" vs "Movie Title 2023")
+    if (title1.includes(title2) || title2.includes(title1)) {
+      return true;
+    }
+
+    // Check for partial matches (at least 70% of words match)
+    const words1 = title1.split(' ').filter(w => w.length > 2);
+    const words2 = title2.split(' ').filter(w => w.length > 2);
+
+    if (words1.length === 0 || words2.length === 0) {
+      return false;
+    }
+
+    const matchingWords = words1.filter(word => words2.includes(word));
+    const matchRatio = matchingWords.length / Math.max(words1.length, words2.length);
+
+    return matchRatio >= 0.7;
+  }
+
+  /**
+   * Check if the content type matches based on the download name and request type
+   */
+  private async isContentTypeMatch(request: any, downloadName: string): Promise<boolean> {
+    const lowerName = downloadName.toLowerCase();
+
+    // For TV shows, look for season/episode patterns
+    if (request.contentType === 'TV_SHOW') {
+      const hasSeasonEpisode = /s\d+e\d+|season\s*\d+|episode\s*\d+/i.test(downloadName);
+      if (hasSeasonEpisode) {
+        return true;
+      }
+    }
+
+    // For movies, check for movie-like patterns
+    if (request.contentType === 'MOVIE') {
+      const hasMoviePattern = /\b(19|20)\d{2}\b|bluray|brrip|webrip|dvdrip|hdtv/i.test(downloadName);
+      if (hasMoviePattern) {
+        return true;
+      }
+    }
+
+    // For games, check for game-like patterns
+    if (request.contentType === 'GAME') {
+      const hasGamePattern = /\b(pc|mac|linux|windows|steam|gog|repack)\b/i.test(downloadName);
+      if (hasGamePattern) {
+        return true;
+      }
+    }
+
+    // Default to true if we can't determine content type from name
+    return true;
+  }
+
+  /**
+   * Extract torrent information from download details
+   */
+  private extractTorrentInfoFromDownload(url: string, name?: string): {
+    title: string;
+    link: string;
+    magnetUri?: string;
+    size: string;
+    seeders: number;
+    indexer: string;
+  } {
+    return {
+      title: name || 'Manual Download',
+      link: url.startsWith('magnet:') ? '' : url,
+      magnetUri: url.startsWith('magnet:') ? url : undefined,
+      size: 'Unknown',
+      seeders: 0,
+      indexer: 'Manual',
+    };
   }
 }

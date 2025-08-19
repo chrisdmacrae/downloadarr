@@ -16,8 +16,12 @@ model RequestedTorrent {
   year               Int?
   imdbId             String?
   tmdbId             Int?
-  season             Int?
-  episode            Int?
+  season             Int?               // For single episode/season requests (legacy)
+  episode            Int?               // For single episode requests (legacy)
+  // TV Show specific fields for ongoing requests
+  isOngoing          Boolean            @default(false) // True for ongoing TV show requests
+  totalSeasons       Int?               // Total seasons if known (for completed shows)
+  totalEpisodes      Int?               // Total episodes if known (for completed shows)
   // Game-specific fields
   igdbId             Int?               // IGDB game ID
   platform           String?            // Game platform (PC, PlayStation, etc.)
@@ -35,17 +39,14 @@ model RequestedTorrent {
   lastSearchAt       DateTime?
   nextSearchAt       DateTime?
   searchIntervalMins Int                @default(30)
-  foundTorrentTitle  String?
-  foundTorrentLink   String?
-  foundMagnetUri     String?
-  foundTorrentSize   String?
-  foundSeeders       Int?
-  foundIndexer       String?
-  downloadJobId      String?
-  aria2Gid           String?
-  downloadProgress   Float?
-  downloadSpeed      String?
-  downloadEta        String?
+  foundTorrentTitle  String?            // For legacy single torrent requests
+  foundTorrentLink   String?            // For legacy single torrent requests
+  foundMagnetUri     String?            // For legacy single torrent requests
+  foundTorrentSize   String?            // For legacy single torrent requests
+  foundSeeders       Int?               // For legacy single torrent requests
+  foundIndexer       String?            // For legacy single torrent requests
+  downloadJobId      String?            // For legacy single torrent requests
+  aria2Gid           String?            // For legacy single torrent requests
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
   completedAt        DateTime?
@@ -53,6 +54,9 @@ model RequestedTorrent {
   userId             String?
   searchLogs         TorrentSearchLog[]
   searchResults      TorrentSearchResult[]
+  // New relationships for TV show management
+  tvShowSeasons      TvShowSeason[]
+  torrentDownloads   TorrentDownload[]
 
   @@map("requested_torrents")
 }
@@ -94,6 +98,62 @@ model TorrentSearchResult {
   requestedTorrent   RequestedTorrent @relation(fields: [requestedTorrentId], references: [id], onDelete: Cascade)
 
   @@map("torrent_search_results")
+}
+
+model TvShowSeason {
+  id                 String           @id @default(cuid())
+  requestedTorrentId String
+  seasonNumber       Int
+  totalEpisodes      Int?             // Total episodes in this season if known
+  status             SeasonStatus     @default(PENDING)
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  requestedTorrent   RequestedTorrent @relation(fields: [requestedTorrentId], references: [id], onDelete: Cascade)
+  episodes           TvShowEpisode[]
+  torrentDownloads   TorrentDownload[]
+
+  @@unique([requestedTorrentId, seasonNumber])
+  @@map("tv_show_seasons")
+}
+
+model TvShowEpisode {
+  id               String           @id @default(cuid())
+  tvShowSeasonId   String
+  episodeNumber    Int
+  title            String?          // Episode title if known
+  airDate          DateTime?        // Episode air date if known
+  status           EpisodeStatus    @default(PENDING)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  tvShowSeason     TvShowSeason     @relation(fields: [tvShowSeasonId], references: [id], onDelete: Cascade)
+  torrentDownloads TorrentDownload[]
+
+  @@unique([tvShowSeasonId, episodeNumber])
+  @@map("tv_show_episodes")
+}
+
+model TorrentDownload {
+  id                 String            @id @default(cuid())
+  requestedTorrentId String
+  tvShowSeasonId     String?           // For season pack downloads
+  tvShowEpisodeId    String?           // For individual episode downloads
+  torrentTitle       String
+  torrentLink        String?
+  magnetUri          String?
+  torrentSize        String?
+  seeders            Int?
+  indexer            String?
+  downloadJobId      String?
+  aria2Gid           String?
+  status             TorrentDownloadStatus @default(PENDING)
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  completedAt        DateTime?
+  requestedTorrent   RequestedTorrent  @relation(fields: [requestedTorrentId], references: [id], onDelete: Cascade)
+  tvShowSeason       TvShowSeason?     @relation(fields: [tvShowSeasonId], references: [id], onDelete: Cascade)
+  tvShowEpisode      TvShowEpisode?    @relation(fields: [tvShowEpisodeId], references: [id], onDelete: Cascade)
+
+  @@map("torrent_downloads")
 }
 
 model DownloadMetadata {
@@ -170,4 +230,30 @@ enum TorrentFormat {
   DIVX
   AV1
   HEVC
+}
+
+enum SeasonStatus {
+  PENDING
+  SEARCHING
+  FOUND
+  DOWNLOADING
+  COMPLETED
+  FAILED
+}
+
+enum EpisodeStatus {
+  PENDING
+  SEARCHING
+  FOUND
+  DOWNLOADING
+  COMPLETED
+  FAILED
+}
+
+enum TorrentDownloadStatus {
+  PENDING
+  DOWNLOADING
+  COMPLETED
+  FAILED
+  CANCELLED
 }
