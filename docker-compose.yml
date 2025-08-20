@@ -116,7 +116,7 @@ services:
     volumes:
       - jackett_config:/config
       - jackett_config:/jackett-config
-      - ./downloads:/downloads
+      - ${DOWNLOAD_PATH}:/downloads
     depends_on:
       - flaresolverr
     networks:

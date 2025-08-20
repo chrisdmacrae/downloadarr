@@ -22,12 +22,13 @@ services:
     environment:
       NODE_ENV: development
     volumes:
-      # Mount source code for hot reloading
+      # Inherit base volumes from docker-compose.yml
+      - ${DOWNLOAD_PATH}:/app/downloads
+      - ${LIBRARY_PATH}:/app/library
+      - ./config:/app/config:ro
+      # Add development-specific volumes
       - ./packages/api/src:/app/packages/api/src:ro
-      # Mount Prisma directory for migrations and schema changes
       - ./packages/api/prisma:/app/packages/api/prisma
-      # Override downloads volume for dev
-      - downloads_dev:/downloads
 
   # Development-specific overrides for Frontend
   frontend:
@@ -44,15 +45,18 @@ services:
   jackett:
     container_name: downloadarr-jackett-dev
     volumes:
+      # Inherit base volumes from docker-compose.yml
       - jackett_config_dev:/config
-      - downloads_dev:/downloads
+      - jackett_config_dev:/jackett-config
+      - ${DOWNLOAD_PATH}:/downloads
 
   # Development-specific overrides for Aria2
   aria2:
     container_name: downloadarr-aria2-dev
     volumes:
+      # Inherit base volumes from docker-compose.yml
       - aria2_config_dev:/config
-      - downloads_dev:/downloads
+      - ${DOWNLOAD_PATH}:/downloads
 
   # Development-specific overrides for AriaNG
   ariang:
@@ -64,4 +68,3 @@ volumes:
   postgres_data_dev:
   jackett_config_dev:
   aria2_config_dev:
-  downloads_dev:
