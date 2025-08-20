@@ -61,6 +61,9 @@ coverage/
 # Downloads
 downloads/
 
+# Library
+library/
+
 # VPN configs
 *.ovpn
 credentials.txt

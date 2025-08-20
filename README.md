@@ -20,9 +20,24 @@ All-in-one media and ROM downloading tool with VPN integration, built with NestJ
 
 ### Setup
 
-Run `curl https://raw.githubusercontent.com/your-repo/main/setup.sh | bash`
+**Option 1: One-line install (recommended)**
+```bash
+curl -fsSL https://raw.githubusercontent.com/chrisdmacrae/downloadarr/main/setup.sh | bash
+```
 
-TODO: Add setup script
+**Option 2: Download and run manually**
+```bash
+curl -fsSL https://raw.githubusercontent.com/chrisdmacrae/downloadarr/main/setup.sh -o setup.sh
+chmod +x setup.sh
+./setup.sh
+```
+
+The setup script will:
+- ✅ Check Docker installation
+- ⬇️ Download required configuration files
+- ⚙️ Configure environment variables (paths, API keys)
+- 🔒 Set up VPN support (optional)
+- 🚀 Start all services with Docker Compose
 
 ### Development
 

@@ -1,0 +1,287 @@
+#!/bin/bash
+
+# Downloadarr Setup Script
+# This script sets up the Downloadarr project with Docker and all required configuration
+
+set -e  # Exit on any error
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# GitHub repository details
+GITHUB_REPO="chrisdmacrae/downloadarr"
+GITHUB_RAW_URL="https://raw.githubusercontent.com/${GITHUB_REPO}/main"
+
+echo -e "${BLUE}🚀 Downloadarr Setup Script${NC}"
+echo "=================================="
+
+# Function to print colored output
+print_status() {
+    echo -e "${GREEN}✓${NC} $1"
+}
+
+print_warning() {
+    echo -e "${YELLOW}⚠${NC} $1"
+}
+
+print_error() {
+    echo -e "${RED}✗${NC} $1"
+}
+
+print_info() {
+    echo -e "${BLUE}ℹ${NC} $1"
+}
+
+# Check if Docker is installed
+check_docker() {
+    print_info "Checking Docker installation..."
+    
+    if ! command -v docker &> /dev/null; then
+        print_error "Docker is not installed!"
+        echo
+        echo "Please install Docker from: https://docs.docker.com/get-docker/"
+        echo
+        echo "Installation links:"
+        echo "  - macOS: https://docs.docker.com/desktop/install/mac-install/"
+        echo "  - Windows: https://docs.docker.com/desktop/install/windows-install/"
+        echo "  - Linux: https://docs.docker.com/engine/install/"
+        exit 1
+    fi
+    
+    if ! command -v docker-compose &> /dev/null && ! docker compose version &> /dev/null; then
+        print_error "Docker Compose is not installed!"
+        echo
+        echo "Please install Docker Compose from: https://docs.docker.com/compose/install/"
+        exit 1
+    fi
+    
+    print_status "Docker and Docker Compose are installed"
+}
+
+# Download configuration files from GitHub
+download_config_files() {
+    print_info "Downloading configuration files from GitHub..."
+    
+    # Download docker-compose.yml
+    if curl -fsSL "${GITHUB_RAW_URL}/docker-compose.yml" -o docker-compose.yml; then
+        print_status "Downloaded docker-compose.yml"
+    else
+        print_error "Failed to download docker-compose.yml"
+        exit 1
+    fi
+    
+    # Download docker-compose.vpn.yml
+    if curl -fsSL "${GITHUB_RAW_URL}/docker-compose.vpn.yml" -o docker-compose.vpn.yml; then
+        print_status "Downloaded docker-compose.vpn.yml"
+    else
+        print_error "Failed to download docker-compose.vpn.yml"
+        exit 1
+    fi
+    
+    # Download .env.example as .env
+    if curl -fsSL "${GITHUB_RAW_URL}/.env.example" -o .env; then
+        print_status "Downloaded .env.example as .env"
+    else
+        print_error "Failed to download .env.example"
+        exit 1
+    fi
+}
+
+# Prompt for user input with default value
+prompt_with_default() {
+    local prompt="$1"
+    local default="$2"
+    local var_name="$3"
+    
+    echo -n -e "${BLUE}${prompt}${NC} [${default}]: "
+    read -r input
+    
+    if [[ -z "$input" ]]; then
+        eval "$var_name=\"$default\""
+    else
+        eval "$var_name=\"$input\""
+    fi
+}
+
+# Update environment variables in .env file
+update_env_var() {
+    local var_name="$1"
+    local var_value="$2"
+    local env_file=".env"
+    
+    if grep -q "^${var_name}=" "$env_file"; then
+        # Variable exists, replace it
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            # macOS
+            sed -i '' "s|^${var_name}=.*|${var_name}=${var_value}|" "$env_file"
+        else
+            # Linux
+            sed -i "s|^${var_name}=.*|${var_name}=${var_value}|" "$env_file"
+        fi
+    else
+        # Variable doesn't exist, add it
+        echo "${var_name}=${var_value}" >> "$env_file"
+    fi
+}
+
+# Configure environment variables
+configure_environment() {
+    print_info "Configuring environment variables..."
+    
+    # Set PUID and PGID
+    print_info "Setting user permissions (PUID/PGID)..."
+    update_env_var "PUID" "1000"
+    update_env_var "PGID" "1000"
+    print_status "Set PUID=1000 and PGID=1000"
+    
+    # Prompt for library path
+    prompt_with_default "Enter your library path (where organized media will be stored)" "/path/to/your/library" LIBRARY_PATH
+    update_env_var "LIBRARY_PATH" "$LIBRARY_PATH"
+    print_status "Set LIBRARY_PATH=$LIBRARY_PATH"
+    
+    # Prompt for download path
+    prompt_with_default "Enter your download path (where files will be downloaded)" "/path/to/your/downloads" DOWNLOAD_PATH
+    update_env_var "DOWNLOAD_PATH" "$DOWNLOAD_PATH"
+    print_status "Set DOWNLOAD_PATH=$DOWNLOAD_PATH"
+    
+    # API Keys configuration
+    echo
+    print_info "Configuring API keys for media discovery..."
+    
+    # OMDB API Key
+    echo
+    print_info "OMDB API Key (for movie information):"
+    echo "  1. Go to: http://www.omdbapi.com/apikey.aspx"
+    echo "  2. Choose the FREE plan (1,000 daily requests)"
+    echo "  3. Enter your email and verify"
+    echo "  4. Copy the API key from the email"
+    prompt_with_default "Enter your OMDB API key" "your-omdb-api-key" OMDB_API_KEY
+    update_env_var "OMDB_API_KEY" "$OMDB_API_KEY"
+    
+    # TMDB API Key
+    echo
+    print_info "TMDB API Key (for TV show information):"
+    echo "  1. Go to: https://www.themoviedb.org/settings/api"
+    echo "  2. Create an account if you don't have one"
+    echo "  3. Request an API key (choose 'Developer' option)"
+    echo "  4. Fill out the application form"
+    echo "  5. Copy the API key (v3 auth)"
+    prompt_with_default "Enter your TMDB API key" "your-tmdb-api-key" TMDB_API_KEY
+    update_env_var "TMDB_API_KEY" "$TMDB_API_KEY"
+    
+    # IGDB credentials
+    echo
+    print_info "IGDB credentials (for game information):"
+    echo "  1. Go to: https://dev.twitch.tv/console/apps"
+    echo "  2. Create a new application"
+    echo "  3. Set OAuth Redirect URL to: http://localhost"
+    echo "  4. Copy the Client ID and Client Secret"
+    echo "  5. Generate an access token using the Client ID and Secret"
+    prompt_with_default "Enter your IGDB Client ID" "your-igdb-client-id" IGDB_CLIENT_ID
+    update_env_var "IGDB_CLIENT_ID" "$IGDB_CLIENT_ID"
+    
+    prompt_with_default "Enter your IGDB Client Secret" "your-igdb-client-secret" IGDB_CLIENT_SECRET
+    update_env_var "IGDB_CLIENT_SECRET" "$IGDB_CLIENT_SECRET"
+    
+    print_status "Environment variables configured"
+}
+
+# Configure VPN
+configure_vpn() {
+    echo
+    print_info "VPN Configuration"
+    echo "VPN provides secure and anonymous downloading through an encrypted tunnel."
+    echo
+    
+    echo -n -e "${BLUE}Do you want to enable VPN support?${NC} [y/N]: "
+    read -r enable_vpn
+    
+    if [[ "$enable_vpn" =~ ^[Yy]$ ]]; then
+        update_env_var "VPN_ENABLED" "true"
+        print_status "VPN enabled"
+        
+        echo
+        print_warning "VPN Setup Instructions:"
+        echo "  1. Get an OpenVPN configuration file (.ovpn) from your VPN provider"
+        echo "  2. Copy it to this directory as 'config.ovpn'"
+        echo "  3. If your VPN requires username/password authentication:"
+        echo "     - Create a file called 'credentials.txt'"
+        echo "     - Put your username on the first line"
+        echo "     - Put your password on the second line"
+        echo "  4. Make sure your .ovpn file references 'credentials.txt' if needed"
+        echo
+        print_info "The setup will continue, but make sure to add your VPN config before starting!"
+        
+        return 0
+    else
+        update_env_var "VPN_ENABLED" "false"
+        print_status "VPN disabled"
+        return 1
+    fi
+}
+
+# Start the application
+start_application() {
+    local use_vpn="$1"
+    
+    print_info "Starting Downloadarr..."
+    
+    if [[ "$use_vpn" == "true" ]]; then
+        print_info "Starting with VPN support..."
+        docker compose -f docker-compose.yml -f docker-compose.vpn.yml up -d
+    else
+        print_info "Starting without VPN..."
+        docker compose -f docker-compose.yml up -d
+    fi
+    
+    print_status "Downloadarr started successfully!"
+}
+
+# Display final information
+show_final_info() {
+    echo
+    echo -e "${GREEN}🎉 Setup Complete!${NC}"
+    echo "==================="
+    echo
+    echo "Downloadarr services are now running:"
+    echo "  • Frontend:     http://localhost:3000"
+    echo "  • API Server:   http://localhost:3001"
+    echo "  • Jackett:      http://localhost:9117"
+    echo "  • AriaNG:       http://localhost:6880"
+    echo "  • FlareSolverr:  http://localhost:8191"
+    echo
+    echo "Useful commands:"
+    echo "  • View logs:    docker compose logs -f"
+    echo "  • Stop:         docker compose down"
+    echo "  • Restart:      docker compose restart"
+    echo
+    if [[ -f "config.ovpn" ]]; then
+        print_status "VPN config file detected"
+    else
+        print_warning "Remember to add your VPN config file as 'config.ovpn' if using VPN"
+    fi
+    echo
+    print_info "Check the logs if any services fail to start: docker compose logs -f"
+}
+
+# Main execution
+main() {
+    check_docker
+    download_config_files
+    configure_environment
+    
+    if configure_vpn; then
+        start_application "true"
+    else
+        start_application "false"
+    fi
+    
+    show_final_info
+}
+
+# Run main function
+main "$@"
