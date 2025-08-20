@@ -96,10 +96,10 @@ prompt_with_default() {
     local prompt="$1"
     local default="$2"
     local var_name="$3"
-    
+
     echo -n -e "${BLUE}${prompt}${NC} [${default}]: "
-    read -r input
-    
+    read -r input || true  # Don't exit on read failure
+
     if [[ -z "$input" ]]; then
         eval "$var_name=\"$default\""
     else
@@ -131,6 +131,9 @@ update_env_var() {
 # Configure environment variables
 configure_environment() {
     print_info "Configuring environment variables..."
+
+    # Temporarily disable exit on error for user input
+    set +e
     
     # Set PUID and PGID
     print_info "Setting user permissions (PUID/PGID)..."
@@ -186,7 +189,10 @@ configure_environment() {
     
     prompt_with_default "Enter your IGDB Client Secret" "your-igdb-client-secret" IGDB_CLIENT_SECRET
     update_env_var "IGDB_CLIENT_SECRET" "$IGDB_CLIENT_SECRET"
-    
+
+    # Re-enable exit on error
+    set -e
+
     print_status "Environment variables configured"
 }
 
@@ -196,9 +202,12 @@ configure_vpn() {
     print_info "VPN Configuration"
     echo "VPN provides secure and anonymous downloading through an encrypted tunnel."
     echo
-    
+
+    # Temporarily disable exit on error for user input
+    set +e
     echo -n -e "${BLUE}Do you want to enable VPN support?${NC} [y/N]: "
-    read -r enable_vpn
+    read -r enable_vpn || true  # Don't exit on read failure
+    set -e  # Re-enable exit on error
     
     if [[ "$enable_vpn" =~ ^[Yy]$ ]]; then
         update_env_var "VPN_ENABLED" "true"
