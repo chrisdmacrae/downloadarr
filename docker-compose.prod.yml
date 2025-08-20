@@ -54,7 +54,7 @@ services:
       OMDB_API_KEY: ${OMDB_API_KEY}
       TMDB_API_KEY: ${TMDB_API_KEY}
       IGDB_CLIENT_ID: ${IGDB_CLIENT_ID}
-      IGDB_ACCESS_TOKEN: ${IGDB_ACCESS_TOKEN}
+      IGDB_CLIENT_SECRET: ${IGDB_CLIENT_SECRET}
       DOWNLOAD_PATH: /app/downloads
       LIBRARY_PATH: /app/library
       PUID: 1000

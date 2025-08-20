@@ -72,18 +72,18 @@ download_config_files() {
 
     
     # Download docker-compose.prod.yml (production version with deployed images)
-    if curl -fsSL "${GITHUB_RAW_URL}/docker-compose.prod.yml" -o docker-compose.yml; then
-        print_status "Downloaded docker-compose.prod.yml as docker-compose.yml"
+    if curl -fsSL "${GITHUB_RAW_URL}/docker-compose.yml"; then
+        print_status "Downloaded docker-compose.yml"
     else
-        print_error "Failed to download docker-compose.prod.yml"
+        print_error "Failed to download docker-compose.yml"
         exit 1
     fi
 
     # Download docker-compose.prod.vpn.yml for VPN support
-    if curl -fsSL "${GITHUB_RAW_URL}/docker-compose.prod.vpn.yml" -o docker-compose.vpn.yml; then
-        print_status "Downloaded docker-compose.prod.vpn.yml as docker-compose.vpn.yml"
+    if curl -fsSL "${GITHUB_RAW_URL}/docker-compose.vpn.yml"; then
+        print_status "Downloaded docker-compose.vpn.yml"
     else
-        print_error "Failed to download docker-compose.prod.vpn.yml"
+        print_error "Failed to download docker-compose.vpn.yml"
         exit 1
     fi
     
@@ -194,10 +194,10 @@ configure_environment() {
     echo "  2. Create a new application"
     echo "  3. Set OAuth Redirect URL to: http://localhost"
     echo "  4. Copy the Client ID and Client Secret"
-    echo "  5. Generate an access token using the Client ID and Secret"
+    echo "  Note: Access tokens are now managed automatically by the application"
     prompt_with_default "Enter your IGDB Client ID" "your-igdb-client-id" IGDB_CLIENT_ID
     update_env_var "IGDB_CLIENT_ID" "$IGDB_CLIENT_ID"
-    
+
     prompt_with_default "Enter your IGDB Client Secret" "your-igdb-client-secret" IGDB_CLIENT_SECRET
     update_env_var "IGDB_CLIENT_SECRET" "$IGDB_CLIENT_SECRET"
 

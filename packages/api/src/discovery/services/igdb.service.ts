@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { BaseExternalApiService } from './base-external-api.service';
+import { IgdbAuthService } from './igdb-auth.service';
 import { ExternalApiConfig, ExternalApiResponse, GameDetails, SearchResult } from '../interfaces/external-api.interface';
 import { firstValueFrom, timeout, retry, catchError } from 'rxjs';
 import { AxiosRequestConfig } from 'axios';
@@ -36,6 +37,7 @@ export class IgdbService extends BaseExternalApiService {
   constructor(
     protected readonly httpService: HttpService,
     protected readonly configService: ConfigService,
+    private readonly igdbAuthService: IgdbAuthService,
   ) {
     super(httpService, configService);
   }
@@ -53,9 +55,9 @@ export class IgdbService extends BaseExternalApiService {
     };
   }
 
-  private getAuthHeaders(): Record<string, string> {
+  private async getAuthHeaders(): Promise<Record<string, string>> {
     const clientId = this.validateApiKey('IGDB_CLIENT_ID');
-    const accessToken = this.validateApiKey('IGDB_ACCESS_TOKEN');
+    const accessToken = await this.igdbAuthService.getAccessToken();
 
     return {
       'Client-ID': clientId,
@@ -242,9 +244,10 @@ where category = 0 & rating_count > 100 & platforms = (${platformFilter});`;
       this.config = this.getServiceConfig();
 
       const url = `${this.config.baseUrl}${endpoint}`;
+      const headers = await this.getAuthHeaders();
       const requestConfig: AxiosRequestConfig = {
         timeout: 30000, // Increase timeout to 30 seconds
-        headers: this.getAuthHeaders(),
+        headers,
       };
 
       this.logger.debug(`Making IGDB request to: ${url}`, { body });

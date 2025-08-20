@@ -7,6 +7,7 @@ import { GameConfigModule } from '../config/config.module';
 import { OmdbService } from './services/omdb.service';
 import { TmdbService } from './services/tmdb.service';
 import { IgdbService } from './services/igdb.service';
+import { IgdbAuthService } from './services/igdb-auth.service';
 import { JackettService } from './services/jackett.service';
 import { TorrentFilterService } from './services/torrent-filter.service';
 import { TorrentPreferencesService } from './services/torrent-preferences.service';
@@ -31,6 +32,7 @@ import { TorrentPreferencesController } from './controllers/torrent-preferences.
     OmdbService,
     TmdbService,
     IgdbService,
+    IgdbAuthService,
     JackettService,
     TorrentFilterService,
     TorrentPreferencesService,
@@ -46,6 +48,7 @@ import { TorrentPreferencesController } from './controllers/torrent-preferences.
     OmdbService,
     TmdbService,
     IgdbService,
+    IgdbAuthService,
     JackettService,
     TorrentFilterService,
     TorrentPreferencesService,
