@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { RequestedTorrentsService } from './requested-torrents.service';
+import { RequestLifecycleOrchestrator } from './request-lifecycle-orchestrator.service';
+import { DownloadAggregationService } from './download-aggregation.service';
 import { Aria2Service } from '../../download/aria2.service';
 import { PrismaService } from '../../database/prisma.service';
 import { RequestStatus } from '../../../generated/prisma';
@@ -11,6 +13,8 @@ export class DownloadProgressTrackerService {
 
   constructor(
     private readonly requestedTorrentsService: RequestedTorrentsService,
+    private readonly orchestrator: RequestLifecycleOrchestrator,
+    private readonly downloadAggregationService: DownloadAggregationService,
     private readonly aria2Service: Aria2Service,
     private readonly prisma: PrismaService,
   ) {}
@@ -39,18 +43,14 @@ export class DownloadProgressTrackerService {
 
   private async checkDownloadStatus(requestId: string, aria2Gid: string): Promise<void> {
     try {
-      const status = await this.aria2Service.getStatus(aria2Gid);
+      // Use aggregation service to check completion status
+      const isComplete = await this.downloadAggregationService.isDownloadComplete(aria2Gid);
+      const failureStatus = await this.downloadAggregationService.isDownloadFailed(aria2Gid);
 
-      if (!status) {
-        this.logger.warn(`No status found for download ${aria2Gid}`);
-        return;
-      }
-
-      // Check if download is complete or failed
-      if (status.status === 'complete') {
+      if (isComplete) {
         await this.handleDownloadCompletion(requestId, aria2Gid);
-      } else if (status.status === 'error') {
-        await this.handleDownloadFailure(requestId, aria2Gid, status.errorMessage);
+      } else if (failureStatus.failed) {
+        await this.handleDownloadFailure(requestId, aria2Gid, failureStatus.reason);
       }
 
     } catch (error) {
@@ -132,7 +132,7 @@ export class DownloadProgressTrackerService {
         }
       } else {
         // Handle simple request completion (movies, games, or legacy downloads)
-        await this.requestedTorrentsService.updateRequestStatus(requestId, RequestStatus.COMPLETED);
+        await this.orchestrator.markAsCompleted(requestId);
         this.logger.log(`Download completed for request ${requestId}`);
       }
     } catch (error) {
@@ -161,7 +161,7 @@ export class DownloadProgressTrackerService {
         }
       } else {
         // Handle simple request failure (movies, games, or legacy downloads)
-        await this.requestedTorrentsService.updateRequestStatus(requestId, RequestStatus.FAILED);
+        await this.orchestrator.markAsFailed(requestId, errorMessage || 'Download failed');
         this.logger.warn(`Download failed for request ${requestId}: ${errorMessage || 'Unknown error'}`);
       }
     } catch (error) {
@@ -183,16 +183,16 @@ export class DownloadProgressTrackerService {
 
       this.logger.log(`TorrentDownload completed: ${torrentDownload.torrentTitle}`);
 
-      // Update associated TV show status
+      // Update associated TV show status via orchestrator
       if (torrentDownload.tvShowSeasonId && !torrentDownload.tvShowEpisodeId) {
         // Season pack download
-        await this.updateSeasonStatus(torrentDownload.tvShowSeasonId);
+        await this.orchestrator.markSeasonPackCompleted(torrentDownload.requestedTorrentId, torrentDownload.tvShowSeasonId);
       } else if (torrentDownload.tvShowEpisodeId) {
         // Individual episode download
-        await this.updateEpisodeStatus(torrentDownload.tvShowEpisodeId);
+        await this.orchestrator.markEpisodeCompleted(torrentDownload.requestedTorrentId, torrentDownload.tvShowEpisodeId);
       } else {
         // Movie or game download
-        await this.updateMainRequestStatus(torrentDownload.requestedTorrentId);
+        await this.orchestrator.markAsCompleted(torrentDownload.requestedTorrentId);
       }
     } catch (error) {
       this.logger.error(`Error completing TorrentDownload ${torrentDownload.id}:`, error);
@@ -212,16 +212,16 @@ export class DownloadProgressTrackerService {
 
       this.logger.warn(`TorrentDownload failed: ${torrentDownload.torrentTitle}`);
 
-      // Update associated TV show status
+      // Update associated TV show status via orchestrator
       if (torrentDownload.tvShowSeasonId && !torrentDownload.tvShowEpisodeId) {
         // Season pack download
-        await this.updateSeasonStatus(torrentDownload.tvShowSeasonId);
+        await this.orchestrator.markSeasonPackFailed(torrentDownload.requestedTorrentId, torrentDownload.tvShowSeasonId);
       } else if (torrentDownload.tvShowEpisodeId) {
         // Individual episode download
-        await this.updateEpisodeStatus(torrentDownload.tvShowEpisodeId);
+        await this.orchestrator.markEpisodeFailed(torrentDownload.requestedTorrentId, torrentDownload.tvShowEpisodeId);
       } else {
         // Movie or game download
-        await this.updateMainRequestStatus(torrentDownload.requestedTorrentId);
+        await this.orchestrator.markAsFailed(torrentDownload.requestedTorrentId, 'Download failed');
       }
     } catch (error) {
       this.logger.error(`Error failing TorrentDownload ${torrentDownload.id}:`, error);

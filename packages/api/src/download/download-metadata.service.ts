@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../database/prisma.service';
 import { Aria2Service } from './aria2.service';
@@ -34,10 +34,18 @@ export interface GroupedDownload {
 export class DownloadMetadataService {
   private readonly logger = new Logger(DownloadMetadataService.name);
 
+  // Lazy injection to avoid circular dependency
+  private orchestrator: any;
+
   constructor(
     private prisma: PrismaService,
     private aria2Service: Aria2Service,
   ) {}
+
+  // Method to set orchestrator (called from TorrentsModule)
+  setOrchestrator(orchestrator: any) {
+    this.orchestrator = orchestrator;
+  }
 
   async createDownloadMetadata(data: {
     name: string;
@@ -560,35 +568,47 @@ export class DownloadMetadataService {
         return;
       }
 
-      // Update each related request
+      // Update each related request using orchestrator if available
       for (const request of relatedRequests) {
-        // Determine the appropriate status based on current request status
-        let newStatus: string;
-        if (request.status === 'DOWNLOADING') {
-          // If it was actively downloading, mark as failed since it was manually deleted
-          newStatus = 'FAILED';
-        } else if (request.status === 'COMPLETED') {
-          // If it was already completed, leave it as completed
-          continue;
-        } else {
-          // For other statuses, mark as cancelled
-          newStatus = 'CANCELLED';
-        }
-
-        await this.prisma.requestedTorrent.update({
-          where: { id: request.id },
-          data: {
-            status: newStatus as any,
-            downloadJobId: null,
-            aria2Gid: null,
-            downloadProgress: null,
-            downloadSpeed: null,
-            downloadEta: null,
-            updatedAt: new Date(),
+        try {
+          // Determine the appropriate action based on current request status
+          if (request.status === 'COMPLETED') {
+            // If it was already completed, leave it as completed
+            this.logger.debug(`Skipping completed request ${request.id} (${request.title})`);
+            continue;
           }
-        });
 
-        this.logger.log(`Updated torrent request ${request.id} (${request.title}) status to ${newStatus} due to download deletion`);
+          if (this.orchestrator) {
+            // Use orchestrator for proper state transitions
+            if (request.status === 'DOWNLOADING') {
+              // If it was actively downloading, mark as cancelled since it was manually deleted
+              await this.orchestrator.markAsCancelled(request.id, 'Download manually deleted by user');
+              this.logger.log(`Cancelled torrent request ${request.id} (${request.title}) due to download deletion`);
+            } else {
+              // For other statuses, also mark as cancelled
+              await this.orchestrator.markAsCancelled(request.id, 'Associated download was deleted');
+              this.logger.log(`Cancelled torrent request ${request.id} (${request.title}) due to download deletion`);
+            }
+          } else {
+            // Fallback to direct database update if orchestrator not available
+            const newStatus = request.status === 'DOWNLOADING' ? 'FAILED' : 'CANCELLED';
+
+            await this.prisma.requestedTorrent.update({
+              where: { id: request.id },
+              data: {
+                status: newStatus as any,
+                downloadJobId: null,
+                aria2Gid: null,
+                updatedAt: new Date(),
+              }
+            });
+
+            this.logger.log(`Updated torrent request ${request.id} (${request.title}) status to ${newStatus} due to download deletion (fallback)`);
+          }
+        } catch (requestError) {
+          this.logger.error(`Error updating individual request ${request.id}:`, requestError);
+          // Continue with other requests
+        }
       }
 
     } catch (error) {

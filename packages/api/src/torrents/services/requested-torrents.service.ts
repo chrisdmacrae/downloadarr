@@ -3,8 +3,8 @@ import { PrismaService } from '../../database/prisma.service';
 import { ContentType, RequestStatus, TorrentQuality, TorrentFormat, RequestedTorrent } from '../../../generated/prisma';
 import { CreateTorrentRequestDto, UpdateTorrentRequestDto } from '../dto/torrent-request.dto';
 import { TvShowSeasonQueryDto, TvShowEpisodeQueryDto } from '../dto/tv-show-season.dto';
-import { DownloadService } from '../../download/download.service';
 import { TvShowMetadataService } from './tv-show-metadata.service';
+import { RequestLifecycleOrchestrator } from './request-lifecycle-orchestrator.service';
 import { Aria2Service } from '../../download/aria2.service';
 
 @Injectable()
@@ -13,10 +13,10 @@ export class RequestedTorrentsService {
 
   constructor(
     private readonly prisma: PrismaService,
-    @Inject(forwardRef(() => DownloadService))
-    private readonly downloadService: DownloadService,
     private readonly tvShowMetadataService: TvShowMetadataService,
     private readonly aria2Service: Aria2Service,
+    @Inject(forwardRef(() => RequestLifecycleOrchestrator))
+    private readonly orchestrator: RequestLifecycleOrchestrator,
   ) {}
 
   async createMovieRequest(dto: CreateTorrentRequestDto): Promise<RequestedTorrent> {
@@ -306,22 +306,12 @@ export class RequestedTorrentsService {
   }
 
   async updateRequestStatus(id: string, status: RequestStatus, additionalData?: Partial<RequestedTorrent>): Promise<RequestedTorrent> {
-    this.logger.log(`Updating torrent request ${id} status to: ${status}`);
+    this.logger.log(`Updating torrent request ${id} status to: ${status} (via orchestrator)`);
 
-    const updateData: any = {
-      status,
-      updatedAt: new Date(),
-      ...additionalData,
-    };
-
-    // Set completion timestamp for completed status
-    if (status === RequestStatus.COMPLETED) {
-      updateData.completedAt = new Date();
-    }
-
-    return this.prisma.requestedTorrent.update({
-      where: { id },
-      data: updateData,
+    return this.orchestrator.transitionRequest({
+      requestId: id,
+      targetStatus: status,
+      metadata: additionalData,
     });
   }
 
@@ -335,47 +325,33 @@ export class RequestedTorrentsService {
   }): Promise<RequestedTorrent> {
     this.logger.log(`Marking torrent request ${id} as found: ${torrentInfo.title}`);
 
-    return this.updateRequestStatus(id, RequestStatus.FOUND, {
-      foundTorrentTitle: torrentInfo.title,
-      foundTorrentLink: torrentInfo.link,
-      foundMagnetUri: torrentInfo.magnetUri,
-      foundTorrentSize: torrentInfo.size,
-      foundSeeders: torrentInfo.seeders,
-      foundIndexer: torrentInfo.indexer,
-    });
+    return this.orchestrator.markAsFound(id, torrentInfo);
   }
 
   async markAsDownloading(id: string, downloadJobId: string, aria2Gid?: string): Promise<RequestedTorrent> {
     this.logger.log(`Marking torrent request ${id} as downloading with job ID: ${downloadJobId}`);
 
-    return this.updateRequestStatus(id, RequestStatus.DOWNLOADING, {
+    return this.orchestrator.startDownload(id, {
       downloadJobId,
-      aria2Gid,
-    });
-  }
-
-
-
-  async incrementSearchAttempt(id: string): Promise<RequestedTorrent> {
-    const request = await this.getRequestById(id);
-    const nextSearchAt = new Date();
-    nextSearchAt.setMinutes(nextSearchAt.getMinutes() + request.searchIntervalMins);
-
-    return this.prisma.requestedTorrent.update({
-      where: { id },
-      data: {
-        searchAttempts: request.searchAttempts + 1,
-        lastSearchAt: new Date(),
-        nextSearchAt,
-        status: RequestStatus.SEARCHING,
-        updatedAt: new Date(),
+      aria2Gid: aria2Gid || '',
+      torrentInfo: {
+        title: 'Unknown',
+        link: '',
+        size: '0',
+        seeders: 0,
+        indexer: 'Unknown',
       },
     });
   }
 
+  async incrementSearchAttempt(id: string): Promise<RequestedTorrent> {
+    this.logger.log(`Starting search for request ${id}`);
+    return this.orchestrator.startSearch(id);
+  }
+
   async cancelRequest(id: string): Promise<RequestedTorrent> {
     this.logger.log(`Cancelling torrent request ${id}`);
-    return this.updateRequestStatus(id, RequestStatus.CANCELLED);
+    return this.orchestrator.cancelRequest(id);
   }
 
   async deleteRequest(id: string): Promise<void> {
@@ -384,16 +360,15 @@ export class RequestedTorrentsService {
     // Get the request to check if it has an active download
     const request = await this.getRequestById(id);
 
-    // If the request has an active download, cancel it first
-    if (request.status === RequestStatus.DOWNLOADING && request.downloadJobId) {
-      this.logger.log(`Cancelling active download ${request.downloadJobId} for request ${id}`);
-
+    // If the request has an active download, cancel it first via orchestrator
+    if (request.status === RequestStatus.DOWNLOADING) {
+      this.logger.log(`Cancelling active download for request ${id}`);
       try {
-        await this.downloadService.cancelDownload(request.downloadJobId);
-        this.logger.log(`Successfully cancelled download ${request.downloadJobId}`);
+        await this.orchestrator.cancelRequest(id);
+        this.logger.log(`Successfully cancelled download for request ${id}`);
       } catch (error) {
-        this.logger.warn(`Failed to cancel download ${request.downloadJobId}: ${error.message}`);
-        // Continue with deletion even if download cancellation fails
+        this.logger.warn(`Failed to cancel download for request ${id}: ${error.message}`);
+        // Continue with deletion even if cancellation fails
       }
     }
 
@@ -406,7 +381,8 @@ export class RequestedTorrentsService {
   }
 
   async cleanupExpiredRequests(): Promise<number> {
-    const result = await this.prisma.requestedTorrent.updateMany({
+    // Get expired requests and mark them via orchestrator
+    const expiredRequests = await this.prisma.requestedTorrent.findMany({
       where: {
         expiresAt: {
           lt: new Date(),
@@ -415,17 +391,23 @@ export class RequestedTorrentsService {
           in: [RequestStatus.PENDING, RequestStatus.SEARCHING],
         },
       },
-      data: {
-        status: RequestStatus.EXPIRED,
-        updatedAt: new Date(),
-      },
     });
 
-    if (result.count > 0) {
-      this.logger.log(`Marked ${result.count} torrent requests as expired`);
+    let count = 0;
+    for (const request of expiredRequests) {
+      try {
+        await this.orchestrator.markAsExpired(request.id);
+        count++;
+      } catch (error) {
+        this.logger.error(`Failed to mark request ${request.id} as expired:`, error);
+      }
     }
 
-    return result.count;
+    if (count > 0) {
+      this.logger.log(`Marked ${count} torrent requests as expired`);
+    }
+
+    return count;
   }
 
   async getRequestStats(userId?: string): Promise<{
@@ -802,45 +784,8 @@ export class RequestedTorrentsService {
       },
     });
 
-    // Populate real-time progress data from aria2
-    const downloadsWithProgress = await Promise.all(
-      downloads.map(async (download) => {
-        const downloadWithProgress = { ...download };
-
-        if (download.aria2Gid && download.status === 'DOWNLOADING') {
-          try {
-            const aria2Status = await this.aria2Service.getStatus(download.aria2Gid);
-
-            // Calculate progress
-            const totalLength = parseInt(aria2Status.totalLength) || 0;
-            const completedLength = parseInt(aria2Status.completedLength) || 0;
-            const progress = totalLength > 0 ? Math.round((completedLength / totalLength) * 100) : 0;
-
-            // Format download speed
-            const downloadSpeed = parseInt(aria2Status.downloadSpeed) || 0;
-            const speed = this.formatSpeed(downloadSpeed);
-
-            // Calculate ETA
-            const eta = this.calculateEta(totalLength, completedLength, downloadSpeed);
-
-            // Add real-time progress data
-            downloadWithProgress.downloadProgress = progress;
-            downloadWithProgress.downloadSpeed = speed;
-            downloadWithProgress.downloadEta = eta;
-          } catch (error) {
-            this.logger.debug(`Failed to get aria2 status for GID ${download.aria2Gid}:`, error);
-            // Keep existing values or set defaults
-            downloadWithProgress.downloadProgress = download.downloadProgress || 0;
-            downloadWithProgress.downloadSpeed = download.downloadSpeed || '0 B/s';
-            downloadWithProgress.downloadEta = download.downloadEta || 'Unknown';
-          }
-        }
-
-        return downloadWithProgress;
-      })
-    );
-
-    return downloadsWithProgress;
+    // Return downloads without progress data - use DownloadAggregationService for live progress
+    return downloads;
   }
 
   /**

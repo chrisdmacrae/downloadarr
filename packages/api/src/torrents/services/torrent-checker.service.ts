@@ -1,10 +1,11 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { RequestedTorrentsService } from './requested-torrents.service';
 import { TorrentSearchLogService } from './torrent-search-log.service';
 import { TorrentSearchResultsService } from './torrent-search-results.service';
 import { JackettService } from '../../discovery/services/jackett.service';
 import { TorrentFilterService, FilterCriteria } from '../../discovery/services/torrent-filter.service';
+import { RequestLifecycleOrchestrator } from './request-lifecycle-orchestrator.service';
 import { DownloadService } from '../../download/download.service';
 import { DownloadType } from '../../download/dto/create-download.dto';
 import { PrismaService } from '../../database/prisma.service';
@@ -22,6 +23,8 @@ export class TorrentCheckerService {
     private readonly searchResultsService: TorrentSearchResultsService,
     private readonly jackettService: JackettService,
     private readonly torrentFilterService: TorrentFilterService,
+    private readonly orchestrator: RequestLifecycleOrchestrator,
+    @Inject(forwardRef(() => DownloadService))
     private readonly downloadService: DownloadService,
     private readonly prisma: PrismaService,
   ) {}
@@ -86,8 +89,8 @@ export class TorrentCheckerService {
     try {
       this.logger.log(`Processing torrent request: ${request.title} (${request.contentType})`);
 
-      // Increment search attempt
-      await this.requestedTorrentsService.incrementSearchAttempt(request.id);
+      // Start search via orchestrator (this will increment attempts and set status)
+      await this.orchestrator.startSearch(request.id);
 
       // Handle ongoing TV shows with special logic
       if (request.contentType === ContentType.TV_SHOW && request.isOngoing) {
@@ -102,11 +105,15 @@ export class TorrentCheckerService {
 
       // Mark as failed if we've exceeded max attempts
       if (request.searchAttempts >= request.maxSearchAttempts) {
-        await this.requestedTorrentsService.updateRequestStatus(request.id, RequestStatus.FAILED);
+        await this.orchestrator.markAsFailed(request.id, `Search failed after ${request.searchAttempts} attempts: ${error.message}`);
         this.logger.log(`Request ${request.title} marked as FAILED after ${request.searchAttempts} attempts`);
       } else {
         // Reset status back to PENDING for retry
-        await this.requestedTorrentsService.updateRequestStatus(request.id, RequestStatus.PENDING);
+        await this.orchestrator.transitionRequest({
+          requestId: request.id,
+          targetStatus: RequestStatus.PENDING,
+          reason: 'Search failed, retrying later',
+        });
       }
     }
   }
@@ -134,7 +141,7 @@ export class TorrentCheckerService {
       await this.initiateTorrentDownloadForSeason(request, bestTorrent, nextSeason);
 
       // Update the main request status to show we found and initiated a download
-      await this.requestedTorrentsService.markAsFound(request.id, {
+      await this.orchestrator.markAsFound(request.id, {
         title: bestTorrent.title,
         link: bestTorrent.link,
         magnetUri: bestTorrent.magnetUri,
@@ -186,7 +193,11 @@ export class TorrentCheckerService {
     } else {
       this.logger.log(`No suitable torrent found for: ${request.title}`);
       // Reset status back to PENDING so it can be searched again later
-      await this.requestedTorrentsService.updateRequestStatus(request.id, RequestStatus.PENDING);
+      await this.orchestrator.transitionRequest({
+        requestId: request.id,
+        targetStatus: RequestStatus.PENDING,
+        reason: 'No suitable torrents found',
+      });
     }
   }
 
@@ -372,8 +383,8 @@ export class TorrentCheckerService {
     try {
       this.logger.log(`Initiating download for: ${torrent.title} (${torrent.seeders} seeders)`);
 
-      // Mark request as found
-      await this.requestedTorrentsService.markAsFound(request.id, {
+      // Mark request as found first
+      await this.orchestrator.markAsFound(request.id, {
         title: torrent.title,
         link: torrent.link,
         magnetUri: torrent.magnetUri,
@@ -382,7 +393,7 @@ export class TorrentCheckerService {
         indexer: torrent.indexer,
       });
 
-      // Create download job
+      // Create actual download job
       const downloadUrl = torrent.magnetUri || torrent.link;
       const downloadType = torrent.magnetUri ? DownloadType.MAGNET : DownloadType.TORRENT;
 
@@ -393,8 +404,10 @@ export class TorrentCheckerService {
         destination: this.getDownloadDestination(request),
       });
 
-      // Create a torrent download record for tracking (for all content types)
-      // Progress data is sourced dynamically from aria2, not stored
+      const downloadJobId = downloadJob.id.toString();
+      const aria2Gid = downloadJob.aria2Gid;
+
+      // Create a torrent download record for tracking
       await this.prisma.torrentDownload.create({
         data: {
           requestedTorrentId: request.id,
@@ -406,26 +419,33 @@ export class TorrentCheckerService {
           torrentSize: torrent.size,
           seeders: torrent.seeders,
           indexer: torrent.indexer,
-          downloadJobId: downloadJob.id.toString(),
-          aria2Gid: downloadJob.aria2Gid,
+          downloadJobId,
+          aria2Gid,
           status: 'DOWNLOADING',
         },
       });
 
-      // Mark request as downloading
-      await this.requestedTorrentsService.markAsDownloading(
-        request.id,
-        downloadJob.id.toString(),
-        downloadJob.aria2Gid,
-      );
+      // Mark request as downloading via orchestrator
+      await this.orchestrator.startDownload(request.id, {
+        downloadJobId,
+        aria2Gid,
+        torrentInfo: {
+          title: torrent.title,
+          link: torrent.link,
+          magnetUri: torrent.magnetUri,
+          size: torrent.size,
+          seeders: torrent.seeders,
+          indexer: torrent.indexer,
+        },
+      });
 
       this.logger.log(`Successfully initiated download for: ${request.title}`);
 
     } catch (error) {
       this.logger.error(`Error initiating download for ${request.title}:`, error);
 
-      // Mark request as failed
-      await this.requestedTorrentsService.updateRequestStatus(request.id, RequestStatus.FAILED);
+      // Mark request as failed via orchestrator
+      await this.orchestrator.markAsFailed(request.id, `Download initiation failed: ${error.message}`);
     }
   }
 
@@ -433,7 +453,7 @@ export class TorrentCheckerService {
     try {
       this.logger.log(`Initiating season pack download for: ${torrent.title} (Season ${seasonNumber})`);
 
-      // Create download job
+      // Create actual download job
       const downloadUrl = torrent.magnetUri || torrent.link;
       const downloadType = torrent.magnetUri ? DownloadType.MAGNET : DownloadType.TORRENT;
 
@@ -443,6 +463,9 @@ export class TorrentCheckerService {
         name: this.sanitizeFilename(torrent.title),
         destination: this.getDownloadDestination(request),
       });
+
+      const downloadJobId = downloadJob.id.toString();
+      const aria2Gid = downloadJob.aria2Gid;
 
       // Create a torrent download record associated with the season
       const season = await this.prisma.tvShowSeason.findUnique({
@@ -465,8 +488,8 @@ export class TorrentCheckerService {
             torrentSize: torrent.size,
             seeders: torrent.seeders,
             indexer: torrent.indexer,
-            downloadJobId: downloadJob.id.toString(),
-            aria2Gid: downloadJob.aria2Gid,
+            downloadJobId,
+            aria2Gid,
             status: 'DOWNLOADING',
           },
         });
@@ -489,7 +512,7 @@ export class TorrentCheckerService {
     try {
       this.logger.log(`Initiating episode download for: ${torrent.title} (S${seasonNumber}E${episodeNumber})`);
 
-      // Create download job
+      // Create actual download job
       const downloadUrl = torrent.magnetUri || torrent.link;
       const downloadType = torrent.magnetUri ? DownloadType.MAGNET : DownloadType.TORRENT;
 
@@ -499,6 +522,9 @@ export class TorrentCheckerService {
         name: this.sanitizeFilename(torrent.title),
         destination: this.getDownloadDestination(request),
       });
+
+      const downloadJobId = downloadJob.id.toString();
+      const aria2Gid = downloadJob.aria2Gid;
 
       // Find the specific episode
       const episode = await this.prisma.tvShowEpisode.findFirst({
@@ -524,8 +550,8 @@ export class TorrentCheckerService {
             torrentSize: torrent.size,
             seeders: torrent.seeders,
             indexer: torrent.indexer,
-            downloadJobId: downloadJob.id.toString(),
-            aria2Gid: downloadJob.aria2Gid,
+            downloadJobId,
+            aria2Gid,
             status: 'DOWNLOADING',
           },
         });

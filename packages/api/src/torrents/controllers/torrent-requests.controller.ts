@@ -18,6 +18,10 @@ import { TorrentSearchLogService } from '../services/torrent-search-log.service'
 import { TorrentSearchResultsService } from '../services/torrent-search-results.service';
 import { TorrentCheckerService } from '../services/torrent-checker.service';
 import { DownloadProgressTrackerService } from '../services/download-progress-tracker.service';
+import { RequestLifecycleOrchestrator } from '../services/request-lifecycle-orchestrator.service';
+import { DownloadService } from '../../download/download.service';
+import { DownloadType } from '../../download/dto/create-download.dto';
+import { PrismaService } from '../../database/prisma.service';
 import { CreateTorrentRequestDto, UpdateTorrentRequestDto, TorrentRequestQueryDto } from '../dto/torrent-request.dto';
 import {
   CreateTvShowSeasonDto,
@@ -43,6 +47,9 @@ export class TorrentRequestsController {
     private readonly torrentCheckerService: TorrentCheckerService,
     private readonly downloadProgressTrackerService: DownloadProgressTrackerService,
     private readonly tvShowMetadataService: TvShowMetadataService,
+    private readonly orchestrator: RequestLifecycleOrchestrator,
+    private readonly downloadService: DownloadService,
+    private readonly prisma: PrismaService,
   ) {}
 
   @Post('movies')
@@ -461,25 +468,27 @@ export class TorrentRequestsController {
   @Post(':id/sync-download')
   @ApiOperation({
     summary: 'Sync download status',
-    description: 'Manually sync download status for a specific torrent request',
+    description: 'Manually sync download status for a specific torrent request (now fetches live from aria2)',
   })
   @ApiParam({ name: 'id', description: 'Torrent request ID' })
   @ApiResponse({ status: 200, description: 'Download status synced successfully' })
-  async syncDownloadStatus(@Param('id') id: string): Promise<{ success: boolean; message: string }> {
+  async syncDownloadStatus(@Param('id') id: string): Promise<{ success: boolean; message: string; data?: any }> {
     try {
-      this.logger.log(`Syncing download status for request ${id}`);
+      this.logger.log(`Getting live download status for request ${id}`);
 
-      await this.downloadProgressTrackerService.syncDownloadStatus(id);
+      // Get live download status instead of syncing stored data
+      const status = await this.orchestrator.getRequestDownloadStatus(id);
 
       return {
         success: true,
-        message: 'Download status synced successfully',
+        message: 'Live download status retrieved successfully',
+        data: status,
       };
     } catch (error) {
-      this.logger.error(`Error syncing download status for ${id}: ${error.message}`, error.stack);
+      this.logger.error(`Error getting download status for ${id}: ${error.message}`, error.stack);
 
       throw new HttpException(
-        'Failed to sync download status',
+        'Failed to get download status',
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
@@ -838,5 +847,344 @@ export class TorrentRequestsController {
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
+  }
+
+  @Get(':id/download-status')
+  @ApiOperation({
+    summary: 'Get live download status',
+    description: 'Get real-time download status for a request, fetched live from aria2',
+  })
+  @ApiParam({ name: 'id', description: 'Torrent request ID' })
+  @ApiResponse({ status: 200, description: 'Download status retrieved successfully' })
+  @ApiResponse({ status: 404, description: 'Torrent request not found' })
+  async getDownloadStatus(@Param('id') id: string) {
+    try {
+      this.logger.log(`Getting live download status for request ${id}`);
+
+      const status = await this.orchestrator.getRequestDownloadStatus(id);
+
+      if (!status) {
+        throw new HttpException('Request not found', HttpStatus.NOT_FOUND);
+      }
+
+      return {
+        success: true,
+        data: status,
+      };
+    } catch (error) {
+      this.logger.error(`Error getting download status for ${id}: ${error.message}`, error.stack);
+
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      throw new HttpException(
+        'Failed to get download status',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Get('download-summary')
+  @ApiOperation({
+    summary: 'Get download summary',
+    description: 'Get aggregated download statistics for all requests',
+  })
+  @ApiResponse({ status: 200, description: 'Download summary retrieved successfully' })
+  async getDownloadSummary() {
+    try {
+      this.logger.log('Getting download summary');
+
+      const summary = await this.orchestrator.getDownloadSummary();
+
+      return {
+        success: true,
+        data: summary,
+      };
+    } catch (error) {
+      this.logger.error(`Error getting download summary: ${error.message}`, error.stack);
+
+      throw new HttpException(
+        'Failed to get download summary',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Post(':id/link-download')
+  @ApiOperation({
+    summary: 'Link a manual download to a torrent request',
+    description: 'Link an existing download job to a torrent request for tracking purposes',
+  })
+  @ApiParam({ name: 'id', description: 'Torrent request ID' })
+  @ApiResponse({ status: 200, description: 'Download linked successfully' })
+  @ApiResponse({ status: 404, description: 'Torrent request not found' })
+  async linkDownload(
+    @Param('id') id: string,
+    @Body() body: { downloadJobId: string; aria2Gid?: string; torrentTitle?: string }
+  ) {
+    try {
+      this.logger.log(`Linking download ${body.downloadJobId} to request ${id}`);
+
+      // Get the request to extract torrent info
+      const request = await this.requestedTorrentsService.getRequestById(id);
+
+      // Follow proper state transitions based on current status
+      if (request.status === 'PENDING') {
+        // First transition to SEARCHING
+        await this.orchestrator.startSearch(id);
+
+        // Then mark as found
+        await this.orchestrator.markAsFound(id, {
+          title: body.torrentTitle || 'Manual Download',
+          link: '',
+          magnetUri: undefined,
+          size: 'Unknown',
+          seeders: 0,
+          indexer: 'Manual',
+        });
+      } else if (request.status === 'SEARCHING') {
+        // Just mark as found
+        await this.orchestrator.markAsFound(id, {
+          title: body.torrentTitle || 'Manual Download',
+          link: '',
+          magnetUri: undefined,
+          size: 'Unknown',
+          seeders: 0,
+          indexer: 'Manual',
+        });
+      } else if (request.status === 'CANCELLED') {
+        // Reactivate cancelled request: CANCELLED → SEARCHING → FOUND
+        await this.orchestrator.startSearch(id);
+
+        // Then mark as found
+        await this.orchestrator.markAsFound(id, {
+          title: body.torrentTitle || 'Manual Download',
+          link: '',
+          magnetUri: undefined,
+          size: 'Unknown',
+          seeders: 0,
+          indexer: 'Manual',
+        });
+      } else if (request.status === 'FOUND') {
+        // Request is already found, no need to change status before downloading
+        this.logger.log(`Request ${id} is already in FOUND status, proceeding to download`);
+      } else if (request.status === 'FAILED' || request.status === 'EXPIRED') {
+        // Reactivate failed/expired request: FAILED/EXPIRED → SEARCHING → FOUND
+        this.logger.log(`Reactivating ${request.status} request ${id} for manual download`);
+        await this.orchestrator.startSearch(id);
+
+        // Then mark as found
+        await this.orchestrator.markAsFound(id, {
+          title: body.torrentTitle || 'Manual Download',
+          link: '',
+          magnetUri: undefined,
+          size: 'Unknown',
+          seeders: 0,
+          indexer: 'Manual',
+        });
+      } else if (request.status === 'DOWNLOADING') {
+        // Request is already downloading, this might be a duplicate link attempt
+        this.logger.warn(`Request ${id} is already in DOWNLOADING status, proceeding anyway`);
+      } else if (request.status === 'COMPLETED') {
+        // Request is already completed, this is unusual but we'll allow it
+        this.logger.warn(`Request ${id} is already COMPLETED, but linking new download anyway`);
+      } else {
+        // Unexpected status
+        this.logger.warn(`Unexpected request status ${request.status} for request ${id}, attempting to proceed`);
+      }
+
+      // Follow proper state machine transitions based on current status
+      let updatedRequest = request;
+
+      // If the request is cancelled, expired, or failed, first transition to searching
+      if (request.status === 'CANCELLED' || request.status === 'EXPIRED' || request.status === 'FAILED') {
+        this.logger.log(`Reactivating ${request.status.toLowerCase()} request ${id} for manual download`);
+        updatedRequest = await this.orchestrator.startSearch(id);
+      }
+
+      // If not already found, mark as found
+      if (updatedRequest.status !== 'FOUND') {
+        this.logger.log(`Marking request ${id} as found with torrent info`);
+        const torrentInfo = {
+          title: body.torrentTitle || 'Manual Download',
+          link: '',
+          magnetUri: undefined,
+          size: 'Unknown',
+          seeders: 0,
+          indexer: 'Manual',
+        };
+        updatedRequest = await this.orchestrator.markAsFound(id, torrentInfo);
+      }
+
+      // Now start the download
+      this.logger.log(`Starting download for request ${id}`);
+      await this.orchestrator.startDownload(id, {
+        downloadJobId: body.downloadJobId,
+        aria2Gid: body.aria2Gid,
+        torrentInfo: {
+          title: body.torrentTitle || 'Manual Download',
+          link: '',
+          magnetUri: undefined,
+          size: 'Unknown',
+          seeders: 0,
+          indexer: 'Manual',
+        },
+      });
+
+      return {
+        success: true,
+        message: 'Download linked successfully',
+      };
+    } catch (error) {
+      this.logger.error(`Error linking download to request ${id}: ${error.message}`, error.stack);
+
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      throw new HttpException(
+        `Failed to link download: ${error.message}`,
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Post(':id/start-download')
+  @ApiOperation({
+    summary: 'Manually start download for found request',
+    description: 'Manually initiate download for a request that is in FOUND status',
+  })
+  @ApiParam({ name: 'id', description: 'Torrent request ID' })
+  @ApiResponse({ status: 200, description: 'Download started successfully' })
+  @ApiResponse({ status: 404, description: 'Torrent request not found' })
+  @ApiResponse({ status: 400, description: 'Request is not in FOUND status' })
+  async startDownload(@Param('id') id: string) {
+    try {
+      this.logger.log(`Manually starting download for request ${id}`);
+
+      // Get the request to check its current status
+      const request = await this.requestedTorrentsService.getRequestById(id);
+
+      if (request.status !== 'FOUND') {
+        throw new HttpException(
+          `Request is in ${request.status} status, not FOUND. Cannot start download.`,
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      // Check if we have torrent info
+      if (!request.foundTorrentLink && !request.foundMagnetUri) {
+        throw new HttpException(
+          'No torrent information found for this request',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      // Check if there are already torrent downloads with placeholder GIDs
+      const existingDownloads = await this.requestedTorrentsService.getTorrentDownloads(id);
+
+      if (existingDownloads.length > 0) {
+        // Update existing download with real aria2 GID
+        const existingDownload = existingDownloads[0];
+
+        // Create the actual download
+        const downloadUrl = request.foundMagnetUri || request.foundTorrentLink;
+        const downloadType = request.foundMagnetUri ? DownloadType.MAGNET : DownloadType.TORRENT;
+
+        const downloadJob = await this.downloadService.createDownload({
+          url: downloadUrl,
+          type: downloadType,
+          name: this.sanitizeFilename(request.foundTorrentTitle || request.title),
+          destination: this.getDownloadDestination(request),
+        });
+
+        // Update the existing torrent download record with real aria2 GID
+        await this.prisma.torrentDownload.update({
+          where: { id: existingDownload.id },
+          data: {
+            downloadJobId: downloadJob.id.toString(),
+            aria2Gid: downloadJob.aria2Gid,
+            status: 'DOWNLOADING',
+          },
+        });
+
+        // Use the orchestrator to transition to downloading
+        await this.orchestrator.startDownload(id, {
+          downloadJobId: downloadJob.id.toString(),
+          aria2Gid: downloadJob.aria2Gid,
+          torrentInfo: {
+            title: request.foundTorrentTitle || 'Unknown',
+            link: request.foundTorrentLink || '',
+            magnetUri: request.foundMagnetUri,
+            size: request.foundTorrentSize || '0',
+            seeders: request.foundSeeders || 0,
+            indexer: request.foundIndexer || 'Unknown',
+          },
+        });
+      } else {
+        // Create new download
+        const downloadUrl = request.foundMagnetUri || request.foundTorrentLink;
+        const downloadType = request.foundMagnetUri ? DownloadType.MAGNET : DownloadType.TORRENT;
+
+        const downloadJob = await this.downloadService.createDownload({
+          url: downloadUrl,
+          type: downloadType,
+          name: this.sanitizeFilename(request.foundTorrentTitle || request.title),
+          destination: this.getDownloadDestination(request),
+        });
+
+        // Use the orchestrator to start the download
+        await this.orchestrator.startDownload(id, {
+          downloadJobId: downloadJob.id.toString(),
+          aria2Gid: downloadJob.aria2Gid,
+          torrentInfo: {
+            title: request.foundTorrentTitle || 'Unknown',
+            link: request.foundTorrentLink || '',
+            magnetUri: request.foundMagnetUri,
+            size: request.foundTorrentSize || '0',
+            seeders: request.foundSeeders || 0,
+            indexer: request.foundIndexer || 'Unknown',
+          },
+        });
+      }
+
+      return {
+        success: true,
+        message: 'Download started successfully',
+      };
+    } catch (error) {
+      this.logger.error(`Error starting download for ${id}: ${error.message}`, error.stack);
+
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      throw new HttpException(
+        `Failed to start download: ${error.message}`,
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  private sanitizeFilename(filename: string): string {
+    return filename
+      .replace(/[<>:"/\\|?*]/g, '_')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  private getDownloadDestination(request: any): string {
+    const baseDir = process.env.DOWNLOAD_PATH || '/downloads';
+
+    if (request.contentType === 'MOVIE') {
+      return `${baseDir}/movies`;
+    } else if (request.contentType === 'TV_SHOW') {
+      return `${baseDir}/tv`;
+    } else if (request.contentType === 'GAME') {
+      return `${baseDir}/games`;
+    }
+
+    return baseDir;
   }
 }

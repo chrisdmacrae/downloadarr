@@ -282,17 +282,51 @@ export function GameDetailModal({ game, open, onOpenChange }: GameDetailModalPro
         searchItem={game}
         onTorrentDownload={async (torrent) => {
           try {
+            let requestId = existingRequest?.id
+
+            // First, create a torrent request if one doesn't exist
+            if (!existingRequest) {
+              const requestDto = {
+                title: game.title,
+                year: game.year,
+                igdbId: parseInt(game.id),
+                platform: game.platform,
+                genre: game.genre,
+                preferredQualities: ['HD_1080P'],
+                preferredFormats: ['X265'],
+                minSeeders: 1,
+                maxSizeGB: 50,
+                priority: 5,
+              }
+
+              const response = await apiService.requestGameDownload(requestDto)
+              requestId = response.data.id
+
+              // Refresh requests to get the new request
+              refreshRequests()
+            }
+
             // Determine download type and URL
             const downloadUrl = torrent.magnetUri || torrent.link
             const downloadType = torrent.magnetUri ? 'magnet' : 'torrent'
 
             // Create download job using the mutation
-            await createDownloadMutation.mutateAsync({
+            const downloadResult = await createDownloadMutation.mutateAsync({
               url: downloadUrl,
               type: downloadType,
               name: torrent.title,
               destination: undefined // Use default destination
             })
+
+            // If we have a request ID, explicitly link the download to the request
+            if (requestId && downloadResult.id) {
+              try {
+                await apiService.linkDownloadToRequest(requestId, downloadResult.id.toString(), downloadResult.aria2Gid, torrent.title)
+              } catch (linkError) {
+                console.warn('Failed to link download to request:', linkError)
+                // Don't fail the whole operation if linking fails
+              }
+            }
 
             toast({
               title: "Download Started",

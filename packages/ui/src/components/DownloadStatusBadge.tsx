@@ -1,23 +1,38 @@
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
-import { 
-  Clock, 
-  Search, 
-  CheckCircle, 
-  Download, 
-  AlertCircle, 
-  XCircle, 
-  Timer 
+import {
+  Clock,
+  Search,
+  CheckCircle,
+  Download,
+  AlertCircle,
+  XCircle,
+  Timer
 } from 'lucide-react'
 import { TorrentRequest } from '@/services/api'
+import { useDownloadStatus } from '@/hooks/useDownloadStatus'
 
 interface DownloadStatusBadgeProps {
   request: TorrentRequest | undefined
   className?: string
 }
 
+// Utility function to format file sizes
+function formatFileSize(bytes: number): string {
+  if (bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
+}
+
 export function DownloadStatusBadge({ request, className }: DownloadStatusBadgeProps) {
   if (!request) return null
+
+  // Get live download status for downloading requests
+  const { downloadStatus } = useDownloadStatus(
+    request.status === 'DOWNLOADING' ? request.id : undefined
+  )
 
   const getStatusConfig = (status: TorrentRequest['status']) => {
     switch (status) {
@@ -97,16 +112,21 @@ export function DownloadStatusBadge({ request, className }: DownloadStatusBadgeP
         {config.label}
       </Badge>
       
-      {request.status === 'DOWNLOADING' && request.downloadProgress !== null && (
+      {request.status === 'DOWNLOADING' && downloadStatus && (
         <div className="space-y-1">
-          <Progress value={request.downloadProgress} className="h-1" />
+          <Progress value={downloadStatus.progress} className="h-1" />
           <div className="flex justify-between text-xs text-muted-foreground">
-            <span>{request.downloadProgress?.toFixed(1)}%</span>
-            {request.downloadSpeed && <span>{request.downloadSpeed}</span>}
+            <span>{downloadStatus.progress.toFixed(1)}%</span>
+            <span>{downloadStatus.downloadSpeed}</span>
           </div>
-          {request.downloadEta && (
+          {downloadStatus.eta && downloadStatus.eta !== '∞' && (
             <div className="text-xs text-muted-foreground">
-              ETA: {request.downloadEta}
+              ETA: {downloadStatus.eta}
+            </div>
+          )}
+          {downloadStatus.totalSize > 0 && (
+            <div className="text-xs text-muted-foreground">
+              {formatFileSize(downloadStatus.completedSize)} / {formatFileSize(downloadStatus.totalSize)}
             </div>
           )}
         </div>

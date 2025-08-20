@@ -1,6 +1,7 @@
-import { Module, forwardRef } from '@nestjs/common';
+import { Module, forwardRef, OnModuleInit } from '@nestjs/common';
 import { ScheduleModule } from '@nestjs/schedule';
 import { BullModule } from '@nestjs/bull';
+import { ModuleRef } from '@nestjs/core';
 
 // Services
 import { RequestedTorrentsService } from './services/requested-torrents.service';
@@ -10,6 +11,12 @@ import { TorrentCheckerService } from './services/torrent-checker.service';
 import { DownloadProgressTrackerService } from './services/download-progress-tracker.service';
 import { TvShowMetadataService } from './services/tv-show-metadata.service';
 import { TvShowMetadataCronService } from './services/tv-show-metadata-cron.service';
+import { RequestLifecycleOrchestrator } from './services/request-lifecycle-orchestrator.service';
+import { DownloadAggregationService } from './services/download-aggregation.service';
+
+// State Machine
+import { RequestStateMachine } from './state-machine/request-state-machine';
+import { TvShowStateMachine } from './state-machine/tv-show-state-machine';
 
 // Controllers
 import { TorrentRequestsController } from './controllers/torrent-requests.controller';
@@ -17,6 +24,7 @@ import { TorrentRequestsController } from './controllers/torrent-requests.contro
 // Import other modules
 import { DiscoveryModule } from '../discovery/discovery.module';
 import { DownloadModule } from '../download/download.module';
+import { DownloadMetadataService } from '../download/download-metadata.service';
 
 @Module({
   imports: [
@@ -25,6 +33,17 @@ import { DownloadModule } from '../download/download.module';
     forwardRef(() => DownloadModule),
   ],
   providers: [
+    // State Machine
+    RequestStateMachine,
+    TvShowStateMachine,
+
+    // Orchestrator
+    RequestLifecycleOrchestrator,
+
+    // Aggregation
+    DownloadAggregationService,
+
+    // Services
     RequestedTorrentsService,
     TorrentSearchLogService,
     TorrentSearchResultsService,
@@ -37,6 +56,17 @@ import { DownloadModule } from '../download/download.module';
     TorrentRequestsController,
   ],
   exports: [
+    // State Machine
+    RequestStateMachine,
+    TvShowStateMachine,
+
+    // Orchestrator
+    RequestLifecycleOrchestrator,
+
+    // Aggregation
+    DownloadAggregationService,
+
+    // Services
     RequestedTorrentsService,
     TorrentSearchLogService,
     TorrentSearchResultsService,
@@ -45,4 +75,20 @@ import { DownloadModule } from '../download/download.module';
     TvShowMetadataService,
   ],
 })
-export class TorrentsModule {}
+export class TorrentsModule implements OnModuleInit {
+  constructor(private moduleRef: ModuleRef) {}
+
+  async onModuleInit() {
+    // Set up orchestrator in DownloadMetadataService to avoid circular dependency
+    try {
+      const orchestrator = this.moduleRef.get(RequestLifecycleOrchestrator, { strict: false });
+      const downloadMetadataService = this.moduleRef.get(DownloadMetadataService, { strict: false });
+
+      if (orchestrator && downloadMetadataService) {
+        downloadMetadataService.setOrchestrator(orchestrator);
+      }
+    } catch (error) {
+      // Ignore if services are not available (during testing, etc.)
+    }
+  }
+}

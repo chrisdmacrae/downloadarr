@@ -44,6 +44,7 @@ import { TvShowSeasonBadges } from '@/components/TvShowSeasonBadges'
 import { TvShowSeasonModal } from '@/components/TvShowSeasonModal'
 import { apiService, TorrentRequest } from '@/services/api'
 import { useTorrentRequests } from '@/hooks/useTorrentRequests'
+import { useDownloadSummary } from '@/hooks/useDownloadStatus'
 import { useToast } from '@/hooks/use-toast'
 
 type StatusFilter = 'all' | TorrentRequest['status']
@@ -64,6 +65,7 @@ export default function Requests() {
   const [seasonModalSeasonNumber, setSeasonModalSeasonNumber] = useState<number | null>(null)
 
   const { requests, isLoading, error, refreshRequests, isOngoingTvShow } = useTorrentRequests()
+  const { summary: downloadSummary } = useDownloadSummary()
   const { toast } = useToast()
 
   // Filter and sort requests
@@ -370,6 +372,36 @@ export default function Requests() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Live Download Summary */}
+        {downloadSummary && downloadSummary.downloading > 0 && (
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-medium">Active Downloads</h3>
+                <div className="text-sm text-muted-foreground">
+                  {downloadSummary.downloading} downloading
+                </div>
+              </div>
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span>Overall Progress</span>
+                  <span>{downloadSummary.totalProgress}%</span>
+                </div>
+                <div className="w-full bg-secondary rounded-full h-2">
+                  <div
+                    className="bg-primary h-2 rounded-full transition-all duration-300"
+                    style={{ width: `${downloadSummary.totalProgress}%` }}
+                  />
+                </div>
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>Speed: {downloadSummary.totalSpeed}</span>
+                  <span>{downloadSummary.completed} completed</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Filters and Search */}
         <div className="flex flex-col gap-3 md:flex-row md:gap-4">

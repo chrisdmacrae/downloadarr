@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Download, Calendar, Clock, Star, User, Film, Search } from 'lucide-react'
-import { SearchResult, MovieDetails } from '@/services/api'
+import { SearchResult, MovieDetails, apiService } from '@/services/api'
 import { useCreateDownload } from '@/hooks/useApi'
 import { DownloadRequestModal } from './DownloadRequestModal'
 import { TorrentSearchModal } from './TorrentSearchModal'
@@ -276,17 +276,61 @@ export function MovieDetailModal({ movie, open, onOpenChange }: MovieDetailModal
         onClose={() => setShowTorrentSearchModal(false)}
         onTorrentDownload={async (torrent) => {
           try {
+            // Determine existing request based on content type
+            const existingRequest = movie.type === 'tv'
+              ? getRequestForShow(movie.title, movie.year)
+              : getRequestForItem(movie.title, movie.year, undefined, undefined, 'MOVIE')
+
+            let requestId = existingRequest?.id
+
+            // First, create a torrent request if one doesn't exist
+            if (!existingRequest) {
+              const requestDto = {
+                title: movie.title,
+                year: movie.year,
+                imdbId: movie.imdbId,
+                tmdbId: movie.tmdbId,
+                preferredQualities: ['HD_1080P', 'UHD_4K'],
+                preferredFormats: ['X264', 'X265'],
+                minSeeders: 5,
+                maxSizeGB: movie.type === 'tv' ? 15 : 20, // Smaller default for TV shows
+                priority: 5,
+              }
+
+              // Create appropriate request type
+              let response
+              if (movie.type === 'tv') {
+                response = await apiService.requestTvShowDownload(requestDto)
+              } else {
+                response = await apiService.requestMovieDownload(requestDto)
+              }
+              requestId = response.data.id
+
+              // Refresh requests to get the new request
+              refreshRequests()
+            }
+
             // Determine download type and URL
             const downloadUrl = torrent.magnetUri || torrent.link
             const downloadType = torrent.magnetUri ? 'magnet' : 'torrent'
 
             // Create download job using the mutation
-            await createDownloadMutation.mutateAsync({
+            const downloadResult = await createDownloadMutation.mutateAsync({
               url: downloadUrl,
               type: downloadType,
               name: torrent.title,
               destination: undefined // Use default destination
             })
+
+            // If we have a request ID, explicitly link the download to the request
+            if (requestId && downloadResult.id) {
+              try {
+                await apiService.linkDownloadToRequest(requestId, downloadResult.id.toString(), downloadResult.aria2Gid, torrent.title)
+              } catch (linkError) {
+                console.warn('Failed to link download to request:', linkError)
+                // Don't fail the whole operation if linking fails
+              }
+            }
 
             toast({
               title: "Download Started",

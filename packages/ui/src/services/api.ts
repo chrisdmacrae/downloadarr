@@ -145,9 +145,7 @@ export interface TorrentRequest {
   searchAttempts: number;
   maxSearchAttempts: number;
   foundTorrentTitle?: string;
-  downloadProgress?: number;
-  downloadSpeed?: string;
-  downloadEta?: string;
+  // downloadProgress, downloadSpeed, downloadEta removed - now fetched live via getRequestDownloadStatus
   createdAt: string;
   updatedAt: string;
   // TV Show management relationships
@@ -527,6 +525,17 @@ export const apiService = {
     return response.data;
   },
 
+  // Live Download Status Services
+  getRequestDownloadStatus: async (id: string): Promise<{ success: boolean; data?: any; error?: string }> => {
+    const response = await api.get(`/torrent-requests/${id}/download-status`);
+    return response.data;
+  },
+
+  getDownloadSummary: async (): Promise<{ success: boolean; data?: any; error?: string }> => {
+    const response = await api.get('/torrent-requests/download-summary');
+    return response.data;
+  },
+
   getSearchResults: async (requestId: string): Promise<{ success: boolean; data?: TorrentSearchResult[]; error?: string }> => {
     const response = await api.get(`/torrent-requests/${requestId}/search-results`);
     return response.data;
@@ -659,6 +668,15 @@ export const apiService = {
 
   selectTorrent: async (requestId: string, resultId: string): Promise<{ success: boolean; message?: string; error?: string }> => {
     const response = await api.post(`/torrent-requests/${requestId}/select-torrent/${resultId}`);
+    return response.data;
+  },
+
+  linkDownloadToRequest: async (requestId: string, downloadJobId: string, aria2Gid?: string, torrentTitle?: string): Promise<{ success: boolean; message?: string; error?: string }> => {
+    const response = await api.post(`/torrent-requests/${requestId}/link-download`, {
+      downloadJobId,
+      aria2Gid,
+      torrentTitle,
+    });
     return response.data;
   },
 

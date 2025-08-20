@@ -149,6 +149,7 @@ model TorrentDownload {
   createdAt          DateTime          @default(now())
   updatedAt          DateTime          @updatedAt
   completedAt        DateTime?
+  // Removed downloadProgress, downloadSpeed, downloadEta - now fetched live from aria2
   requestedTorrent   RequestedTorrent  @relation(fields: [requestedTorrentId], references: [id], onDelete: Cascade)
   tvShowSeason       TvShowSeason?     @relation(fields: [tvShowSeasonId], references: [id], onDelete: Cascade)
   tvShowEpisode      TvShowEpisode?    @relation(fields: [tvShowEpisodeId], references: [id], onDelete: Cascade)
