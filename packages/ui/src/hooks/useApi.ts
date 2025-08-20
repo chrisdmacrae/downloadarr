@@ -235,3 +235,10 @@ export const useGamePlatformOptions = (grouped = false) => {
     staleTime: 10 * 60 * 1000, // 10 minutes - platforms don't change often
   });
 };
+
+// Path preview hook
+export const usePreviewOrganizationPath = () => {
+  return useMutation({
+    mutationFn: apiService.previewOrganizationPath,
+  });
+};
