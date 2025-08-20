@@ -22,6 +22,10 @@ RUN npx prisma generate
 # Build the application
 RUN npm run build
 
+# Install production dependencies in a separate location
+WORKDIR /app
+RUN npm install --only=production && npm cache clean --force
+
 # Production stage
 FROM node:20-alpine AS production
 
@@ -36,14 +40,13 @@ RUN apk add --no-cache \
 
 WORKDIR /app
 
-# Copy package files and install production dependencies
+# Copy package files
 COPY package.json ./
 COPY packages/api/package.json ./packages/api/
-RUN npm install --only=production && npm cache clean --force
 
-# Copy built application
+# Copy built application and dependencies from builder
 COPY --from=builder /app/packages/api/dist ./packages/api/dist
-COPY --from=builder /app/packages/api/node_modules ./packages/api/node_modules
+COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/packages/api/generated ./packages/api/generated
 COPY --from=builder /app/packages/api/prisma ./packages/api/prisma
 

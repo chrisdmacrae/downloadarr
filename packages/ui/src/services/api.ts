@@ -843,6 +843,8 @@ export const getTmdbPosterUrl = (tmdbId: number | string | undefined, size: stri
 
   // For now, we'll need to make an API call to get the poster path
   // This is a placeholder - in a real implementation, you might want to cache this
+  // TODO: Use the size parameter when implementing the actual TMDB API call
+  console.log(`Getting poster for TMDB ID ${tmdbId} with size ${size}`)
   // or add an endpoint that returns the poster URL directly
   return undefined;
 };

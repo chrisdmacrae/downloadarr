@@ -57,7 +57,6 @@ export default function Settings() {
       toast({
         title: "Error",
         description: "Failed to save organization settings. Please try again.",
-        variant: "destructive",
       })
     }
   }
@@ -73,7 +72,6 @@ export default function Settings() {
       toast({
         title: "Error",
         description: "Failed to start reverse indexing. Please try again.",
-        variant: "destructive",
       })
     }
   }
