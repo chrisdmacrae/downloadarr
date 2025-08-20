@@ -304,7 +304,7 @@ export default function Search() {
                     onClick={handleItemClick}
                     showOverview={true}
                     showDownloadButton={item.type === 'game'}
-                    statusBadge={torrentRequest ? <DownloadStatusBadge request={torrentRequest} /> : undefined}
+                    statusBadge={torrentRequest ? <DownloadStatusBadge request={torrentRequest} variant='compact' /> : undefined}
                   />
                 )
               })}

@@ -15,6 +15,7 @@ import { useDownloadStatus } from '@/hooks/useDownloadStatus'
 interface DownloadStatusBadgeProps {
   request: TorrentRequest | undefined
   className?: string
+  variant?: 'default' | 'compact'
 }
 
 // Utility function to format file sizes
@@ -26,7 +27,7 @@ function formatFileSize(bytes: number): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
 }
 
-export function DownloadStatusBadge({ request, className }: DownloadStatusBadgeProps) {
+export function DownloadStatusBadge({ request, className, variant = 'default' }: DownloadStatusBadgeProps) {
   if (!request) return null
 
   // Get live download status for downloading requests
@@ -105,13 +106,28 @@ export function DownloadStatusBadge({ request, className }: DownloadStatusBadgeP
   const config = getStatusConfig(request.status)
   const Icon = config.icon
 
+  if (variant === 'compact') {
+    return (
+      <div className={`space-y-1 ${className}`}>
+        <Badge variant={config.variant} className="flex items-center gap-1">
+          <Icon className="h-3 w-3" />
+          {config.label}
+        </Badge>
+
+        {request.status === 'DOWNLOADING' && downloadStatus && (
+          <Progress value={downloadStatus.progress} className="h-1" />
+        )}
+      </div>
+    )
+  }
+
   return (
     <div className={`space-y-1 ${className}`}>
       <Badge variant={config.variant} className="flex items-center gap-1">
         <Icon className="h-3 w-3" />
         {config.label}
       </Badge>
-      
+
       {request.status === 'DOWNLOADING' && downloadStatus && (
         <div className="space-y-1">
           <Progress value={downloadStatus.progress} className="h-1" />
@@ -131,13 +147,13 @@ export function DownloadStatusBadge({ request, className }: DownloadStatusBadgeP
           )}
         </div>
       )}
-      
+
       {request.status === 'SEARCHING' && (
         <div className="text-xs text-muted-foreground">
           Attempt {request.searchAttempts} of {request.maxSearchAttempts}
         </div>
       )}
-      
+
       {request.status === 'FOUND' && request.foundTorrentTitle && (
         <div className="text-xs text-muted-foreground line-clamp-1" title={request.foundTorrentTitle}>
           Found: {request.foundTorrentTitle}

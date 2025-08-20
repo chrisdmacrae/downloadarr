@@ -10,6 +10,7 @@ import { TorrentsModule } from './torrents/torrents.module';
 import { GameConfigModule } from './config/config.module';
 import { JackettModule } from './jackett/jackett.module';
 import { OrganizationModule } from './organization/organization.module';
+import { InitializationModule } from './initialization/initialization.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { OrganizationModule } from './organization/organization.module';
       isGlobal: true,
       envFilePath: ['.env.local', '.env'],
     }),
+    InitializationModule,
     DatabaseModule,
     DownloadModule,
     VpnModule,

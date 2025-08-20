@@ -77,8 +77,8 @@ services:
       TMDB_API_KEY: ${TMDB_API_KEY}
       IGDB_CLIENT_ID: ${IGDB_CLIENT_ID}
       IGDB_ACCESS_TOKEN: ${IGDB_ACCESS_TOKEN}
-      DOWNLOAD_PATH: ${DOWNLOAD_PATH}
-      LIBRARY_PATH: ${LIBRARY_PATH}
+      DOWNLOAD_PATH: /app/downloads
+      LIBRARY_PATH: /app/library
     volumes:
       - ${DOWNLOAD_PATH}:/app/downloads
       - ${LIBRARY_PATH}:/app/library

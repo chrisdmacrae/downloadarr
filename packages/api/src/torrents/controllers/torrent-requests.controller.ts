@@ -1204,11 +1204,11 @@ export class TorrentRequestsController {
     if (request.contentType === 'MOVIE') {
       return `${baseDir}/movies`;
     } else if (request.contentType === 'TV_SHOW') {
-      return `${baseDir}/tv`;
+      return `${baseDir}/tv-shows`;
     } else if (request.contentType === 'GAME') {
       return `${baseDir}/games`;
+    } else {
+      return `${baseDir}/other`;
     }
-
-    return baseDir;
   }
 }

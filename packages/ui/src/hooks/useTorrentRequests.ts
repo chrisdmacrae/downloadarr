@@ -57,6 +57,17 @@ export function useTorrentRequests() {
     })
   }
 
+  const getRequestForGame = (title: string, year?: number): TorrentRequest | undefined => {
+    // For games, find any request for this game
+    return requests.find(request => {
+      const titleMatch = request.title.toLowerCase() === title.toLowerCase()
+      const yearMatch = !year || request.year === year
+      const isGame = request.contentType === 'GAME'
+
+      return titleMatch && yearMatch && isGame
+    })
+  }
+
   const getRequestsByStatus = (status: TorrentRequest['status']) => {
     return requests.filter(request => request.status === status)
   }
@@ -100,6 +111,7 @@ export function useTorrentRequests() {
     error,
     getRequestForItem,
     getRequestForShow,
+    getRequestForGame,
     getRequestsByStatus,
     refreshRequests,
     getTvShowSeasonSummary,

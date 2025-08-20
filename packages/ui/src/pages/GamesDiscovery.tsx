@@ -3,8 +3,10 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { SearchResultCarousel } from '@/components/SearchResultCarousel'
 import { SearchResultCard } from '@/components/SearchResultCard'
 import { GameDetailModal } from '@/components/GameDetailModal'
+import { DownloadStatusBadge } from '@/components/DownloadStatusBadge'
 import { SearchResult, apiService } from '@/services/api'
 import { useToast } from '@/hooks/use-toast'
+import { useTorrentRequests } from '@/hooks/useTorrentRequests'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -34,6 +36,7 @@ export default function GamesDiscovery() {
   const [searchQuery, setSearchQuery] = useState('')
   const { toast } = useToast()
   const navigate = useNavigate()
+  const { getRequestForGame } = useTorrentRequests()
 
   // Target platforms from the spec (for ROM tab)
   const targetPlatforms = [
@@ -175,6 +178,11 @@ export default function GamesDiscovery() {
     }
   }
 
+  const getStatusBadge = (item: SearchResult) => {
+    const torrentRequest = getRequestForGame(item.title, item.year)
+    return torrentRequest ? <DownloadStatusBadge request={torrentRequest} variant="compact" /> : undefined
+  }
+
   if (isLoading) {
     return (
       <div className="space-y-4 md:space-y-8">
@@ -297,6 +305,7 @@ export default function GamesDiscovery() {
                 onClick={handleGameClick}
                 size="medium"
                 showOverview={false}
+                statusBadge={getStatusBadge(game)}
               />
             ))}
           </div>
@@ -310,6 +319,7 @@ export default function GamesDiscovery() {
           items={popularGames}
           onItemClick={handleGameClick}
           cardSize="medium"
+          getStatusBadge={getStatusBadge}
         />
       )}
 
@@ -325,6 +335,7 @@ export default function GamesDiscovery() {
             items={games}
             onItemClick={handleGameClick}
             cardSize="medium"
+            getStatusBadge={getStatusBadge}
           />
         )
       })}
@@ -341,6 +352,7 @@ export default function GamesDiscovery() {
             items={games}
             onItemClick={handleGameClick}
             cardSize="medium"
+            getStatusBadge={getStatusBadge}
           />
         )
       })}

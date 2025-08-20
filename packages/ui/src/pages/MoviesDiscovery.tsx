@@ -3,8 +3,10 @@ import { useNavigate } from 'react-router-dom'
 import { SearchResultCarousel } from '@/components/SearchResultCarousel'
 import { SearchResultCard } from '@/components/SearchResultCard'
 import { MovieDetailModal } from '@/components/MovieDetailModal'
+import { DownloadStatusBadge } from '@/components/DownloadStatusBadge'
 import { SearchResult, apiService } from '@/services/api'
 import { useToast } from '@/hooks/use-toast'
+import { useTorrentRequests } from '@/hooks/useTorrentRequests'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -26,6 +28,7 @@ export default function MoviesDiscovery() {
   const [searchQuery, setSearchQuery] = useState('')
   const { toast } = useToast()
   const navigate = useNavigate()
+  const { getRequestForItem } = useTorrentRequests()
 
   // Predefined genres based on the spec
   const targetGenres = [
@@ -98,6 +101,11 @@ export default function MoviesDiscovery() {
     if (e.key === 'Enter') {
       handleSearch()
     }
+  }
+
+  const getStatusBadge = (item: SearchResult) => {
+    const torrentRequest = getRequestForItem(item.title, item.year, undefined, undefined, 'MOVIE')
+    return torrentRequest ? <DownloadStatusBadge request={torrentRequest} variant="compact" /> : undefined
   }
 
   if (isLoading) {
@@ -181,6 +189,7 @@ export default function MoviesDiscovery() {
                 onClick={handleMovieClick}
                 size="medium"
                 showOverview={false}
+                statusBadge={getStatusBadge(movie)}
               />
             ))}
           </div>
@@ -194,6 +203,7 @@ export default function MoviesDiscovery() {
           items={popularMovies}
           onItemClick={handleMovieClick}
           cardSize="medium"
+          getStatusBadge={getStatusBadge}
         />
       )}
 
@@ -209,6 +219,7 @@ export default function MoviesDiscovery() {
             items={movies}
             onItemClick={handleMovieClick}
             cardSize="medium"
+            getStatusBadge={getStatusBadge}
           />
         )
       })}

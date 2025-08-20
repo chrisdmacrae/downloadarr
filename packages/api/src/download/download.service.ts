@@ -20,7 +20,7 @@ export class DownloadService {
     const { url, type, destination, name } = createDownloadDto;
 
     const options = {
-      dir: destination || '/downloads',
+      dir: this.translatePathForAria2(destination || '/downloads'),
       out: name,
     };
 
@@ -426,5 +426,24 @@ export class DownloadService {
       seeders: 0,
       indexer: 'Manual',
     };
+  }
+
+  /**
+   * Translate API container paths to Aria2 container paths
+   * API container: /app/downloads -> Aria2 container: /downloads
+   */
+  private translatePathForAria2(apiPath: string): string {
+    // If the path starts with /app/downloads, translate it to /downloads for Aria2
+    if (apiPath.startsWith('/app/downloads')) {
+      return apiPath.replace('/app/downloads', '/downloads');
+    }
+
+    // If it's already a /downloads path, use it as-is
+    if (apiPath.startsWith('/downloads')) {
+      return apiPath;
+    }
+
+    // For any other path, assume it's relative to /downloads in Aria2
+    return `/downloads${apiPath.startsWith('/') ? '' : '/'}${apiPath}`;
   }
 }

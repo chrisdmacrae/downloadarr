@@ -10,15 +10,17 @@ interface SearchResultCarouselProps {
   isLoading?: boolean
   cardSize?: 'small' | 'medium' | 'large'
   showOverview?: boolean
+  getStatusBadge?: (item: SearchResult) => React.ReactNode
 }
 
-export function SearchResultCarousel({ 
-  title, 
-  items, 
-  onItemClick, 
-  isLoading = false, 
+export function SearchResultCarousel({
+  title,
+  items,
+  onItemClick,
+  isLoading = false,
   cardSize = 'medium',
-  showOverview = false 
+  showOverview = false,
+  getStatusBadge
 }: SearchResultCarouselProps) {
   const cardWidths = {
     small: 128,
@@ -64,11 +66,12 @@ export function SearchResultCarousel({
       <Carousel itemWidth={cardWidth} gap={16}>
         {items.map((item) => (
           <CarouselItem key={item.id} width={cardWidth}>
-            <SearchResultCard 
-              item={item} 
+            <SearchResultCard
+              item={item}
               onClick={onItemClick}
               size={cardSize}
               showOverview={showOverview}
+              statusBadge={getStatusBadge?.(item)}
             />
           </CarouselItem>
         ))}

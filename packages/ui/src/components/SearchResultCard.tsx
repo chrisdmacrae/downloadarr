@@ -116,14 +116,8 @@ export function SearchResultCard({
           </p>
         </CardContent>
       )}
-      {(showDownloadButton || (statusBadge && item.type !== 'game')) && (
+      {showDownloadButton && (
         <CardContent className="pt-0 px-3 pb-3">
-          {/* Show request status if exists for non-game items */}
-          {item.type !== 'game' && statusBadge && (
-            <div className="flex items-center justify-center py-2">
-              {statusBadge}
-            </div>
-          )}
           {showDownloadButton && (
             <Button
               size="sm"
