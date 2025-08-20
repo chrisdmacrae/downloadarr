@@ -1,3 +1,6 @@
+# Production Docker Compose configuration using deployed images
+# This file uses pre-built images from GitHub Container Registry instead of building locally
+
 services:
   # Redis for BullMQ job queue
   redis:
@@ -12,7 +15,7 @@ services:
     networks:
       - downloadarr
 
-  # PostgreSQL database (optional, for future use)
+  # PostgreSQL database
   postgres:
     image: postgres:15-alpine
     container_name: downloadarr-postgres
@@ -28,7 +31,7 @@ services:
     networks:
       - downloadarr
 
-  # NestJS API Server
+  # NestJS API Server - Using deployed image
   api:
     image: ghcr.io/chrisdmacrae/downloadarr/api:latest
     container_name: downloadarr-api
@@ -68,7 +71,7 @@ services:
     networks:
       - downloadarr
 
-  # React Frontend
+  # React Frontend - Using deployed image
   frontend:
     image: ghcr.io/chrisdmacrae/downloadarr/frontend:latest
     container_name: downloadarr-frontend
@@ -152,7 +155,6 @@ services:
     ports:
       - "6880:6880"
     command: --port 6880 --ipv6
-
     networks:
       - downloadarr
 

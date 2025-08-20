@@ -4,10 +4,9 @@ All-in-one media and ROM downloading tool with VPN integration, built with NestJ
 
 ## Features
 
-- **Media Discovery**: Search and download movies and TV shows
-- **ROM Management**: Discover and download retro game ROMs
+- **Media Discovery**: Search and download movies and TV shows (for media you own)
+- **ROM Management**: Discover and download retro game ROMs (for games that you own)
 - **VPN Integration**: Secure downloading with OpenVPN support
-- **Queue Management**: BullMQ-powered job processing
 - **Docker Deployment**: Complete containerized setup
 
 ## Quick Start

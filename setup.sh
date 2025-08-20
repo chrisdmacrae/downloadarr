@@ -3,7 +3,7 @@
 # Downloadarr Setup Script
 # This script sets up the Downloadarr project with Docker and all required configuration
 
-set -e  # Exit on any error
+# Note: We'll enable/disable set -e as needed to handle user input properly
 
 # Colors for output
 RED='\033[0;31m'
@@ -38,6 +38,7 @@ print_info() {
 
 # Check if Docker is installed
 check_docker() {
+    set -e  # Enable exit on error for this function
     print_info "Checking Docker installation..."
     
     if ! command -v docker &> /dev/null; then
@@ -60,25 +61,29 @@ check_docker() {
     fi
     
     print_status "Docker and Docker Compose are installed"
+    set +e  # Disable exit on error after this function
 }
 
 # Download configuration files from GitHub
 download_config_files() {
+    set -e  # Enable exit on error for this function
     print_info "Downloading configuration files from GitHub..."
     
-    # Download docker-compose.yml
-    if curl -fsSL "${GITHUB_RAW_URL}/docker-compose.yml" -o docker-compose.yml; then
-        print_status "Downloaded docker-compose.yml"
+
+    
+    # Download docker-compose.prod.yml (production version with deployed images)
+    if curl -fsSL "${GITHUB_RAW_URL}/docker-compose.prod.yml" -o docker-compose.yml; then
+        print_status "Downloaded docker-compose.prod.yml as docker-compose.yml"
     else
-        print_error "Failed to download docker-compose.yml"
+        print_error "Failed to download docker-compose.prod.yml"
         exit 1
     fi
-    
-    # Download docker-compose.vpn.yml
-    if curl -fsSL "${GITHUB_RAW_URL}/docker-compose.vpn.yml" -o docker-compose.vpn.yml; then
-        print_status "Downloaded docker-compose.vpn.yml"
+
+    # Download docker-compose.prod.vpn.yml for VPN support
+    if curl -fsSL "${GITHUB_RAW_URL}/docker-compose.prod.vpn.yml" -o docker-compose.vpn.yml; then
+        print_status "Downloaded docker-compose.prod.vpn.yml as docker-compose.vpn.yml"
     else
-        print_error "Failed to download docker-compose.vpn.yml"
+        print_error "Failed to download docker-compose.prod.vpn.yml"
         exit 1
     fi
     
@@ -89,6 +94,7 @@ download_config_files() {
         print_error "Failed to download .env.example"
         exit 1
     fi
+    set +e  # Disable exit on error after this function
 }
 
 # Prompt for user input with default value
@@ -96,9 +102,17 @@ prompt_with_default() {
     local prompt="$1"
     local default="$2"
     local var_name="$3"
+    local input=""
 
-    echo -n -e "${BLUE}${prompt}${NC} [${default}]: "
-    read -r input || true  # Don't exit on read failure
+    while true; do
+        echo -n -e "${BLUE}${prompt}${NC} [${default}]: "
+        if read -r input; then
+            break
+        else
+            echo
+            print_warning "Please try again..."
+        fi
+    done
 
     if [[ -z "$input" ]]; then
         eval "$var_name=\"$default\""
@@ -131,9 +145,6 @@ update_env_var() {
 # Configure environment variables
 configure_environment() {
     print_info "Configuring environment variables..."
-
-    # Temporarily disable exit on error for user input
-    set +e
     
     # Set PUID and PGID
     print_info "Setting user permissions (PUID/PGID)..."
@@ -190,9 +201,6 @@ configure_environment() {
     prompt_with_default "Enter your IGDB Client Secret" "your-igdb-client-secret" IGDB_CLIENT_SECRET
     update_env_var "IGDB_CLIENT_SECRET" "$IGDB_CLIENT_SECRET"
 
-    # Re-enable exit on error
-    set -e
-
     print_status "Environment variables configured"
 }
 
@@ -203,11 +211,16 @@ configure_vpn() {
     echo "VPN provides secure and anonymous downloading through an encrypted tunnel."
     echo
 
-    # Temporarily disable exit on error for user input
-    set +e
-    echo -n -e "${BLUE}Do you want to enable VPN support?${NC} [y/N]: "
-    read -r enable_vpn || true  # Don't exit on read failure
-    set -e  # Re-enable exit on error
+    local enable_vpn=""
+    while true; do
+        echo -n -e "${BLUE}Do you want to enable VPN support?${NC} [y/N]: "
+        if read -r enable_vpn; then
+            break
+        else
+            echo
+            print_warning "Please try again..."
+        fi
+    done
     
     if [[ "$enable_vpn" =~ ^[Yy]$ ]]; then
         update_env_var "VPN_ENABLED" "true"
@@ -235,8 +248,9 @@ configure_vpn() {
 
 # Start the application
 start_application() {
+    set -e  # Enable exit on error for this function
     local use_vpn="$1"
-    
+
     print_info "Starting Downloadarr..."
     
     if [[ "$use_vpn" == "true" ]]; then
@@ -248,6 +262,7 @@ start_application() {
     fi
     
     print_status "Downloadarr started successfully!"
+    set +e  # Disable exit on error after this function
 }
 
 # Display final information
