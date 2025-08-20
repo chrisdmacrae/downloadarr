@@ -14,8 +14,8 @@ NC='\033[0m' # No Color
 
 # GitHub repository details
 GITHUB_REPO="chrisdmacrae/downloadarr"
-GITHUB_RAW_URL="https://raw.githubusercontent.com/${GITHUB_REPO}/main"
-
+GITHUB_RAW_URL="https://raw.githubusercontent.com/${GITHUB_REPO}/refs/heads/main"
+    
 echo -e "${BLUE}🚀 Downloadarr Setup Script${NC}"
 echo "=================================="
 

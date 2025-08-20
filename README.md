@@ -22,12 +22,12 @@ All-in-one media and ROM downloading tool with VPN integration, built with NestJ
 
 **Option 1: One-line install (recommended)**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/chrisdmacrae/downloadarr/main/setup.sh | bash
+curl -fsSL https://raw.githubusercontent.com/chrisdmacrae/downloadarr/refs/heads/main/setup.sh | bash
 ```
 
 **Option 2: Download and run manually**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/chrisdmacrae/downloadarr/main/setup.sh -o setup.sh
+curl -fsSL https://raw.githubusercontent.com/chrisdmacrae/downloadarr/refs/heads/main/setup.sh -o setup.sh
 chmod +x setup.sh
 ./setup.sh
 ```
