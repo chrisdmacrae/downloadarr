@@ -208,7 +208,7 @@ export function MovieDetailModal({ movie, open, onOpenChange }: MovieDetailModal
                     if (existingRequest) {
                       return (
                         <div className="space-y-3">
-                          <div className="flex items-center justify-center">
+                          <div className="flex mb-4">
                             <DownloadStatusBadge request={existingRequest} />
                           </div>
                           <div className="flex flex-col sm:flex-row gap-2">
@@ -285,11 +285,12 @@ export function MovieDetailModal({ movie, open, onOpenChange }: MovieDetailModal
 
             // First, create a torrent request if one doesn't exist
             if (!existingRequest) {
+              const movieDetails = movieDetail as MovieDetails
               const requestDto = {
                 title: movie.title,
                 year: movie.year,
-                imdbId: movie.imdbId,
-                tmdbId: movie.tmdbId,
+                imdbId: movieDetails?.imdbId || undefined,
+                tmdbId: movieDetails?.tmdbId || undefined,
                 preferredQualities: ['HD_1080P', 'UHD_4K'],
                 preferredFormats: ['X264', 'X265'],
                 minSeeders: 5,
@@ -304,7 +305,9 @@ export function MovieDetailModal({ movie, open, onOpenChange }: MovieDetailModal
               } else {
                 response = await apiService.requestMovieDownload(requestDto)
               }
-              requestId = response.data.id
+              if (response.data) {
+                requestId = response.data.id
+              }
 
               // Refresh requests to get the new request
               refreshRequests()

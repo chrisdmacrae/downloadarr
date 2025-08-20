@@ -9,6 +9,7 @@ import { DiscoveryModule } from './discovery/discovery.module';
 import { TorrentsModule } from './torrents/torrents.module';
 import { GameConfigModule } from './config/config.module';
 import { JackettModule } from './jackett/jackett.module';
+import { OrganizationModule } from './organization/organization.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { JackettModule } from './jackett/jackett.module';
     TorrentsModule,
     GameConfigModule,
     JackettModule,
+    OrganizationModule,
   ],
   controllers: [AppController],
   providers: [AppService],

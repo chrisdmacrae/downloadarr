@@ -223,7 +223,7 @@ export function GameDetailModal({ game, open, onOpenChange }: GameDetailModalPro
                   {(() => {
                     if (existingRequest) {
                       return (
-                        <div className="space-y-2">
+                        <div className="space-y-2 mb-4">
                           <DownloadStatusBadge
                             request={existingRequest}
                             className="w-full justify-center"
@@ -286,12 +286,13 @@ export function GameDetailModal({ game, open, onOpenChange }: GameDetailModalPro
 
             // First, create a torrent request if one doesn't exist
             if (!existingRequest) {
+              const gameDetails = gameDetail as GameDetails
               const requestDto = {
                 title: game.title,
                 year: game.year,
                 igdbId: parseInt(game.id),
-                platform: game.platform,
-                genre: game.genre,
+                platform: gameDetails?.platforms?.[0] || undefined,
+                genre: gameDetails?.genre?.[0] || undefined,
                 preferredQualities: ['HD_1080P'],
                 preferredFormats: ['X265'],
                 minSeeders: 1,
@@ -300,7 +301,9 @@ export function GameDetailModal({ game, open, onOpenChange }: GameDetailModalPro
               }
 
               const response = await apiService.requestGameDownload(requestDto)
-              requestId = response.data.id
+              if (response.data) {
+                requestId = response.data.id
+              }
 
               // Refresh requests to get the new request
               refreshRequests()

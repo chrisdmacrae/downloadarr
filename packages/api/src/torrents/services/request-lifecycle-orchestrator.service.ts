@@ -5,6 +5,7 @@ import { RequestStateMachine, StateTransitionContext, StateAction } from '../sta
 import { TvShowStateMachine, TvShowStateContext } from '../state-machine/tv-show-state-machine';
 import { DownloadAggregationService } from './download-aggregation.service';
 import { Aria2Service } from '../../download/aria2.service';
+import { DownloadMetadataService } from '../../download/download-metadata.service';
 
 export interface TransitionRequestDto {
   requestId: string;
@@ -502,8 +503,77 @@ export class RequestLifecycleOrchestrator {
   }
 
   private async cancelDownloadJobs(requestId: string): Promise<void> {
-    // Implement download job cancellation
-    this.logger.debug(`Cancelling download jobs for request ${requestId}`);
+    this.logger.log(`Cancelling download jobs for request ${requestId}`);
+
+    try {
+      // Get the request with its download information
+      const request = await this.prisma.requestedTorrent.findUnique({
+        where: { id: requestId },
+        include: {
+          torrentDownloads: true,
+        },
+      });
+
+      if (!request) {
+        this.logger.warn(`Request ${requestId} not found when trying to cancel download jobs`);
+        return;
+      }
+
+      // Cancel download metadata if linked by downloadJobId
+      if (request.downloadJobId) {
+        try {
+          // Import the download metadata service dynamically to avoid circular dependency
+          const { DownloadMetadataService } = await import('../../download/download-metadata.service');
+          const downloadMetadataService = new DownloadMetadataService(this.prisma, this.aria2Service);
+
+          await downloadMetadataService.deleteDownloadMetadata(request.downloadJobId);
+          this.logger.log(`Deleted download metadata ${request.downloadJobId} for request ${requestId}`);
+        } catch (error) {
+          this.logger.warn(`Failed to delete download metadata ${request.downloadJobId}: ${error.message}`);
+        }
+      }
+
+      // Cancel any TorrentDownload records and their associated download metadata
+      for (const torrentDownload of request.torrentDownloads) {
+        if (torrentDownload.downloadJobId) {
+          try {
+            // Import the download metadata service dynamically to avoid circular dependency
+            const { DownloadMetadataService } = await import('../../download/download-metadata.service');
+            const downloadMetadataService = new DownloadMetadataService(this.prisma, this.aria2Service);
+
+            await downloadMetadataService.deleteDownloadMetadata(torrentDownload.downloadJobId);
+            this.logger.log(`Deleted download metadata ${torrentDownload.downloadJobId} for torrent download ${torrentDownload.id}`);
+          } catch (error) {
+            this.logger.warn(`Failed to delete download metadata ${torrentDownload.downloadJobId}: ${error.message}`);
+          }
+        }
+
+        // Also try to cancel by aria2Gid if no downloadJobId
+        if (!torrentDownload.downloadJobId && torrentDownload.aria2Gid) {
+          try {
+            await this.aria2Service.forceRemove(torrentDownload.aria2Gid);
+            this.logger.log(`Cancelled aria2 download ${torrentDownload.aria2Gid} for torrent download ${torrentDownload.id}`);
+          } catch (error) {
+            this.logger.warn(`Failed to cancel aria2 download ${torrentDownload.aria2Gid}: ${error.message}`);
+          }
+        }
+      }
+
+      // Also cancel by aria2Gid from the main request if no downloadJobId
+      if (!request.downloadJobId && request.aria2Gid) {
+        try {
+          await this.aria2Service.forceRemove(request.aria2Gid);
+          this.logger.log(`Cancelled aria2 download ${request.aria2Gid} for request ${requestId}`);
+        } catch (error) {
+          this.logger.warn(`Failed to cancel aria2 download ${request.aria2Gid}: ${error.message}`);
+        }
+      }
+
+      this.logger.log(`Successfully cancelled download jobs for request ${requestId}`);
+    } catch (error) {
+      this.logger.error(`Error cancelling download jobs for request ${requestId}:`, error);
+      // Don't throw - we want the request deletion to continue even if cleanup fails
+    }
   }
 
   private async handleTvShowStateUpdate(request: RequestedTorrent, newStatus: RequestStatus): Promise<void> {

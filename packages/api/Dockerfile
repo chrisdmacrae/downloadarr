@@ -47,17 +47,29 @@ COPY --from=builder /app/packages/api/node_modules ./packages/api/node_modules
 COPY --from=builder /app/packages/api/generated ./packages/api/generated
 COPY --from=builder /app/packages/api/prisma ./packages/api/prisma
 
+# Copy startup script
+COPY packages/api/scripts/start.sh /start.sh
+RUN chmod +x /start.sh
+
 # Create directories
 RUN mkdir -p /downloads /app/vpn
 
-# Set permissions and Docker access
-RUN chown -R node:node /app /downloads
+# Create entrypoint script to handle PUID/PGID
+RUN echo '#!/bin/sh' > /entrypoint.sh && \
+    echo 'PUID=${PUID:-1000}' >> /entrypoint.sh && \
+    echo 'PGID=${PGID:-1000}' >> /entrypoint.sh && \
+    echo 'groupmod -o -g "$PGID" node' >> /entrypoint.sh && \
+    echo 'usermod -o -u "$PUID" node' >> /entrypoint.sh && \
+    echo 'chown -R node:node /app /downloads' >> /entrypoint.sh && \
+    echo 'exec su-exec node /start.sh "$@"' >> /entrypoint.sh && \
+    chmod +x /entrypoint.sh
+
+# Install su-exec for user switching
+RUN apk add --no-cache su-exec
 
 # Add node user to docker group for Docker socket access
 RUN addgroup -g 999 docker || true
 RUN adduser node docker || true
-
-USER node
 
 WORKDIR /app/packages/api
 
@@ -67,4 +79,5 @@ EXPOSE 3001
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD curl -f http://localhost:3001/ || exit 1
 
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["node", "dist/main.js"]

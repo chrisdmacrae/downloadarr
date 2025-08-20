@@ -57,6 +57,7 @@ model RequestedTorrent {
   // New relationships for TV show management
   tvShowSeasons      TvShowSeason[]
   torrentDownloads   TorrentDownload[]
+  organizedFiles     OrganizedFile[]
 
   @@map("requested_torrents")
 }
@@ -257,4 +258,90 @@ enum TorrentDownloadStatus {
   COMPLETED
   FAILED
   CANCELLED
+}
+
+model OrganizationRule {
+  id                String      @id @default(cuid())
+  contentType       ContentType
+  isDefault         Boolean     @default(false)
+  isActive          Boolean     @default(true)
+
+  // Folder naming rules
+  folderNamePattern String      // e.g., "{title} ({year})"
+
+  // File naming rules
+  fileNamePattern   String      // e.g., "{title} ({year}) - {edition} - {quality} - {format}"
+
+  // Season folder rules (TV shows only)
+  seasonFolderPattern String?   // e.g., "Season {seasonNumber}"
+
+  // Path configuration
+  basePath          String?     // Override for LIBRARY_PATH
+
+  // Platform-specific rules (for games)
+  platform          String?     // Platform name for game-specific rules
+
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  @@unique([contentType, isDefault])
+  @@map("organization_rules")
+}
+
+model OrganizationSettings {
+  id                    String   @id @default(cuid())
+
+  // Base library paths
+  libraryPath           String   @default("/library")
+  moviesPath            String?  // Override for movies
+  tvShowsPath           String?  // Override for TV shows
+  gamesPath             String?  // Override for games
+
+  // Organization behavior
+  organizeOnComplete    Boolean  @default(true)
+  replaceExistingFiles  Boolean  @default(true)
+  extractArchives       Boolean  @default(true)
+  deleteAfterExtraction Boolean  @default(true)
+
+  // Reverse indexing
+  enableReverseIndexing Boolean  @default(true)
+  reverseIndexingCron   String   @default("0 * * * *") // Every hour
+
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@map("organization_settings")
+}
+
+model OrganizedFile {
+  id                String      @id @default(cuid())
+
+  // File information
+  originalPath      String
+  organizedPath     String
+  fileName          String
+  fileSize          BigInt?
+
+  // Content metadata
+  contentType       ContentType
+  title             String
+  year              Int?
+  season            Int?        // For TV shows
+  episode           Int?        // For TV shows
+  platform          String?     // For games
+
+  // Quality information
+  quality           String?
+  format            String?
+  edition           String?
+
+  // Organization tracking
+  organizedAt       DateTime    @default(now())
+  isReverseIndexed  Boolean     @default(false) // True if found via reverse indexing
+
+  // Relationships
+  requestedTorrentId String?
+  requestedTorrent   RequestedTorrent? @relation(fields: [requestedTorrentId], references: [id], onDelete: SetNull)
+
+  @@map("organized_files")
 }

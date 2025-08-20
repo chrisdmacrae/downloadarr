@@ -24,6 +24,7 @@ import { TorrentRequestsController } from './controllers/torrent-requests.contro
 // Import other modules
 import { DiscoveryModule } from '../discovery/discovery.module';
 import { DownloadModule } from '../download/download.module';
+import { OrganizationModule } from '../organization/organization.module';
 import { DownloadMetadataService } from '../download/download-metadata.service';
 
 @Module({
@@ -31,6 +32,7 @@ import { DownloadMetadataService } from '../download/download-metadata.service';
     ScheduleModule.forRoot(),
     DiscoveryModule,
     forwardRef(() => DownloadModule),
+    OrganizationModule,
   ],
   providers: [
     // State Machine

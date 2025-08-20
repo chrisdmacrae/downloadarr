@@ -5,7 +5,9 @@ import { RequestLifecycleOrchestrator } from './request-lifecycle-orchestrator.s
 import { DownloadAggregationService } from './download-aggregation.service';
 import { Aria2Service } from '../../download/aria2.service';
 import { PrismaService } from '../../database/prisma.service';
-import { RequestStatus } from '../../../generated/prisma';
+import { OrganizationRulesService } from '../../organization/services/organization-rules.service';
+import { FileOrganizationService } from '../../organization/services/file-organization.service';
+import { RequestStatus, ContentType } from '../../../generated/prisma';
 
 @Injectable()
 export class DownloadProgressTrackerService {
@@ -17,6 +19,8 @@ export class DownloadProgressTrackerService {
     private readonly downloadAggregationService: DownloadAggregationService,
     private readonly aria2Service: Aria2Service,
     private readonly prisma: PrismaService,
+    private readonly organizationRulesService: OrganizationRulesService,
+    private readonly fileOrganizationService: FileOrganizationService,
   ) {}
 
   @Cron(CronExpression.EVERY_30_SECONDS)
@@ -132,6 +136,9 @@ export class DownloadProgressTrackerService {
         }
       } else {
         // Handle simple request completion (movies, games, or legacy downloads)
+        // First, try to organize the downloaded files
+        await this.organizeDownloadedFiles(requestId, aria2Gid);
+
         await this.orchestrator.markAsCompleted(requestId);
         this.logger.log(`Download completed for request ${requestId}`);
       }
@@ -182,6 +189,11 @@ export class DownloadProgressTrackerService {
       });
 
       this.logger.log(`TorrentDownload completed: ${torrentDownload.torrentTitle}`);
+
+      // Organize downloaded files if aria2Gid is available
+      if (torrentDownload.aria2Gid) {
+        await this.organizeDownloadedFiles(torrentDownload.requestedTorrentId, torrentDownload.aria2Gid);
+      }
 
       // Update associated TV show status via orchestrator
       if (torrentDownload.tvShowSeasonId && !torrentDownload.tvShowEpisodeId) {
@@ -407,5 +419,246 @@ export class DownloadProgressTrackerService {
     } catch (error) {
       this.logger.error(`Error updating main request status for ${requestId}:`, error);
     }
+  }
+
+  /**
+   * Organize downloaded files based on organization rules
+   */
+  private async organizeDownloadedFiles(requestId: string, aria2Gid: string): Promise<void> {
+    try {
+      this.logger.log(`Starting organization for request ${requestId} with aria2Gid ${aria2Gid}`);
+
+      // Check if organization is enabled
+      const settings = await this.organizationRulesService.getSettings();
+      this.logger.log(`Organization settings - organizeOnComplete: ${settings.organizeOnComplete}`);
+
+      if (!settings.organizeOnComplete) {
+        this.logger.warn(`Organization on completion is disabled for request ${requestId}`);
+        return;
+      }
+
+      // Get the request details
+      const request = await this.prisma.requestedTorrent.findUnique({
+        where: { id: requestId },
+      });
+
+      if (!request) {
+        this.logger.warn(`Request ${requestId} not found for organization`);
+        return;
+      }
+
+      this.logger.log(`Found request: ${request.title} (${request.contentType})`);
+
+      // Check if organization rules exist for this content type
+      try {
+        const rule = await this.organizationRulesService.getRuleForContentType(request.contentType as ContentType, request.platform);
+        this.logger.log(`Found organization rule for ${request.contentType}: ${rule.folderNamePattern} / ${rule.fileNamePattern}`);
+      } catch (error) {
+        this.logger.error(`No organization rule found for ${request.contentType}:`, error);
+        return;
+      }
+
+      // Get download status and files from Aria2
+      const downloadStatus = await this.aria2Service.getStatus(aria2Gid);
+      this.logger.log(`Download status for ${aria2Gid}: ${downloadStatus.status}`);
+
+      // Collect all files to organize (from main download and child downloads)
+      const allFiles: Array<{ path: string; length: string; completedLength: string }> = [];
+
+      // Add files from main download (if any)
+      if (downloadStatus.files && downloadStatus.files.length > 0) {
+        this.logger.log(`Found ${downloadStatus.files.length} files in main download`);
+        allFiles.push(...downloadStatus.files);
+      }
+
+      // For torrents, check child downloads for actual content files
+      if (downloadStatus.followedBy && downloadStatus.followedBy.length > 0) {
+        this.logger.log(`Checking ${downloadStatus.followedBy.length} child downloads for files to organize`);
+
+        for (const childGid of downloadStatus.followedBy) {
+          try {
+            const childStatus = await this.aria2Service.getStatus(childGid);
+            if (childStatus.files && childStatus.files.length > 0) {
+              this.logger.log(`Found ${childStatus.files.length} files in child download ${childGid}`);
+              allFiles.push(...childStatus.files);
+            }
+          } catch (childError) {
+            this.logger.debug(`Error getting child download files for ${childGid}:`, childError);
+          }
+        }
+      }
+
+      if (allFiles.length === 0) {
+        this.logger.warn(`No files found for download ${aria2Gid} (including child downloads)`);
+        return;
+      }
+
+      this.logger.log(`Found ${allFiles.length} total files for request: ${request.title}`);
+
+      // Process each file
+      let organizedCount = 0;
+      let skippedCount = 0;
+
+      for (const file of allFiles) {
+        if (!file.path) {
+          this.logger.debug(`Skipping file with no path`);
+          continue;
+        }
+
+        this.logger.log(`Processing file: ${file.path}`);
+
+        // Skip metadata files - they should not be organized
+        if (this.isMetadataFile(file.path)) {
+          this.logger.log(`Skipping metadata file: ${file.path}`);
+          skippedCount++;
+          continue;
+        }
+
+        try {
+          // Convert Aria2 path to API container path
+          // Aria2 reports paths as /downloads/... but in API container they're at /app/downloads/...
+          const actualFilePath = this.convertAria2PathToContainerPath(file.path);
+          this.logger.log(`Converted path: ${file.path} -> ${actualFilePath}`);
+
+          // Create organization context
+          const context = {
+            contentType: request.contentType as ContentType,
+            title: request.title,
+            year: request.year || undefined,
+            season: request.season || undefined,
+            episode: request.episode || undefined,
+            platform: request.platform || undefined,
+            quality: this.extractQualityFromPath(file.path),
+            format: this.extractFormatFromPath(file.path),
+            edition: this.extractEditionFromPath(file.path),
+            originalPath: actualFilePath,
+            fileName: file.path.split('/').pop() || 'unknown',
+          };
+
+          this.logger.log(`Organization context: ${JSON.stringify(context, null, 2)}`);
+
+          // Organize the file
+          const result = await this.fileOrganizationService.organizeFile(context, requestId);
+
+          if (result.success) {
+            this.logger.log(`Successfully organized: ${actualFilePath} -> ${result.organizedPath}`);
+            organizedCount++;
+          } else {
+            this.logger.warn(`Failed to organize ${actualFilePath}: ${result.error}`);
+          }
+
+        } catch (error) {
+          this.logger.error(`Error organizing file ${file.path}:`, error);
+        }
+      }
+
+      this.logger.log(`Organization complete for request ${requestId}: ${organizedCount} organized, ${skippedCount} skipped`);
+
+    } catch (error) {
+      this.logger.error(`Error organizing files for request ${requestId}:`, error);
+    }
+  }
+
+  /**
+   * Check if a file is a metadata file that should not be organized
+   */
+  private isMetadataFile(filePath: string): boolean {
+    const fileName = filePath.split('/').pop() || '';
+    const fileNameLower = fileName.toLowerCase();
+
+    // Check for metadata file patterns
+    const isMetadata = (
+      // Aria2 metadata files
+      fileName.startsWith('[METADATA]') ||
+      // Common metadata/info files (be more specific with .txt files)
+      fileNameLower.endsWith('.nfo') ||
+      fileNameLower.endsWith('.torrent') ||
+      // Only exclude specific .txt files, not all
+      fileNameLower.includes('readme') ||
+      fileNameLower.includes('info.txt') ||
+      fileNameLower.includes('description.txt') ||
+      fileNameLower.includes('instructions.txt') ||
+      // Subtitle files (usually organized separately)
+      fileNameLower.endsWith('.srt') ||
+      fileNameLower.endsWith('.sub') ||
+      fileNameLower.endsWith('.idx') ||
+      fileNameLower.endsWith('.ass') ||
+      fileNameLower.endsWith('.ssa') ||
+      fileNameLower.endsWith('.vtt') ||
+      // Sample files
+      fileNameLower.includes('sample') ||
+      // Other metadata
+      fileNameLower.endsWith('.sfv') ||
+      fileNameLower.endsWith('.md5') ||
+      fileNameLower.endsWith('.sha') ||
+      fileNameLower.endsWith('.par2')
+    );
+
+    if (isMetadata) {
+      this.logger.debug(`File ${fileName} identified as metadata file`);
+    }
+
+    return isMetadata;
+  }
+
+  /**
+   * Convert Aria2 path to API container path
+   * Aria2 reports paths as /downloads/... but in API container they're at /app/downloads/...
+   */
+  private convertAria2PathToContainerPath(aria2Path: string): string {
+    // If the path starts with /downloads, replace it with /app/downloads
+    if (aria2Path.startsWith('/downloads')) {
+      return aria2Path.replace('/downloads', '/app/downloads');
+    }
+
+    // If it's already an absolute path starting with /app/downloads, return as-is
+    if (aria2Path.startsWith('/app/downloads')) {
+      return aria2Path;
+    }
+
+    // If it's a relative path, assume it's relative to /app/downloads
+    return `/app/downloads/${aria2Path}`;
+  }
+
+  /**
+   * Extract quality information from file path
+   */
+  private extractQualityFromPath(filePath: string): string | undefined {
+    const fileName = filePath.toLowerCase();
+
+    if (fileName.includes('2160p') || fileName.includes('4k')) return '2160p';
+    if (fileName.includes('1080p')) return '1080p';
+    if (fileName.includes('720p')) return '720p';
+    if (fileName.includes('480p')) return '480p';
+
+    return undefined;
+  }
+
+  /**
+   * Extract format information from file path
+   */
+  private extractFormatFromPath(filePath: string): string | undefined {
+    const fileName = filePath.toLowerCase();
+
+    if (fileName.includes('x265') || fileName.includes('hevc')) return 'x265';
+    if (fileName.includes('x264')) return 'x264';
+    if (fileName.includes('av1')) return 'AV1';
+
+    return undefined;
+  }
+
+  /**
+   * Extract edition information from file path
+   */
+  private extractEditionFromPath(filePath: string): string | undefined {
+    const fileName = filePath.toLowerCase();
+
+    if (fileName.includes('bluray') || fileName.includes('brrip')) return 'BluRay';
+    if (fileName.includes('webrip')) return 'WEBRip';
+    if (fileName.includes('webdl') || fileName.includes('web-dl')) return 'WEB-DL';
+    if (fileName.includes('hdtv')) return 'HDTV';
+    if (fileName.includes('dvdrip')) return 'DVDRip';
+
+    return undefined;
   }
 }

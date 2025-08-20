@@ -365,4 +365,79 @@ export class TvShowsController {
       );
     }
   }
+
+  @Get('tmdb/:tmdbId/poster')
+  @ApiOperation({
+    summary: 'Get TV show poster URL',
+    description: 'Get the poster URL for a TV show by TMDB ID',
+  })
+  @ApiParam({
+    name: 'tmdbId',
+    description: 'TMDB ID of the TV show',
+    example: '1399',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Poster URL retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+        data: { type: 'string', example: 'https://image.tmdb.org/t/p/w500/...' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid TMDB ID',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'TV show not found',
+  })
+  @ApiResponse({
+    status: 503,
+    description: 'External API service unavailable',
+  })
+  async getTvShowPosterUrl(@Param('tmdbId') tmdbId: string): Promise<{ success: boolean; data?: string; error?: string }> {
+    try {
+      const id = parseInt(tmdbId);
+      if (isNaN(id) || id <= 0) {
+        throw new HttpException(
+          'Invalid TMDB ID. Must be a positive number',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      this.logger.log(`Getting poster URL for TV show TMDB ID: ${id}`);
+
+      const result = await this.tmdbService.getTvShowDetails(id.toString());
+
+      if (!result.success) {
+        const statusCode = result.error?.includes('not found') ? HttpStatus.NOT_FOUND :
+                          result.statusCode || HttpStatus.SERVICE_UNAVAILABLE;
+
+        throw new HttpException(
+          result.error || 'Failed to get TV show details',
+          statusCode,
+        );
+      }
+
+      return {
+        success: true,
+        data: result.data?.poster,
+      };
+    } catch (error) {
+      this.logger.error(`Error getting TV show poster URL: ${error.message}`, error.stack);
+
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      throw new HttpException(
+        'Internal server error while getting TV show poster URL',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
 }

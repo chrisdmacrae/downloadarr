@@ -84,6 +84,8 @@ export function SearchResultCard({
             }}
           />
         ) : null}
+        {/* Black fade overlay at the top */}
+        <div className="absolute top-0 left-0 right-0 h-16 bg-gradient-to-b from-black/60 via-black/40 to-transparent pointer-events-none" />
         <div className={`absolute inset-0 flex items-center justify-center text-muted-foreground ${item.poster ? 'hidden' : ''}`}>
           <div className="text-center p-2">
             {getPlaceholderIcon()}

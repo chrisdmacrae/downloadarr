@@ -996,16 +996,19 @@ export class TorrentRequestsController {
 
       // Follow proper state machine transitions based on current status
       let updatedRequest = request;
+      this.logger.log(`Initial request status: ${request.status}`);
 
       // If the request is cancelled, expired, or failed, first transition to searching
       if (request.status === 'CANCELLED' || request.status === 'EXPIRED' || request.status === 'FAILED') {
         this.logger.log(`Reactivating ${request.status.toLowerCase()} request ${id} for manual download`);
         updatedRequest = await this.orchestrator.startSearch(id);
+        this.logger.log(`After startSearch, status is: ${updatedRequest.status}`);
       }
 
-      // If not already found, mark as found
-      if (updatedRequest.status !== 'FOUND') {
-        this.logger.log(`Marking request ${id} as found with torrent info`);
+      // If not already found, mark as found (but only if we're not already in FOUND status)
+      this.logger.log(`Checking if should mark as found. Current status: ${updatedRequest.status}`);
+      if (updatedRequest.status !== 'FOUND' && updatedRequest.status !== 'DOWNLOADING' && updatedRequest.status !== 'COMPLETED') {
+        this.logger.log(`Marking request ${id} as found with torrent info (current status: ${updatedRequest.status})`);
         const torrentInfo = {
           title: body.torrentTitle || 'Manual Download',
           link: '',
@@ -1015,7 +1018,28 @@ export class TorrentRequestsController {
           indexer: 'Manual',
         };
         updatedRequest = await this.orchestrator.markAsFound(id, torrentInfo);
+        this.logger.log(`After markAsFound, status is: ${updatedRequest.status}`);
+      } else {
+        this.logger.log(`Request ${id} is already in ${updatedRequest.status} status, skipping markAsFound`);
       }
+
+      // Create a torrent download record for proper completion tracking
+      await this.prisma.torrentDownload.create({
+        data: {
+          requestedTorrentId: id,
+          tvShowSeasonId: null,
+          tvShowEpisodeId: null,
+          torrentTitle: body.torrentTitle || 'Manual Download',
+          torrentLink: '',
+          magnetUri: undefined,
+          torrentSize: 'Unknown',
+          seeders: 0,
+          indexer: 'Manual',
+          downloadJobId: body.downloadJobId,
+          aria2Gid: body.aria2Gid,
+          status: 'DOWNLOADING',
+        },
+      });
 
       // Now start the download
       this.logger.log(`Starting download for request ${id}`);

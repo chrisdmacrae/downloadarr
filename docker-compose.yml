@@ -47,7 +47,6 @@ services:
       ARIA2_HOST: aria2
       ARIA2_PORT: 6800
       ARIA2_SECRET: ${ARIA2_RPC_SECRET:-downloadarr}
-      DOWNLOAD_PATH: /downloads
       JACKETT_URL: http://jackett:9117
       JACKETT_API_KEY: ${JACKETT_API_KEY}
       FLARESOLVERR_URL: http://flaresolverr:8191
@@ -55,8 +54,13 @@ services:
       TMDB_API_KEY: ${TMDB_API_KEY}
       IGDB_CLIENT_ID: ${IGDB_CLIENT_ID}
       IGDB_ACCESS_TOKEN: ${IGDB_ACCESS_TOKEN}
+      DOWNLOAD_PATH: /app/downloads
+      LIBRARY_PATH: /app/library
+      PUID: 1000
+      PGID: 1000
     volumes:
-      - downloads:/downloads
+      - ${DOWNLOAD_PATH}:/app/downloads
+      - ${LIBRARY_PATH}:/app/library
       - ./config:/app/config:ro
     depends_on:
       - redis
@@ -103,8 +107,8 @@ services:
     container_name: downloadarr-jackett
     restart: unless-stopped
     environment:
-      PUID: 1000
-      PGID: 1000
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
       TZ: ${TZ:-UTC}
       AUTO_UPDATE: true
     ports:
@@ -112,7 +116,7 @@ services:
     volumes:
       - jackett_config:/config
       - jackett_config:/jackett-config
-      - downloads:/downloads
+      - ./downloads:/downloads
     depends_on:
       - flaresolverr
     networks:
@@ -124,8 +128,8 @@ services:
     container_name: downloadarr-aria2
     restart: unless-stopped
     environment:
-      PUID: 1000
-      PGID: 1000
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
       UMASK_SET: 022
       RPC_SECRET: ${ARIA2_RPC_SECRET:-downloadarr}
       RPC_PORT: 6800
@@ -140,7 +144,7 @@ services:
       - "6888:6888"  # BT listen port
     volumes:
       - aria2_config:/config
-      - downloads:/downloads
+      - ${DOWNLOAD_PATH}:/downloads
     networks:
       - downloadarr
 
@@ -161,7 +165,6 @@ volumes:
   postgres_data:
   jackett_config:
   aria2_config:
-  downloads:
 
 networks:
   downloadarr:

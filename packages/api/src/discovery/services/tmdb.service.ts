@@ -4,7 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { AxiosRequestConfig, AxiosResponse } from 'axios';
 import { firstValueFrom, timeout, retry, catchError } from 'rxjs';
 import { BaseExternalApiService } from './base-external-api.service';
-import { ExternalApiConfig, ExternalApiResponse, TvShowDetails, SearchResult } from '../interfaces/external-api.interface';
+import { ExternalApiConfig, ExternalApiResponse, TvShowDetails, SearchResult, MovieDetails } from '../interfaces/external-api.interface';
 
 interface TmdbSearchResponse {
   page: number;
@@ -82,6 +82,28 @@ interface TmdbTvShowDetails {
   external_ids: {
     imdb_id: string | null;
     tvdb_id: number | null;
+  };
+}
+
+interface TmdbMovieDetails {
+  id: number;
+  title: string;
+  original_title: string;
+  overview: string;
+  poster_path: string | null;
+  backdrop_path: string | null;
+  release_date: string;
+  genres: Array<{ id: number; name: string }>;
+  runtime: number;
+  vote_average: number;
+  vote_count: number;
+  adult: boolean;
+  external_ids: {
+    imdb_id: string | null;
+  };
+  credits?: {
+    cast: Array<{ id: number; name: string; character: string }>;
+    crew: Array<{ id: number; name: string; job: string }>;
   };
 }
 
@@ -470,6 +492,59 @@ export class TmdbService extends BaseExternalApiService {
       };
     } catch (error) {
       this.logger.error(`Error getting TV shows by genre: ${error.message}`, error.stack);
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  }
+
+  async getMovieDetails(tmdbId: string): Promise<ExternalApiResponse<MovieDetails>> {
+    try {
+      const id = parseInt(tmdbId);
+      if (isNaN(id)) {
+        return {
+          success: false,
+          error: 'Invalid TMDB ID',
+        };
+      }
+
+      const params = {
+        append_to_response: 'external_ids',
+      };
+
+      const response = await this.makeRequest<TmdbMovieDetails>(`/movie/${id}`, params);
+
+      if (!response.success || !response.data) {
+        return {
+          success: false,
+          error: response.error,
+        };
+      }
+
+      const movieDetails: MovieDetails = {
+        id: response.data.id.toString(),
+        title: response.data.title,
+        year: response.data.release_date ? new Date(response.data.release_date).getFullYear() : undefined,
+        poster: response.data.poster_path ? `${this.imageBaseUrl}${response.data.poster_path}` : undefined,
+        overview: response.data.overview || undefined,
+        type: 'movie',
+        tmdbId: response.data.id,
+        imdbId: response.data.external_ids?.imdb_id || undefined,
+        runtime: response.data.runtime,
+        genre: response.data.genres?.map(g => g.name) || undefined,
+        director: response.data.credits?.crew?.find(c => c.job === 'Director')?.name || undefined,
+        actors: response.data.credits?.cast?.slice(0, 5).map(a => a.name).join(', ') || undefined,
+        rating: response.data.vote_average,
+        released: response.data.release_date,
+      };
+
+      return {
+        success: true,
+        data: movieDetails,
+      };
+    } catch (error) {
+      this.logger.error(`Error getting movie details: ${error.message}`, error.stack);
       return {
         success: false,
         error: error.message,

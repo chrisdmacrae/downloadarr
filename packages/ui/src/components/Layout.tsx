@@ -10,7 +10,8 @@ import {
   Film,
   Tv,
   Gamepad2,
-  List
+  List,
+  FolderTree
 } from 'lucide-react'
 
 const navigation = [
@@ -28,6 +29,7 @@ const findNavigation = [
 
 const settingsNavigation = [
   { name: 'Settings', href: '/settings', icon: Settings },
+  { name: 'Organization', href: '/organization', icon: FolderTree },
 ]
 
 interface LayoutProps {

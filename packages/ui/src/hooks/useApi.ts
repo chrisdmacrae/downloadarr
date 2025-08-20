@@ -9,6 +9,11 @@ export const queryKeys = {
   downloads: ['downloads'] as const,
   activeDownloads: ['downloads', 'active'] as const,
   downloadStatus: (id: string) => ['downloads', id, 'status'] as const,
+  organizationSettings: ['organization', 'settings'] as const,
+  organizationRules: ['organization', 'rules'] as const,
+  reverseIndexingStatus: ['organization', 'reverse-index', 'status'] as const,
+  gamePlatforms: ['game-platforms'] as const,
+  gamePlatformOptions: ['game-platforms', 'options'] as const,
 };
 
 // Hook for queue statistics
@@ -129,5 +134,104 @@ export const useCancelDownload = () => {
       queryClient.refetchQueries({ queryKey: queryKeys.activeDownloads });
       queryClient.invalidateQueries({ queryKey: queryKeys.downloadStatus(downloadId) });
     },
+  });
+};
+
+// Organization hooks
+export const useOrganizationSettings = () => {
+  return useQuery({
+    queryKey: queryKeys.organizationSettings,
+    queryFn: apiService.getOrganizationSettings,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+};
+
+export const useUpdateOrganizationSettings = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: apiService.updateOrganizationSettings,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.organizationSettings });
+    },
+  });
+};
+
+export const useOrganizationRules = () => {
+  return useQuery({
+    queryKey: queryKeys.organizationRules,
+    queryFn: apiService.getOrganizationRules,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+};
+
+export const useCreateOrganizationRule = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: apiService.createOrganizationRule,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.organizationRules });
+    },
+  });
+};
+
+export const useUpdateOrganizationRule = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, rule }: { id: string; rule: Partial<any> }) =>
+      apiService.updateOrganizationRule(id, rule),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.organizationRules });
+    },
+  });
+};
+
+export const useDeleteOrganizationRule = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: apiService.deleteOrganizationRule,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.organizationRules });
+    },
+  });
+};
+
+export const useTriggerReverseIndexing = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: apiService.triggerReverseIndexing,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.reverseIndexingStatus });
+    },
+  });
+};
+
+export const useReverseIndexingStatus = () => {
+  return useQuery({
+    queryKey: queryKeys.reverseIndexingStatus,
+    queryFn: apiService.getReverseIndexingStatus,
+    refetchInterval: 5000, // Check every 5 seconds
+    staleTime: 3000,
+  });
+};
+
+// Game Platform hooks
+export const useGamePlatforms = () => {
+  return useQuery({
+    queryKey: queryKeys.gamePlatforms,
+    queryFn: apiService.getGamePlatforms,
+    staleTime: 10 * 60 * 1000, // 10 minutes - platforms don't change often
+  });
+};
+
+export const useGamePlatformOptions = (grouped = false) => {
+  return useQuery({
+    queryKey: [...queryKeys.gamePlatformOptions, grouped],
+    queryFn: () => apiService.getGamePlatformOptions(grouped),
+    staleTime: 10 * 60 * 1000, // 10 minutes - platforms don't change often
   });
 };

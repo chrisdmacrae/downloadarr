@@ -29,6 +29,10 @@ RUN npm install && npm cache clean --force
 # Copy the API source code
 COPY packages/api ./packages/api
 
+# Copy startup script
+COPY packages/api/scripts/start.sh /start.sh
+RUN chmod +x /start.sh
+
 # Create directories
 RUN mkdir -p /downloads /app/vpn
 
@@ -49,5 +53,5 @@ EXPOSE 3001
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD curl -f http://localhost:3001/ || exit 1
 
-# Use development command with hot reloading
-CMD ["npm", "run", "dev"]
+# Use development command with hot reloading and migrations
+CMD ["/start.sh", "npm", "run", "dev"]

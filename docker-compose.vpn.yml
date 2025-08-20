@@ -77,8 +77,11 @@ services:
       TMDB_API_KEY: ${TMDB_API_KEY}
       IGDB_CLIENT_ID: ${IGDB_CLIENT_ID}
       IGDB_ACCESS_TOKEN: ${IGDB_ACCESS_TOKEN}
+      DOWNLOAD_PATH: ${DOWNLOAD_PATH}
+      LIBRARY_PATH: ${LIBRARY_PATH}
     volumes:
-      - downloads:/downloads
+      - ${DOWNLOAD_PATH}:/app/downloads
+      - ${LIBRARY_PATH}:/app/library
       - vpn_ip_share:/tmp/vpn-ip:ro  # Read-only access to VPN IP data
       - ./config:/app/config:ro  # Mount config directory
     # Keep normal networking - don't use network_mode
@@ -98,8 +101,8 @@ services:
     ports: !reset []  # Remove direct port exposure
     networks: !reset []  # Remove from normal network
     environment:
-      PUID: 1000
-      PGID: 1000
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
       UMASK_SET: 022
       RPC_SECRET: ${ARIA2_RPC_SECRET:-downloadarr}
       RPC_PORT: 6800
@@ -111,7 +114,7 @@ services:
       TZ: ${TZ:-UTC}
     volumes:
       - aria2_config:/config
-      - downloads:/downloads
+      - ${DOWNLOAD_PATH}:/downloads
       - vpn_ip_share:/tmp/vpn-ip  # Shared volume for VPN IP
     depends_on:
       - vpn
@@ -176,8 +179,8 @@ services:
   jackett:
     container_name: downloadarr-jackett-vpn
     environment:
-      PUID: 1000
-      PGID: 1000
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
       TZ: ${TZ:-UTC}
       AUTO_UPDATE: true
       # FlareSolverr configuration

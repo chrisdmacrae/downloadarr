@@ -9,6 +9,7 @@ import MoviesDiscovery from '@/pages/MoviesDiscovery'
 import TvShowsDiscovery from '@/pages/TvShowsDiscovery'
 import GamesDiscovery from '@/pages/GamesDiscovery'
 import Settings from '@/pages/Settings'
+import OrganizationRules from '@/pages/OrganizationRules'
 
 function App() {
   return (
@@ -23,6 +24,7 @@ function App() {
           <Route path="/tv-shows" element={<TvShowsDiscovery />} />
           <Route path="/games" element={<GamesDiscovery />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/organization" element={<OrganizationRules />} />
         </Routes>
       </Layout>
       <Toaster />

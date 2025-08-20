@@ -265,15 +265,28 @@ export class DownloadService {
         // Extract torrent info from the download
         const torrentInfo = this.extractTorrentInfoFromDownload(url, name);
 
-        // Mark the request as found with the torrent info
-        await this.requestedTorrentsService.markAsFound(matchingRequest.id, torrentInfo);
-
-        // Mark the request as downloading
-        await this.requestedTorrentsService.markAsDownloading(
-          matchingRequest.id,
-          downloadId,
-          aria2Gid
-        );
+        // Follow proper state transitions based on current status
+        if (matchingRequest.status === 'PENDING') {
+          // PENDING → SEARCHING → FOUND → DOWNLOADING
+          await this.requestedTorrentsService.incrementSearchAttempt(matchingRequest.id);
+          await this.requestedTorrentsService.markAsFound(matchingRequest.id, torrentInfo);
+          await this.requestedTorrentsService.markAsDownloading(matchingRequest.id, downloadId, aria2Gid);
+        } else if (matchingRequest.status === 'SEARCHING') {
+          // SEARCHING → FOUND → DOWNLOADING
+          await this.requestedTorrentsService.markAsFound(matchingRequest.id, torrentInfo);
+          await this.requestedTorrentsService.markAsDownloading(matchingRequest.id, downloadId, aria2Gid);
+        } else if (matchingRequest.status === 'FOUND') {
+          // FOUND → DOWNLOADING (just update with download info)
+          await this.requestedTorrentsService.markAsDownloading(matchingRequest.id, downloadId, aria2Gid);
+        } else if (matchingRequest.status === 'FAILED') {
+          // FAILED → SEARCHING → FOUND → DOWNLOADING
+          await this.requestedTorrentsService.incrementSearchAttempt(matchingRequest.id);
+          await this.requestedTorrentsService.markAsFound(matchingRequest.id, torrentInfo);
+          await this.requestedTorrentsService.markAsDownloading(matchingRequest.id, downloadId, aria2Gid);
+        } else {
+          this.logger.warn(`Cannot link download to request in ${matchingRequest.status} status`);
+          return;
+        }
 
         this.logger.log(`Updated torrent request ${matchingRequest.title} status to DOWNLOADING`);
       }

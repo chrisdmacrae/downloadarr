@@ -118,6 +118,64 @@ export interface GamePlatform {
   aliases: string[];
 }
 
+export interface OrganizationSettings {
+  id: string;
+  libraryPath: string;
+  moviesPath?: string;
+  tvShowsPath?: string;
+  gamesPath?: string;
+  organizeOnComplete: boolean;
+  replaceExistingFiles: boolean;
+  extractArchives: boolean;
+  deleteAfterExtraction: boolean;
+  enableReverseIndexing: boolean;
+  reverseIndexingCron: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface OrganizationRule {
+  id: string;
+  contentType: 'MOVIE' | 'TV_SHOW' | 'GAME';
+  isDefault: boolean;
+  isActive: boolean;
+  folderNamePattern: string;
+  fileNamePattern: string;
+  seasonFolderPattern?: string;
+  basePath?: string;
+  platform?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateOrganizationRuleDto {
+  contentType: 'MOVIE' | 'TV_SHOW' | 'GAME';
+  isDefault?: boolean;
+  isActive?: boolean;
+  folderNamePattern: string;
+  fileNamePattern: string;
+  seasonFolderPattern?: string;
+  basePath?: string;
+  platform?: string;
+}
+
+export interface PathPreview {
+  folderPath: string;
+  fileName: string;
+  fullPath: string;
+}
+
+export interface FileMetadata {
+  title: string;
+  year?: number;
+  season?: number;
+  episode?: number;
+  platform?: string;
+  quality?: string;
+  format?: string;
+  edition?: string;
+}
+
 // Torrent Request Types
 export interface TorrentRequest {
   id: string;
@@ -695,6 +753,79 @@ export const apiService = {
     const response = await api.get(`/game-platforms/search?q=${encodeURIComponent(query)}`);
     return response.data;
   },
+
+  // Organization Services
+  getOrganizationSettings: async (): Promise<OrganizationSettings> => {
+    const response = await api.get('/organization/settings');
+    return response.data;
+  },
+
+  updateOrganizationSettings: async (settings: Partial<OrganizationSettings>): Promise<OrganizationSettings> => {
+    const response = await api.put('/organization/settings', settings);
+    return response.data;
+  },
+
+  getOrganizationRules: async (): Promise<OrganizationRule[]> => {
+    const response = await api.get('/organization/rules');
+    return response.data;
+  },
+
+  getOrganizationRule: async (contentType: 'MOVIE' | 'TV_SHOW' | 'GAME'): Promise<OrganizationRule> => {
+    const response = await api.get(`/organization/rules/${contentType}`);
+    return response.data;
+  },
+
+  createOrganizationRule: async (rule: CreateOrganizationRuleDto): Promise<OrganizationRule> => {
+    const response = await api.post('/organization/rules', rule);
+    return response.data;
+  },
+
+  updateOrganizationRule: async (id: string, rule: Partial<OrganizationRule>): Promise<OrganizationRule> => {
+    const response = await api.put(`/organization/rules/${id}`, rule);
+    return response.data;
+  },
+
+  deleteOrganizationRule: async (id: string): Promise<{ success: boolean }> => {
+    const response = await api.delete(`/organization/rules/${id}`);
+    return response.data;
+  },
+
+  previewOrganizationPath: async (context: {
+    contentType: 'MOVIE' | 'TV_SHOW' | 'GAME';
+    title: string;
+    year?: number;
+    season?: number;
+    episode?: number;
+    platform?: string;
+    quality?: string;
+    format?: string;
+    edition?: string;
+  }): Promise<PathPreview> => {
+    const response = await api.post('/organization/preview-path', context);
+    return response.data;
+  },
+
+  triggerReverseIndexing: async (): Promise<{ success: boolean; message: string; results?: any }> => {
+    const response = await api.post('/organization/reverse-index');
+    return response.data;
+  },
+
+  getReverseIndexingStatus: async (): Promise<{ isRunning: boolean }> => {
+    const response = await api.get('/organization/reverse-index/status');
+    return response.data;
+  },
+
+  extractMetadata: async (fileName: string, contentType: 'MOVIE' | 'TV_SHOW' | 'GAME'): Promise<FileMetadata> => {
+    const response = await api.get(`/organization/extract-metadata?fileName=${encodeURIComponent(fileName)}&contentType=${contentType}`);
+    return response.data;
+  },
+
+  // Get poster URL for a TMDB ID
+  getTmdbPosterUrl: async (tmdbId: number, contentType: 'movie' | 'tv' = 'movie'): Promise<{ success: boolean; data?: string; error?: string }> => {
+    const endpoint = contentType === 'tv' ? 'tv-shows' : 'movies';
+    const response = await api.get(`/discovery/${endpoint}/tmdb/${tmdbId}/poster`);
+    return response.data;
+  },
 };
 
 // Error handling interceptor
@@ -705,5 +836,26 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
+// Utility function to generate TMDB poster URL from TMDB ID
+export const getTmdbPosterUrl = (tmdbId: number | string | undefined, size: string = 'w500'): string | undefined => {
+  if (!tmdbId) return undefined;
+
+  // For now, we'll need to make an API call to get the poster path
+  // This is a placeholder - in a real implementation, you might want to cache this
+  // or add an endpoint that returns the poster URL directly
+  return undefined;
+};
+
+// Utility function to generate poster URL for a request
+export const getRequestPosterUrl = (request: TorrentRequest): string | undefined => {
+  // Try TMDB ID first (most reliable for movies/TV shows)
+  if (request.tmdbId) {
+    return getTmdbPosterUrl(request.tmdbId);
+  }
+
+  // For now, return undefined - we could potentially add IMDB poster lookup later
+  return undefined;
+};
 
 export default api;
