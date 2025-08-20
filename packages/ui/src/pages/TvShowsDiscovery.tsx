@@ -22,7 +22,10 @@ export default function TvShowsDiscovery() {
   const [popularShows, setPopularShows] = useState<SearchResult[]>([])
   const [genres, setGenres] = useState<Genre[]>([])
   const [genreShows, setGenreShows] = useState<Record<number, SearchResult[]>>({})
-  const [selectedShow, setSelectedShow] = useState<SearchResult | null>(null)
+  const [selectedShow, setSelectedShow] = useState<{
+    id: string
+    title: string
+  } | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
@@ -87,7 +90,10 @@ export default function TvShowsDiscovery() {
   }
 
   const handleShowClick = (show: SearchResult) => {
-    setSelectedShow(show)
+    setSelectedShow({
+      id: show.id,
+      title: show.title
+    })
     setIsModalOpen(true)
   }
 
@@ -225,11 +231,15 @@ export default function TvShowsDiscovery() {
       })}
 
       {/* TV Show Detail Modal */}
-      <MovieDetailModal
-        movie={selectedShow}
-        open={isModalOpen}
-        onOpenChange={setIsModalOpen}
-      />
+      {selectedShow && (
+        <MovieDetailModal
+          contentType="tv"
+          contentId={selectedShow.id}
+          title={selectedShow.title}
+          open={isModalOpen}
+          onOpenChange={setIsModalOpen}
+        />
+      )}
     </div>
   )
 }

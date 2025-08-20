@@ -191,6 +191,57 @@ export class TmdbService extends BaseExternalApiService {
     }
   }
 
+  async searchMovies(query: string, year?: number, page: number = 1): Promise<ExternalApiResponse<SearchResult[]>> {
+    try {
+      const sanitizedQuery = this.sanitizeSearchQuery(query);
+      if (!sanitizedQuery) {
+        return {
+          success: false,
+          error: 'Invalid search query',
+        };
+      }
+
+      const params: Record<string, any> = {
+        query: sanitizedQuery,
+        page: page.toString(),
+        include_adult: 'false',
+      };
+
+      if (year) {
+        params.year = year.toString();
+      }
+
+      const response = await this.makeRequest<TmdbMovieSearchResponse>('/search/movie', params);
+
+      if (!response.success || !response.data) {
+        return {
+          success: false,
+          error: response.error,
+        };
+      }
+
+      const searchResults: SearchResult[] = response.data.results.map(item => ({
+        id: item.id.toString(),
+        title: item.title,
+        year: item.release_date ? new Date(item.release_date).getFullYear() : undefined,
+        poster: item.poster_path ? `${this.imageBaseUrl}${item.poster_path}` : undefined,
+        overview: item.overview || undefined,
+        type: 'movie' as const,
+      }));
+
+      return {
+        success: true,
+        data: searchResults,
+      };
+    } catch (error) {
+      this.logger.error(`Error searching movies: ${error.message}`, error.stack);
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  }
+
   async searchTvShows(query: string, year?: number, page: number = 1): Promise<ExternalApiResponse<SearchResult[]>> {
     try {
       const sanitizedQuery = this.sanitizeSearchQuery(query);

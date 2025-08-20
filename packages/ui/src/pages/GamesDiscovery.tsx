@@ -30,7 +30,10 @@ export default function GamesDiscovery() {
   const [platformGames, setPlatformGames] = useState<Record<string, SearchResult[]>>({})
   const [pcGenres, setPcGenres] = useState<Genre[]>([])
   const [pcGenreGames, setPcGenreGames] = useState<Record<string, SearchResult[]>>({})
-  const [selectedGame, setSelectedGame] = useState<SearchResult | null>(null)
+  const [selectedGame, setSelectedGame] = useState<{
+    id: string
+    title: string
+  } | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
@@ -157,7 +160,10 @@ export default function GamesDiscovery() {
   }
 
   const handleGameClick = (game: SearchResult) => {
-    setSelectedGame(game)
+    setSelectedGame({
+      id: game.id,
+      title: game.title
+    })
     setIsModalOpen(true)
   }
 
@@ -358,11 +364,14 @@ export default function GamesDiscovery() {
       })}
 
       {/* Game Detail Modal */}
-      <GameDetailModal
-        game={selectedGame}
-        open={isModalOpen}
-        onOpenChange={setIsModalOpen}
-      />
+      {selectedGame && (
+        <GameDetailModal
+          gameId={selectedGame.id}
+          title={selectedGame.title}
+          open={isModalOpen}
+          onOpenChange={setIsModalOpen}
+        />
+      )}
     </div>
   )
 }

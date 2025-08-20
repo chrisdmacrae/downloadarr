@@ -22,7 +22,10 @@ export default function MoviesDiscovery() {
   const [popularMovies, setPopularMovies] = useState<SearchResult[]>([])
   const [genres, setGenres] = useState<Genre[]>([])
   const [genreMovies, setGenreMovies] = useState<Record<number, SearchResult[]>>({})
-  const [selectedMovie, setSelectedMovie] = useState<SearchResult | null>(null)
+  const [selectedMovie, setSelectedMovie] = useState<{
+    id: string
+    title: string
+  } | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
@@ -87,7 +90,10 @@ export default function MoviesDiscovery() {
   }
 
   const handleMovieClick = (movie: SearchResult) => {
-    setSelectedMovie(movie)
+    setSelectedMovie({
+      id: movie.id,
+      title: movie.title
+    })
     setIsModalOpen(true)
   }
 
@@ -225,11 +231,15 @@ export default function MoviesDiscovery() {
       })}
 
       {/* Movie Detail Modal */}
-      <MovieDetailModal
-        movie={selectedMovie}
-        open={isModalOpen}
-        onOpenChange={setIsModalOpen}
-      />
+      {selectedMovie && (
+        <MovieDetailModal
+          contentType="movie"
+          contentId={selectedMovie.id}
+          title={selectedMovie.title}
+          open={isModalOpen}
+          onOpenChange={setIsModalOpen}
+        />
+      )}
     </div>
   )
 }

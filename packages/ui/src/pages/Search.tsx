@@ -316,7 +316,9 @@ export default function Search() {
       {/* Detail Modals */}
       {selectedItem && selectedItem.type !== 'game' && (
         <MovieDetailModal
-          movie={selectedItem}
+          contentType={selectedItem.type as 'movie' | 'tv'}
+          contentId={selectedItem.id}
+          title={selectedItem.title}
           open={showDetailModal}
           onOpenChange={setShowDetailModal}
         />
@@ -324,7 +326,8 @@ export default function Search() {
 
       {selectedItem && selectedItem.type === 'game' && (
         <GameDetailModal
-          game={selectedItem}
+          gameId={selectedItem.id}
+          title={selectedItem.title}
           open={showDetailModal}
           onOpenChange={setShowDetailModal}
         />

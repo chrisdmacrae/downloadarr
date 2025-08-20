@@ -15,18 +15,32 @@ export class FileOrganizationService {
   ) {}
 
   /**
+   * Ensure path is absolute and resolve it properly
+   * This is important because the API runs from /app/packages/api but files are at /app/downloads, /app/library
+   */
+  private resolvePath(filePath: string): string {
+    if (path.isAbsolute(filePath)) {
+      return path.resolve(filePath);
+    }
+
+    // If it's a relative path, resolve it from the app root (/app) not the current working directory
+    return path.resolve('/app', filePath);
+  }
+
+  /**
    * Organize a downloaded file
    */
   async organizeFile(context: OrganizationContext, requestedTorrentId?: string): Promise<OrganizationResult> {
     try {
-      this.logger.log(`Organizing file: ${context.originalPath} (${context.contentType})`);
+      const resolvedOriginalPath = this.resolvePath(context.originalPath);
+      this.logger.log(`Organizing file: ${context.originalPath} -> resolved: ${resolvedOriginalPath} (${context.contentType})`);
 
       // Check if file exists
       try {
-        await fs.access(context.originalPath);
-        this.logger.log(`File exists: ${context.originalPath}`);
+        await fs.access(resolvedOriginalPath);
+        this.logger.log(`File exists: ${resolvedOriginalPath}`);
       } catch (error) {
-        this.logger.error(`File not found: ${context.originalPath}`, error);
+        this.logger.error(`File not found: ${resolvedOriginalPath}`, error);
         return {
           success: false,
           originalPath: context.originalPath,
@@ -38,11 +52,11 @@ export class FileOrganizationService {
       const settings = await this.organizationRulesService.getSettings();
 
       // Extract archives if enabled
-      let filesToOrganize: string[] = [context.originalPath];
+      let filesToOrganize: string[] = [resolvedOriginalPath];
       let extractedFiles: string[] = [];
 
-      if (settings.extractArchives && this.isArchiveFile(context.originalPath)) {
-        const extractResult = await this.extractArchive(context.originalPath);
+      if (settings.extractArchives && this.isArchiveFile(resolvedOriginalPath)) {
+        const extractResult = await this.extractArchive(resolvedOriginalPath);
         if (extractResult.success && extractResult.extractedFiles) {
           filesToOrganize = extractResult.extractedFiles;
           extractedFiles = extractResult.extractedFiles;
@@ -50,10 +64,10 @@ export class FileOrganizationService {
           // Delete original archive if configured
           if (settings.deleteAfterExtraction) {
             try {
-              await fs.unlink(context.originalPath);
-              this.logger.log(`Deleted archive: ${context.originalPath}`);
+              await fs.unlink(resolvedOriginalPath);
+              this.logger.log(`Deleted archive: ${resolvedOriginalPath}`);
             } catch (error) {
-              this.logger.warn(`Failed to delete archive ${context.originalPath}:`, error);
+              this.logger.warn(`Failed to delete archive ${resolvedOriginalPath}:`, error);
             }
           }
         }
@@ -104,7 +118,10 @@ export class FileOrganizationService {
    */
   async organizeDirectory(directoryPath: string, context: Omit<OrganizationContext, 'originalPath' | 'fileName'>, requestedTorrentId?: string): Promise<OrganizationResult[]> {
     try {
-      const files = await this.getFilesRecursively(directoryPath);
+      const resolvedDirectoryPath = this.resolvePath(directoryPath);
+      this.logger.log(`Organizing directory: ${directoryPath} -> resolved: ${resolvedDirectoryPath}`);
+
+      const files = await this.getFilesRecursively(resolvedDirectoryPath);
       const results: OrganizationResult[] = [];
 
       for (const filePath of files) {
@@ -131,26 +148,30 @@ export class FileOrganizationService {
 
   private async organizeIndividualFile(context: OrganizationContext, requestedTorrentId?: string): Promise<OrganizationResult> {
     try {
-      this.logger.log(`Organizing individual file: ${context.originalPath}`);
+      // Resolve paths to ensure they're absolute and correct
+      const resolvedOriginalPath = this.resolvePath(context.originalPath);
+      this.logger.log(`Organizing individual file: ${context.originalPath} -> resolved: ${resolvedOriginalPath}`);
 
       // Generate organized path
       const pathResult = await this.organizationRulesService.generateOrganizedPath(context);
-      this.logger.log(`Generated organized path: ${pathResult.fullPath}`);
+      const resolvedDestinationPath = this.resolvePath(pathResult.fullPath);
+      this.logger.log(`Generated organized path: ${pathResult.fullPath} -> resolved: ${resolvedDestinationPath}`);
 
       // Create destination directory
-      await fs.mkdir(path.dirname(pathResult.fullPath), { recursive: true });
-      this.logger.log(`Created destination directory: ${path.dirname(pathResult.fullPath)}`);
+      const destinationDir = path.dirname(resolvedDestinationPath);
+      await fs.mkdir(destinationDir, { recursive: true });
+      this.logger.log(`Created destination directory: ${destinationDir}`);
 
       // Get file stats
-      const stats = await fs.stat(context.originalPath);
+      const stats = await fs.stat(resolvedOriginalPath);
 
       // Check if file already exists
       const settings = await this.organizationRulesService.getSettings();
       try {
-        await fs.access(pathResult.fullPath);
-        
+        await fs.access(resolvedDestinationPath);
+
         if (!settings.replaceExistingFiles) {
-          this.logger.warn(`File already exists and replace is disabled: ${pathResult.fullPath}`);
+          this.logger.warn(`File already exists and replace is disabled: ${resolvedDestinationPath}`);
           return {
             success: false,
             originalPath: context.originalPath,
@@ -159,21 +180,22 @@ export class FileOrganizationService {
         }
 
         // Delete existing file
-        await fs.unlink(pathResult.fullPath);
-        this.logger.log(`Replaced existing file: ${pathResult.fullPath}`);
+        await fs.unlink(resolvedDestinationPath);
+        this.logger.log(`Replaced existing file: ${resolvedDestinationPath}`);
       } catch {
         // File doesn't exist, which is fine
       }
 
       // Move file to organized location
       try {
-        await fs.rename(context.originalPath, pathResult.fullPath);
+        await fs.rename(resolvedOriginalPath, resolvedDestinationPath);
+        this.logger.log(`Successfully moved: ${resolvedOriginalPath} -> ${resolvedDestinationPath}`);
       } catch (error) {
         // If rename fails (e.g., cross-device link), fall back to copy + delete
         if (error.code === 'EXDEV') {
-          this.logger.log(`Cross-device move detected, using copy+delete for: ${context.originalPath}`);
-          await fs.copyFile(context.originalPath, pathResult.fullPath);
-          await fs.unlink(context.originalPath);
+          this.logger.log(`Cross-device move detected, using copy+delete for: ${resolvedOriginalPath}`);
+          await fs.copyFile(resolvedOriginalPath, resolvedDestinationPath);
+          await fs.unlink(resolvedOriginalPath);
         } else {
           throw error;
         }
@@ -183,7 +205,7 @@ export class FileOrganizationService {
       await this.prisma.organizedFile.create({
         data: {
           originalPath: context.originalPath,
-          organizedPath: pathResult.fullPath,
+          organizedPath: resolvedDestinationPath,
           fileName: pathResult.fileName,
           fileSize: BigInt(stats.size),
           contentType: context.contentType,
@@ -200,12 +222,12 @@ export class FileOrganizationService {
         },
       });
 
-      this.logger.log(`Successfully organized: ${context.originalPath} -> ${pathResult.fullPath}`);
+      this.logger.log(`Successfully organized: ${context.originalPath} -> ${resolvedDestinationPath}`);
 
       return {
         success: true,
         originalPath: context.originalPath,
-        organizedPath: pathResult.fullPath,
+        organizedPath: resolvedDestinationPath,
         filesProcessed: 1,
       };
 
@@ -256,13 +278,14 @@ export class FileOrganizationService {
 
   private async getFilesRecursively(dirPath: string): Promise<string[]> {
     const files: string[] = [];
-    
+    const resolvedDirPath = this.resolvePath(dirPath);
+
     try {
-      const entries = await fs.readdir(dirPath, { withFileTypes: true });
-      
+      const entries = await fs.readdir(resolvedDirPath, { withFileTypes: true });
+
       for (const entry of entries) {
-        const fullPath = path.join(dirPath, entry.name);
-        
+        const fullPath = path.join(resolvedDirPath, entry.name);
+
         if (entry.isDirectory()) {
           const subFiles = await this.getFilesRecursively(fullPath);
           files.push(...subFiles);
@@ -271,9 +294,9 @@ export class FileOrganizationService {
         }
       }
     } catch (error) {
-      this.logger.error(`Error reading directory ${dirPath}:`, error);
+      this.logger.error(`Error reading directory ${resolvedDirPath}:`, error);
     }
-    
+
     return files;
   }
 }

@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Download, Calendar, Clock, Star, User, Film, Search } from 'lucide-react'
-import { SearchResult, MovieDetails, apiService } from '@/services/api'
+import { MovieDetails, apiService } from '@/services/api'
 import { useCreateDownload } from '@/hooks/useApi'
 import { DownloadRequestModal } from './DownloadRequestModal'
 import { TorrentSearchModal } from './TorrentSearchModal'
@@ -13,12 +13,14 @@ import { useTorrentRequests } from '@/hooks/useTorrentRequests'
 import { useToast } from '@/hooks/use-toast'
 
 interface MovieDetailModalProps {
-  movie: SearchResult | null
+  contentType: 'movie' | 'tv'
+  contentId: string
+  title: string
   open: boolean
   onOpenChange: (open: boolean) => void
 }
 
-export function MovieDetailModal({ movie, open, onOpenChange }: MovieDetailModalProps) {
+export function MovieDetailModal({ contentType, contentId, title, open, onOpenChange }: MovieDetailModalProps) {
   const [movieDetails, setMovieDetails] = useState<MovieDetails | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [showDownloadModal, setShowDownloadModal] = useState(false)
@@ -28,10 +30,10 @@ export function MovieDetailModal({ movie, open, onOpenChange }: MovieDetailModal
   const { getRequestForItem, getRequestForShow, refreshRequests, requests } = useTorrentRequests()
 
   useEffect(() => {
-    if (movie && open) {
+    if (contentId && open) {
       fetchMovieDetails()
     }
-  }, [movie, open])
+  }, [contentId, open])
 
   // Force re-render when requests change to update the status display
   useEffect(() => {
@@ -39,21 +41,54 @@ export function MovieDetailModal({ movie, open, onOpenChange }: MovieDetailModal
   }, [requests])
 
   const fetchMovieDetails = async () => {
-    if (!movie) return
+    if (!contentId) return
 
     setIsLoading(true)
     try {
-      // For now, we'll use the basic movie data since we need IMDb ID for detailed info
-      // In a real implementation, you'd need to map TMDB ID to IMDb ID
+      // Fetch complete details from the appropriate API
+      if (contentType === 'movie') {
+        const response = await apiService.getMovieDetails(contentId);
+        if (response.success && response.data) {
+          setMovieDetails(response.data);
+          return;
+        } else {
+          console.log('Failed to fetch movie details from API:', response.error);
+        }
+      } else if (contentType === 'tv') {
+        const response = await apiService.getTvShowDetails(contentId);
+        if (response.success && response.data) {
+          // Convert TvShowDetails to MovieDetails for compatibility with the modal
+          const tvShowAsMovie: MovieDetails = {
+            ...response.data,
+            type: 'movie', // Override type for modal compatibility
+            runtime: undefined, // TV shows don't have runtime like movies
+            director: response.data.creator, // Use creator as director
+            actors: undefined, // TV shows don't have the same actor structure
+            plot: response.data.overview,
+            released: response.data.year?.toString(),
+          };
+          setMovieDetails(tvShowAsMovie);
+          return;
+        } else {
+          console.log('Failed to fetch TV show details from API:', response.error);
+        }
+      }
+
+      // Fallback: Create basic movie details if API calls fail
+      const tmdbId = parseInt(contentId);
       setMovieDetails({
-        ...movie,
+        id: contentId,
+        title: title,
+        year: undefined,
+        poster: undefined,
+        overview: undefined,
         type: 'movie',
-        // Add some mock detailed data for now
+        tmdbId: isNaN(tmdbId) ? undefined : tmdbId,
         runtime: undefined,
         genre: undefined,
         director: undefined,
         actors: undefined,
-        plot: movie.overview,
+        plot: undefined,
         rating: undefined,
         released: undefined,
       } as MovieDetails)
@@ -78,29 +113,29 @@ export function MovieDetailModal({ movie, open, onOpenChange }: MovieDetailModal
   const handleDownloadRequestCreated = () => {
     toast({
       title: "Download Requested",
-      description: `${movie?.title} has been added to the download queue`,
+      description: `${title} has been added to the download queue`,
     })
     // Refresh the torrent requests to show the new status
     refreshRequests()
   }
 
-  if (!movie) return null
+  if (!contentId) return null
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-2xl">{movie.title}</DialogTitle>
+          <DialogTitle className="text-2xl">{movieDetails?.title || title}</DialogTitle>
         </DialogHeader>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* Poster */}
           <div className="md:col-span-1">
             <div className="aspect-[2/3] bg-muted rounded-lg overflow-hidden">
-              {movie.poster ? (
+              {movieDetails?.poster ? (
                 <img
-                  src={movie.poster}
-                  alt={movie.title}
+                  src={movieDetails.poster}
+                  alt={movieDetails.title || title}
                   className="w-full h-full object-cover"
                 />
               ) : (
@@ -125,12 +160,12 @@ export function MovieDetailModal({ movie, open, onOpenChange }: MovieDetailModal
                 {/* Basic Info */}
                 <div className="flex flex-wrap gap-2 items-center">
                   <Badge variant="secondary">
-                    {movie.type === 'tv' ? 'TV Show' : 'Movie'}
+                    {contentType === 'tv' ? 'TV Show' : 'Movie'}
                   </Badge>
-                  {movie.year && (
+                  {movieDetails?.year && (
                     <div className="flex items-center gap-1 text-sm text-muted-foreground">
                       <Calendar className="h-4 w-4" />
-                      {movie.year}
+                      {movieDetails.year}
                     </div>
                   )}
                   {movieDetails?.runtime && (
@@ -159,11 +194,11 @@ export function MovieDetailModal({ movie, open, onOpenChange }: MovieDetailModal
                 )}
 
                 {/* Overview */}
-                {movie.overview && (
+                {(movieDetails?.overview || movieDetails?.plot) && (
                   <div>
                     <h3 className="font-semibold mb-2">Overview</h3>
                     <p className="text-sm text-muted-foreground leading-relaxed">
-                      {movie.overview}
+                      {movieDetails.overview || movieDetails.plot}
                     </p>
                   </div>
                 )}
@@ -201,9 +236,9 @@ export function MovieDetailModal({ movie, open, onOpenChange }: MovieDetailModal
                   {(() => {
                     // For TV shows, check for any existing request for this show (regardless of season/episode)
                     // For movies, check for exact match
-                    const existingRequest = movie.type === 'tv'
-                      ? getRequestForShow(movie.title, movie.year)
-                      : getRequestForItem(movie.title, movie.year, undefined, undefined, 'MOVIE')
+                    const existingRequest = contentType === 'tv'
+                      ? getRequestForShow(movieDetails?.title || title, movieDetails?.year)
+                      : getRequestForItem(movieDetails?.title || title, movieDetails?.year, undefined, undefined, 'MOVIE')
 
                     if (existingRequest) {
                       return (
@@ -263,7 +298,7 @@ export function MovieDetailModal({ movie, open, onOpenChange }: MovieDetailModal
 
       {/* Download Request Modal */}
       <DownloadRequestModal
-        item={movie}
+        item={movieDetails}
         open={showDownloadModal}
         onOpenChange={setShowDownloadModal}
         onRequestCreated={handleDownloadRequestCreated}
@@ -271,36 +306,36 @@ export function MovieDetailModal({ movie, open, onOpenChange }: MovieDetailModal
 
       {/* Torrent Search Modal */}
       <TorrentSearchModal
-        searchItem={movie}
+        searchItem={movieDetails}
         isOpen={showTorrentSearchModal}
         onClose={() => setShowTorrentSearchModal(false)}
         onTorrentDownload={async (torrent) => {
           try {
             // Determine existing request based on content type
-            const existingRequest = movie.type === 'tv'
-              ? getRequestForShow(movie.title, movie.year)
-              : getRequestForItem(movie.title, movie.year, undefined, undefined, 'MOVIE')
+            const existingRequest = contentType === 'tv'
+              ? getRequestForShow(movieDetails?.title || title, movieDetails?.year)
+              : getRequestForItem(movieDetails?.title || title, movieDetails?.year, undefined, undefined, 'MOVIE')
 
             let requestId = existingRequest?.id
 
             // First, create a torrent request if one doesn't exist
             if (!existingRequest) {
-              const movieDetails = movieDetail as MovieDetails
+              const movieDetailsData = movieDetails as MovieDetails
               const requestDto = {
-                title: movie.title,
-                year: movie.year,
-                imdbId: movieDetails?.imdbId || undefined,
-                tmdbId: movieDetails?.tmdbId || undefined,
+                title: movieDetails?.title || title,
+                year: movieDetails?.year,
+                imdbId: movieDetailsData?.imdbId || undefined,
+                tmdbId: movieDetailsData?.tmdbId || undefined,
                 preferredQualities: ['HD_1080P', 'UHD_4K'],
                 preferredFormats: ['X264', 'X265'],
                 minSeeders: 5,
-                maxSizeGB: movie.type === 'tv' ? 15 : 20, // Smaller default for TV shows
+                maxSizeGB: contentType === 'tv' ? 15 : 20, // Smaller default for TV shows
                 priority: 5,
               }
 
               // Create appropriate request type
               let response
-              if (movie.type === 'tv') {
+              if (contentType === 'tv') {
                 response = await apiService.requestTvShowDownload(requestDto)
               } else {
                 response = await apiService.requestMovieDownload(requestDto)

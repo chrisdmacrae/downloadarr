@@ -28,25 +28,25 @@ import {
   XCircle,
   RefreshCw,
   Download,
-  Film,
-  Tv,
   Calendar,
   AlertCircle,
   Loader2,
   SearchIcon,
   PlayCircle,
-  Edit
+  Edit,
+  ExternalLink
 } from 'lucide-react'
 import { DownloadStatusBadge } from '@/components/DownloadStatusBadge'
 import { TorrentSelectionModal } from '@/components/TorrentSelectionModal'
 import { EditRequestModal } from '@/components/EditRequestModal'
 import { TvShowSeasonBadges } from '@/components/TvShowSeasonBadges'
 import { TvShowSeasonModal } from '@/components/TvShowSeasonModal'
+import { MovieDetailModal } from '@/components/MovieDetailModal'
+import { GameDetailModal } from '@/components/GameDetailModal'
 import { apiService, TorrentRequest } from '@/services/api'
 import { useTorrentRequests } from '@/hooks/useTorrentRequests'
 import { useDownloadSummary } from '@/hooks/useDownloadStatus'
 import { useToast } from '@/hooks/use-toast'
-import { usePosterUrls } from '@/hooks/usePosterUrl'
 
 type StatusFilter = 'all' | TorrentRequest['status']
 
@@ -64,17 +64,16 @@ export default function Requests() {
   const [editRequest, setEditRequest] = useState<TorrentRequest | null>(null)
   const [seasonModalRequest, setSeasonModalRequest] = useState<TorrentRequest | null>(null)
   const [seasonModalSeasonNumber, setSeasonModalSeasonNumber] = useState<number | null>(null)
+  const [selectedItem, setSelectedItem] = useState<{
+    type: 'movie' | 'tv' | 'game'
+    id: string
+    title: string
+  } | null>(null)
+  const [showDetailModal, setShowDetailModal] = useState(false)
 
   const { requests, isLoading, error, refreshRequests, isOngoingTvShow } = useTorrentRequests()
   const { summary: downloadSummary } = useDownloadSummary()
   const { toast } = useToast()
-
-  // Get poster URLs for all requests
-  const posterUrls = usePosterUrls(requests)
-
-  // Debug: Log requests with TMDB IDs
-  console.log('Requests with TMDB IDs:', requests.filter(r => r.tmdbId).map(r => ({ title: r.title, tmdbId: r.tmdbId, contentType: r.contentType })))
-  console.log('Poster URLs state:', posterUrls)
 
   // Filter and sort requests
   const filteredRequests = requests
@@ -246,6 +245,36 @@ export default function Requests() {
     setSeasonModalSeasonNumber(null)
   }
 
+  const handleItemClick = (request: TorrentRequest) => {
+    // Determine the correct ID and type for fetching complete data
+    let id: string;
+    let type: 'movie' | 'tv' | 'game';
+
+    if (request.contentType === 'GAME' && request.igdbId) {
+      id = request.igdbId.toString();
+      type = 'game';
+    } else if (request.contentType === 'MOVIE' && request.tmdbId) {
+      id = request.tmdbId.toString();
+      type = 'movie';
+    } else if (request.contentType === 'TV_SHOW' && request.tmdbId) {
+      id = request.tmdbId.toString();
+      type = 'tv';
+    } else {
+      // Fallback - this won't work for fetching external data
+      console.warn(`No external ID found for request: ${request.title}`, request);
+      id = request.id;
+      type = request.contentType === 'MOVIE' ? 'movie' :
+            request.contentType === 'TV_SHOW' ? 'tv' : 'game';
+    }
+
+    setSelectedItem({
+      type,
+      id,
+      title: request.title
+    });
+    setShowDetailModal(true);
+  }
+
   const getStatusCounts = () => {
     const counts = {
       all: requests.length,
@@ -276,10 +305,6 @@ export default function Requests() {
       hour: '2-digit',
       minute: '2-digit',
     })
-  }
-
-  const getContentIcon = (contentType: string) => {
-    return contentType === 'MOVIE' ? Film : Tv
   }
 
   if (error) {
@@ -475,7 +500,6 @@ export default function Requests() {
         ) : (
           <div className="space-y-4">
             {filteredRequests.map((request) => {
-              const ContentIcon = getContentIcon(request.contentType)
               const canCancel = ['PENDING', 'SEARCHING'].includes(request.status)
               const canDelete = true // Allow deletion of all requests - backend will handle download cancellation
               const canSearch = ['PENDING', 'FAILED', 'EXPIRED'].includes(request.status)
@@ -486,38 +510,14 @@ export default function Requests() {
                 <Card key={request.id} className="overflow-hidden">
                   <CardHeader className="p-3 md:p-6 pb-2 md:pb-6">
                     <div className="flex items-start justify-between gap-3">
-                      {/* Thumbnail on the left */}
-                      <div className="flex-shrink-0">
-                        <div className="w-12 h-16 md:w-16 md:h-20 bg-muted rounded overflow-hidden">
-                          {posterUrls[request.id]?.url ? (
-                            <img
-                              src={posterUrls[request.id].url!}
-                              alt={request.title}
-                              className="w-full h-full object-cover"
-                              onError={(e) => {
-                                const target = e.target as HTMLImageElement
-                                target.style.display = 'none'
-                                target.nextElementSibling?.classList.remove('hidden')
-                              }}
-                            />
-                          ) : null}
-                          <div className={`w-full h-full flex items-center justify-center text-muted-foreground ${posterUrls[request.id]?.url ? 'hidden' : ''}`}>
-                            {posterUrls[request.id]?.loading ? (
-                              <div className="animate-pulse">
-                                <ContentIcon className="h-4 w-4 md:h-6 md:w-6" />
-                              </div>
-                            ) : (
-                              <ContentIcon className="h-6 w-6 md:h-8 md:w-8" />
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
                       <div className="flex items-start gap-2 md:gap-3 flex-1 min-w-0">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between gap-2">
                             <CardTitle className="text-base md:text-lg line-clamp-2 md:line-clamp-1 flex-1">
-                              <div className="flex items-center gap-2 flex-wrap">
+                              <div
+                                className="flex items-center gap-2 flex-wrap cursor-pointer hover:text-primary transition-colors group"
+                                onClick={() => handleItemClick(request)}
+                              >
                                 <span>
                                   {request.title}
                                   {request.year && (
@@ -526,6 +526,7 @@ export default function Requests() {
                                     </span>
                                   )}
                                 </span>
+                                <ExternalLink className="h-3 w-3 text-muted-foreground group-hover:text-primary transition-colors" />
                               </div>
                             </CardTitle>
                             {/* Mobile: Dropdown menu right of title */}
@@ -900,6 +901,26 @@ export default function Requests() {
         request={seasonModalRequest}
         seasonNumber={seasonModalSeasonNumber}
       />
+
+      {/* Detail Modals */}
+      {selectedItem && selectedItem.type !== 'game' && (
+        <MovieDetailModal
+          contentType={selectedItem.type as 'movie' | 'tv'}
+          contentId={selectedItem.id}
+          title={selectedItem.title}
+          open={showDetailModal}
+          onOpenChange={setShowDetailModal}
+        />
+      )}
+
+      {selectedItem && selectedItem.type === 'game' && (
+        <GameDetailModal
+          gameId={selectedItem.id}
+          title={selectedItem.title}
+          open={showDetailModal}
+          onOpenChange={setShowDetailModal}
+        />
+      )}
     </div>
   )
 }

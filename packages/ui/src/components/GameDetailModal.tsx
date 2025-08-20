@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Download, Calendar, Star, User, Building, Gamepad2, Search } from 'lucide-react'
-import { SearchResult, GameDetails, apiService } from '@/services/api'
+import { GameDetails, apiService } from '@/services/api'
 import { useCreateDownload } from '@/hooks/useApi'
 import { DownloadRequestModal } from './DownloadRequestModal'
 import { TorrentSearchModal } from './TorrentSearchModal'
@@ -13,12 +13,13 @@ import { useTorrentRequests } from '@/hooks/useTorrentRequests'
 import { useToast } from '@/hooks/use-toast'
 
 interface GameDetailModalProps {
-  game: SearchResult | null
+  gameId: string
+  title: string
   open: boolean
   onOpenChange: (open: boolean) => void
 }
 
-export function GameDetailModal({ game, open, onOpenChange }: GameDetailModalProps) {
+export function GameDetailModal({ gameId, title, open, onOpenChange }: GameDetailModalProps) {
   const [gameDetails, setGameDetails] = useState<GameDetails | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [showDownloadModal, setShowDownloadModal] = useState(false)
@@ -27,28 +28,33 @@ export function GameDetailModal({ game, open, onOpenChange }: GameDetailModalPro
   const { toast } = useToast()
   const createDownloadMutation = useCreateDownload()
 
-  const existingRequest = game ? getRequestForItem(game.title, game.year, undefined, undefined, 'GAME' as any) : undefined
+  const existingRequest = gameDetails ? getRequestForItem(gameDetails.title || title, gameDetails.year, undefined, undefined, 'GAME' as any) : undefined
 
   useEffect(() => {
-    if (game && open) {
+    if (gameId && open) {
       fetchGameDetails()
     }
-  }, [game, open])
+  }, [gameId, open])
 
   const fetchGameDetails = async () => {
-    if (!game) return
+    if (!gameId) return
 
     setIsLoading(true)
     try {
-      const response = await apiService.getGameDetails(game.id)
+      const response = await apiService.getGameDetails(gameId)
       if (response.success && response.data) {
         setGameDetails(response.data)
       } else {
         // Fallback to basic game data
+        const igdbId = parseInt(gameId);
         setGameDetails({
-          ...game,
+          id: gameId,
+          title: title,
+          year: undefined,
+          poster: undefined,
+          overview: undefined,
           type: 'game',
-          igdbId: parseInt(game.id),
+          igdbId: isNaN(igdbId) ? undefined : igdbId,
           platforms: undefined,
           genre: undefined,
           developer: undefined,
@@ -79,29 +85,29 @@ export function GameDetailModal({ game, open, onOpenChange }: GameDetailModalPro
   const handleDownloadRequestCreated = () => {
     toast({
       title: "Download Requested",
-      description: `${game?.title} has been added to the download queue`,
+      description: `${title} has been added to the download queue`,
     })
     // Refresh the torrent requests to show the new status
     refreshRequests()
   }
 
-  if (!game) return null
+  if (!gameId) return null
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-2xl">{game.title}</DialogTitle>
+          <DialogTitle className="text-2xl">{gameDetails?.title || title}</DialogTitle>
         </DialogHeader>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* Cover Art */}
           <div className="md:col-span-1">
             <div className="aspect-[2/3] bg-muted rounded-lg overflow-hidden">
-              {game.poster ? (
+              {gameDetails?.poster ? (
                 <img
-                  src={game.poster}
-                  alt={game.title}
+                  src={gameDetails.poster}
+                  alt={gameDetails.title || title}
                   className="w-full h-full object-cover"
                 />
               ) : (
@@ -126,10 +132,10 @@ export function GameDetailModal({ game, open, onOpenChange }: GameDetailModalPro
                 {/* Basic Info */}
                 <div className="flex flex-wrap gap-2 items-center">
                   <Badge variant="secondary">Game</Badge>
-                  {game.year && (
+                  {gameDetails?.year && (
                     <div className="flex items-center gap-1 text-sm text-muted-foreground">
                       <Calendar className="h-4 w-4" />
-                      {game.year}
+                      {gameDetails.year}
                     </div>
                   )}
                   {gameDetails?.rating && (
@@ -163,11 +169,11 @@ export function GameDetailModal({ game, open, onOpenChange }: GameDetailModalPro
                 )}
 
                 {/* Overview */}
-                {game.overview && (
+                {gameDetails?.overview && (
                   <div>
                     <h3 className="font-semibold mb-2">Overview</h3>
                     <p className="text-sm text-muted-foreground leading-relaxed">
-                      {game.overview}
+                      {gameDetails.overview}
                     </p>
                   </div>
                 )}
@@ -269,7 +275,7 @@ export function GameDetailModal({ game, open, onOpenChange }: GameDetailModalPro
 
       {/* Download Request Modal */}
       <DownloadRequestModal
-        item={game}
+        item={gameDetails}
         open={showDownloadModal}
         onOpenChange={setShowDownloadModal}
         onRequestCreated={handleDownloadRequestCreated}
@@ -279,20 +285,20 @@ export function GameDetailModal({ game, open, onOpenChange }: GameDetailModalPro
       <TorrentSearchModal
         isOpen={showTorrentSearchModal}
         onClose={() => setShowTorrentSearchModal(false)}
-        searchItem={game}
+        searchItem={gameDetails}
         onTorrentDownload={async (torrent) => {
           try {
             let requestId = existingRequest?.id
 
             // First, create a torrent request if one doesn't exist
             if (!existingRequest) {
-              const gameDetails = gameDetail as GameDetails
+              const gameDetailsData = gameDetails as GameDetails
               const requestDto = {
-                title: game.title,
-                year: game.year,
-                igdbId: parseInt(game.id),
-                platform: gameDetails?.platforms?.[0] || undefined,
-                genre: gameDetails?.genre?.[0] || undefined,
+                title: gameDetails?.title || title,
+                year: gameDetails?.year,
+                igdbId: gameDetails?.igdbId || parseInt(gameId),
+                platform: gameDetailsData?.platforms?.[0] || undefined,
+                genre: gameDetailsData?.genre?.[0] || undefined,
                 preferredQualities: ['HD_1080P'],
                 preferredFormats: ['X265'],
                 minSeeders: 1,

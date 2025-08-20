@@ -55,7 +55,7 @@ export class MoviesController {
     try {
       this.logger.log(`Searching movies with query: "${searchDto.query}", year: ${searchDto.year}, page: ${searchDto.page}`);
       
-      const result = await this.omdbService.searchMovies(
+      const result = await this.tmdbService.searchMovies(
         searchDto.query,
         searchDto.year,
         searchDto.page || 1,
@@ -203,15 +203,16 @@ export class MoviesController {
   async getMovieDetails(@Param('id') id: string): Promise<{ success: boolean; data?: MovieDetails; error?: string }> {
     try {
       this.logger.log(`Getting movie details for ID: ${id}`);
-      
-      if (!id || !id.startsWith('tt')) {
+
+      const numericId = parseInt(id);
+      if (isNaN(numericId)) {
         throw new HttpException(
-          'Invalid IMDb ID format. ID must start with "tt"',
+          'Invalid TMDB ID format. ID must be a number',
           HttpStatus.BAD_REQUEST,
         );
       }
 
-      const result = await this.omdbService.getMovieDetails(id);
+      const result = await this.tmdbService.getMovieDetails(id);
 
       if (!result.success) {
         const statusCode = result.error?.includes('not found') ? HttpStatus.NOT_FOUND : 
