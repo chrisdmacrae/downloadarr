@@ -14,6 +14,9 @@ export const queryKeys = {
   reverseIndexingStatus: ['organization', 'reverse-index', 'status'] as const,
   gamePlatforms: ['game-platforms'] as const,
   gamePlatformOptions: ['game-platforms', 'options'] as const,
+  appConfiguration: ['configuration'] as const,
+  onboardingStatus: ['configuration', 'onboarding', 'status'] as const,
+  jackettConfig: ['configuration', 'jackett'] as const,
 };
 
 // Hook for queue statistics

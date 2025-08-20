@@ -36,7 +36,8 @@ RUN apk add --no-cache \
     wget \
     aria2 \
     docker-cli \
-    shadow
+    shadow \
+    postgresql-client
 
 WORKDIR /app
 

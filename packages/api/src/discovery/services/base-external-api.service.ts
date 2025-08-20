@@ -18,7 +18,7 @@ export abstract class BaseExternalApiService {
     protected readonly configService: ConfigService,
   ) {}
 
-  protected abstract getServiceConfig(): ExternalApiConfig;
+  protected abstract getServiceConfig(): ExternalApiConfig | Promise<ExternalApiConfig>;
 
   protected async makeRequest<T>(
     endpoint: string,
@@ -26,7 +26,7 @@ export abstract class BaseExternalApiService {
     options?: AxiosRequestConfig,
   ): Promise<ExternalApiResponse<T>> {
     try {
-      this.config = this.getServiceConfig();
+      this.config = await this.getServiceConfig();
       
       // Check rate limiting
       if (this.config.rateLimit && this.rateLimitInfo) {

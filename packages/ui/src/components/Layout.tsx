@@ -1,6 +1,7 @@
 import { Link, useLocation } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { IssueReportFab } from '@/components/IssueReportFab'
 import {
   Download,
   Search,
@@ -131,6 +132,9 @@ export default function Layout({ children }: LayoutProps) {
           {children}
         </main>
       </div>
+
+      {/* Floating Action Button for Issue Reporting */}
+      <IssueReportFab />
     </div>
   )
 }

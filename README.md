@@ -38,6 +38,11 @@ The setup script will:
 - 🔒 Set up VPN support (optional)
 - 🚀 Start all services with Docker Compose
 
+After setup, visit http://localhost:3000 to complete the onboarding wizard where you'll:
+- Configure your Jackett API key
+- Set up file organization preferences
+- Complete your Downloadarr setup
+
 ### Development
 
 TODO: add dev script
@@ -57,7 +62,6 @@ Copy `.env.example` to `.env` and configure:
 - `VPN_ENABLED` - Enable/disable VPN integration
 - `VPN_CONFIG_PATH` - Path to OpenVPN configuration
 - `DOWNLOAD_PATH` - Directory for downloaded files
-- `JACKETT_API_KEY` - Jackett API key for torrent search
 - `FLARESOLVERR_URL` - FlareSolverr URL for Cloudflare bypass
 - `OMDB_API_KEY` - OMDb API key for movie search
 - `TMDB_API_KEY` - TMDB API key for TV show search

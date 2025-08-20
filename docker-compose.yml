@@ -46,7 +46,6 @@ services:
       ARIA2_PORT: 6800
       ARIA2_SECRET: ${ARIA2_RPC_SECRET:-downloadarr}
       JACKETT_URL: http://jackett:9117
-      JACKETT_API_KEY: ${JACKETT_API_KEY}
       FLARESOLVERR_URL: http://flaresolverr:8191
       OMDB_API_KEY: ${OMDB_API_KEY}
       TMDB_API_KEY: ${TMDB_API_KEY}

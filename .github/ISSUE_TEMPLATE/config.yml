@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 📖 Documentation
+    url: https://github.com/chrisdmacrae/downloadarr/blob/main/README.md
+    about: Check the documentation for setup and usage instructions
+  - name: 💬 Discussions
+    url: https://github.com/chrisdmacrae/downloadarr/discussions
+    about: Ask questions and discuss ideas with the community
+  - name: 🔒 Security Issues
+    url: https://github.com/chrisdmacrae/downloadarr/security/advisories/new
+    about: Report security vulnerabilities privately

@@ -104,15 +104,8 @@ prompt_with_default() {
     local var_name="$3"
     local input=""
 
-    while true; do
-        echo -n -e "${BLUE}${prompt}${NC} [${default}]: "
-        if read -r input; then
-            break
-        else
-            echo
-            print_warning "Please try again..."
-        fi
-    done
+    echo -n -e "${BLUE}${prompt}${NC} [${default}]: "
+    read -r input
 
     if [[ -z "$input" ]]; then
         eval "$var_name=\"$default\""
@@ -212,15 +205,8 @@ configure_vpn() {
     echo
 
     local enable_vpn=""
-    while true; do
-        echo -n -e "${BLUE}Do you want to enable VPN support?${NC} [y/N]: "
-        if read -r enable_vpn; then
-            break
-        else
-            echo
-            print_warning "Please try again..."
-        fi
-    done
+    echo -n -e "${BLUE}Do you want to enable VPN support?${NC} [y/N]: "
+    read -r enable_vpn
     
     if [[ "$enable_vpn" =~ ^[Yy]$ ]]; then
         update_env_var "VPN_ENABLED" "true"

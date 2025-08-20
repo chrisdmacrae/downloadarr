@@ -1,9 +1,10 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { BaseExternalApiService } from './base-external-api.service';
 import { TorrentFilterService, FilterCriteria } from './torrent-filter.service';
 import { GamePlatformsService } from '../../config/game-platforms.service';
+import { AppConfigurationService } from '../../config/services/app-configuration.service';
 import {
   ExternalApiResponse,
   ExternalApiConfig,
@@ -12,7 +13,7 @@ import {
   JackettSearchResponse,
   JackettTorrent,
 } from '../interfaces/external-api.interface';
-import { TorrentSearchDto, MovieTorrentSearchDto, TvTorrentSearchDto, GameTorrentSearchDto } from '../dto/torrent-search.dto';
+import { MovieTorrentSearchDto, TvTorrentSearchDto, GameTorrentSearchDto } from '../dto/torrent-search.dto';
 
 @Injectable()
 export class JackettService extends BaseExternalApiService {
@@ -22,11 +23,30 @@ export class JackettService extends BaseExternalApiService {
     protected readonly configService: ConfigService,
     private readonly torrentFilterService: TorrentFilterService,
     private readonly gamePlatformsService: GamePlatformsService,
+    private readonly appConfigService: AppConfigurationService,
   ) {
     super(httpService, configService);
   }
 
-  protected getServiceConfig(): ExternalApiConfig {
+  protected async getServiceConfig(): Promise<ExternalApiConfig> {
+    // Try to get configuration from database first
+    try {
+      const jackettConfig = await this.appConfigService.getJackettConfig();
+
+      if (jackettConfig.apiKey) {
+        return {
+          baseUrl: jackettConfig.url,
+          apiKey: jackettConfig.apiKey,
+          timeout: 15000,
+          retryAttempts: 2,
+          retryDelay: 1000,
+        };
+      }
+    } catch (error) {
+      this.logger.debug('Could not get Jackett config from database, falling back to environment variables');
+    }
+
+    // Fallback to environment variables
     const jackettUrl = this.configService.get<string>('JACKETT_URL', 'http://localhost:9117');
     const apiKey = this.configService.get<string>('JACKETT_API_KEY');
 

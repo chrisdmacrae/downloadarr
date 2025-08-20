@@ -7,7 +7,8 @@ RUN apk add --no-cache \
     wget \
     aria2 \
     docker-cli \
-    shadow
+    shadow \
+    netcat-openbsd
 
 WORKDIR /app
 

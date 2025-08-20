@@ -345,3 +345,23 @@ model OrganizedFile {
 
   @@map("organized_files")
 }
+
+model AppConfiguration {
+  id                    String   @id @default(cuid())
+
+  // Onboarding status
+  onboardingCompleted   Boolean  @default(false)
+  onboardingCompletedAt DateTime?
+
+  // Jackett configuration
+  jackettApiKey         String?
+  jackettUrl            String   @default("http://jackett:9117")
+
+  // Organization preferences
+  organizationEnabled   Boolean  @default(true)
+
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@map("app_configuration")
+}
