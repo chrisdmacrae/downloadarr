@@ -225,10 +225,12 @@ export class DownloadMetadataService {
         if (validChildStatuses.length > 0) {
           const hasActive = validChildStatuses.some(child => child.status === 'active');
           const hasError = validChildStatuses.some(child => child.status === 'error');
+          const hasPaused = validChildStatuses.some(child => child.status === 'paused');
           const allComplete = validChildStatuses.every(child => child.status === 'complete');
 
           if (hasError) overallStatus = 'error';
           else if (hasActive) overallStatus = 'active';
+          else if (hasPaused) overallStatus = 'paused';
           else if (allComplete && mainStatus.status === 'complete') overallStatus = 'complete';
         } else {
           // Check if this is a torrent that has completed metadata but no child files yet
