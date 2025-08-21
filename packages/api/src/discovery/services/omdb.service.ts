@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { BaseExternalApiService } from './base-external-api.service';
+import { AppConfigurationService } from '../../config/services/app-configuration.service';
 import { ExternalApiConfig, ExternalApiResponse, MovieDetails, SearchResult } from '../interfaces/external-api.interface';
 
 interface OmdbSearchResponse {
@@ -54,14 +55,21 @@ export class OmdbService extends BaseExternalApiService {
   constructor(
     protected readonly httpService: HttpService,
     protected readonly configService: ConfigService,
+    private readonly appConfigService: AppConfigurationService,
   ) {
     super(httpService, configService);
   }
 
-  protected getServiceConfig(): ExternalApiConfig {
+  protected async getServiceConfig(): Promise<ExternalApiConfig> {
+    const apiKeysConfig = await this.appConfigService.getApiKeysConfig();
+
+    if (!apiKeysConfig.omdbApiKey) {
+      throw new Error('OMDB API key is not configured. Please configure it in the application settings.');
+    }
+
     return {
       baseUrl: 'http://www.omdbapi.com/',
-      apiKey: this.validateApiKey('OMDB_API_KEY'),
+      apiKey: apiKeysConfig.omdbApiKey,
       timeout: 10000,
       retryAttempts: 2,
       retryDelay: 1000,

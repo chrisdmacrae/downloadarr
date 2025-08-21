@@ -46,7 +46,7 @@ export class AppConfigurationService {
    */
   async completeOnboarding(dto: OnboardingStepDto): Promise<AppConfiguration> {
     const existingConfig = await this.getConfiguration();
-    
+
     return this.prisma.appConfiguration.update({
       where: { id: existingConfig.id },
       data: {
@@ -54,6 +54,10 @@ export class AppConfigurationService {
         onboardingCompletedAt: new Date(),
         jackettApiKey: dto.jackettApiKey,
         organizationEnabled: dto.organizationEnabled,
+        omdbApiKey: dto.omdbApiKey,
+        tmdbApiKey: dto.tmdbApiKey,
+        igdbClientId: dto.igdbClientId,
+        igdbClientSecret: dto.igdbClientSecret,
       },
     });
   }
@@ -75,6 +79,46 @@ export class AppConfigurationService {
       apiKey: config.jackettApiKey,
       url: config.jackettUrl,
     };
+  }
+
+  /**
+   * Get external API keys configuration
+   */
+  async getApiKeysConfig(): Promise<{
+    omdbApiKey: string | null;
+    tmdbApiKey: string | null;
+    igdbClientId: string | null;
+    igdbClientSecret: string | null;
+  }> {
+    const config = await this.getConfiguration();
+    return {
+      omdbApiKey: config.omdbApiKey,
+      tmdbApiKey: config.tmdbApiKey,
+      igdbClientId: config.igdbClientId,
+      igdbClientSecret: config.igdbClientSecret,
+    };
+  }
+
+  /**
+   * Update external API keys
+   */
+  async updateApiKeys(apiKeys: {
+    omdbApiKey?: string;
+    tmdbApiKey?: string;
+    igdbClientId?: string;
+    igdbClientSecret?: string;
+  }): Promise<AppConfiguration> {
+    const existingConfig = await this.getConfiguration();
+
+    return this.prisma.appConfiguration.update({
+      where: { id: existingConfig.id },
+      data: {
+        omdbApiKey: apiKeys.omdbApiKey ?? existingConfig.omdbApiKey,
+        tmdbApiKey: apiKeys.tmdbApiKey ?? existingConfig.tmdbApiKey,
+        igdbClientId: apiKeys.igdbClientId ?? existingConfig.igdbClientId,
+        igdbClientSecret: apiKeys.igdbClientSecret ?? existingConfig.igdbClientSecret,
+      },
+    });
   }
 
   /**

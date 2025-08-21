@@ -71,10 +71,6 @@ services:
       REDIS_PORT: 6379
       JACKETT_URL: http://jackett:9117
       FLARESOLVERR_URL: http://flaresolverr:8191
-      # External API Keys for Discovery Services
-      OMDB_API_KEY: ${OMDB_API_KEY}
-      TMDB_API_KEY: ${TMDB_API_KEY}
-      IGDB_CLIENT_ID: ${IGDB_CLIENT_ID}
       IGDB_CLIENT_SECRET: ${IGDB_CLIENT_SECRET}
       DOWNLOAD_PATH: /app/downloads
       LIBRARY_PATH: /app/library

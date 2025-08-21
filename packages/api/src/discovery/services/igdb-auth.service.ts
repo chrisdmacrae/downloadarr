@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { HttpService } from '@nestjs/axios';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { firstValueFrom } from 'rxjs';
+import { AppConfigurationService } from '../../config/services/app-configuration.service';
 
 interface TwitchTokenResponse {
   access_token: string;
@@ -25,6 +26,7 @@ export class IgdbAuthService implements OnModuleInit {
   constructor(
     private readonly configService: ConfigService,
     private readonly httpService: HttpService,
+    private readonly appConfigService: AppConfigurationService,
   ) {}
 
   async onModuleInit() {
@@ -74,8 +76,8 @@ export class IgdbAuthService implements OnModuleInit {
    * Refresh the access token using client credentials
    */
   private async refreshToken(): Promise<void> {
-    const clientId = this.getClientId();
-    const clientSecret = this.getClientSecret();
+    const clientId = await this.getClientId();
+    const clientSecret = await this.getClientSecret();
 
     this.logger.log('🔄 Requesting new access token from Twitch...');
 
@@ -126,7 +128,7 @@ export class IgdbAuthService implements OnModuleInit {
    * Validate that the token works with IGDB API
    */
   private async validateToken(accessToken: string): Promise<void> {
-    const clientId = this.getClientId();
+    const clientId = await this.getClientId();
 
     try {
       this.logger.log('🔍 Validating token with IGDB API...');
@@ -175,25 +177,25 @@ export class IgdbAuthService implements OnModuleInit {
   }
 
   /**
-   * Get client ID from environment
+   * Get client ID from database configuration
    */
-  private getClientId(): string {
-    const clientId = this.configService.get<string>('IGDB_CLIENT_ID');
-    if (!clientId) {
-      throw new Error('IGDB_CLIENT_ID is required but not configured');
+  private async getClientId(): Promise<string> {
+    const apiKeysConfig = await this.appConfigService.getApiKeysConfig();
+    if (!apiKeysConfig.igdbClientId) {
+      throw new Error('IGDB Client ID is not configured. Please configure it in the application settings.');
     }
-    return clientId;
+    return apiKeysConfig.igdbClientId;
   }
 
   /**
-   * Get client secret from environment
+   * Get client secret from database configuration
    */
-  private getClientSecret(): string {
-    const clientSecret = this.configService.get<string>('IGDB_CLIENT_SECRET');
-    if (!clientSecret) {
-      throw new Error('IGDB_CLIENT_SECRET is required but not configured');
+  private async getClientSecret(): Promise<string> {
+    const apiKeysConfig = await this.appConfigService.getApiKeysConfig();
+    if (!apiKeysConfig.igdbClientSecret) {
+      throw new Error('IGDB Client Secret is not configured. Please configure it in the application settings.');
     }
-    return clientSecret;
+    return apiKeysConfig.igdbClientSecret;
   }
 
   /**

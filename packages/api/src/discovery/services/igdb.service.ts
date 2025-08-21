@@ -3,6 +3,7 @@ import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { BaseExternalApiService } from './base-external-api.service';
 import { IgdbAuthService } from './igdb-auth.service';
+import { AppConfigurationService } from '../../config/services/app-configuration.service';
 import { ExternalApiConfig, ExternalApiResponse, GameDetails, SearchResult } from '../interfaces/external-api.interface';
 import { firstValueFrom, timeout, retry, catchError } from 'rxjs';
 import { AxiosRequestConfig } from 'axios';
@@ -38,6 +39,7 @@ export class IgdbService extends BaseExternalApiService {
     protected readonly httpService: HttpService,
     protected readonly configService: ConfigService,
     private readonly igdbAuthService: IgdbAuthService,
+    private readonly appConfigService: AppConfigurationService,
   ) {
     super(httpService, configService);
   }
@@ -56,11 +58,16 @@ export class IgdbService extends BaseExternalApiService {
   }
 
   private async getAuthHeaders(): Promise<Record<string, string>> {
-    const clientId = this.validateApiKey('IGDB_CLIENT_ID');
+    const apiKeysConfig = await this.appConfigService.getApiKeysConfig();
+
+    if (!apiKeysConfig.igdbClientId) {
+      throw new Error('IGDB Client ID is not configured. Please configure it in the application settings.');
+    }
+
     const accessToken = await this.igdbAuthService.getAccessToken();
 
     return {
-      'Client-ID': clientId,
+      'Client-ID': apiKeysConfig.igdbClientId,
       'Authorization': `Bearer ${accessToken}`,
       'Content-Type': 'text/plain',
     };

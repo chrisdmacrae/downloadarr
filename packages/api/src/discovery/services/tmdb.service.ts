@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { AxiosRequestConfig, AxiosResponse } from 'axios';
 import { firstValueFrom, timeout, retry, catchError } from 'rxjs';
 import { BaseExternalApiService } from './base-external-api.service';
+import { AppConfigurationService } from '../../config/services/app-configuration.service';
 import { ExternalApiConfig, ExternalApiResponse, TvShowDetails, SearchResult, MovieDetails } from '../interfaces/external-api.interface';
 
 interface TmdbSearchResponse {
@@ -114,14 +115,21 @@ export class TmdbService extends BaseExternalApiService {
   constructor(
     protected readonly httpService: HttpService,
     protected readonly configService: ConfigService,
+    private readonly appConfigService: AppConfigurationService,
   ) {
     super(httpService, configService);
   }
 
-  protected getServiceConfig(): ExternalApiConfig {
+  protected async getServiceConfig(): Promise<ExternalApiConfig> {
+    const apiKeysConfig = await this.appConfigService.getApiKeysConfig();
+
+    if (!apiKeysConfig.tmdbApiKey) {
+      throw new Error('TMDB API key is not configured. Please configure it in the application settings.');
+    }
+
     return {
       baseUrl: 'https://api.themoviedb.org/3',
-      apiKey: this.validateApiKey('TMDB_API_KEY'),
+      apiKey: apiKeysConfig.tmdbApiKey,
       timeout: 10000,
       retryAttempts: 2,
       retryDelay: 1000,
@@ -139,7 +147,7 @@ export class TmdbService extends BaseExternalApiService {
     options?: AxiosRequestConfig,
   ): Promise<ExternalApiResponse<T>> {
     try {
-      this.config = this.getServiceConfig();
+      this.config = await this.getServiceConfig();
 
       // Check rate limiting
       if (this.config.rateLimit && this.rateLimitInfo) {

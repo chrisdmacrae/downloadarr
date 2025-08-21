@@ -6,16 +6,22 @@ import { useToast } from '@/hooks/use-toast'
 import { useCompleteOnboarding } from '@/hooks/useOnboarding'
 import JackettStep from './onboarding/JackettStep'
 import OrganizationStep from './onboarding/OrganizationStep'
+import ApiKeysStep from './onboarding/ApiKeysStep'
 import CompletionStep from './onboarding/CompletionStep'
 
 interface OnboardingData {
   jackettApiKey: string
   organizationEnabled: boolean
+  omdbApiKey?: string
+  tmdbApiKey?: string
+  igdbClientId?: string
+  igdbClientSecret?: string
 }
 
 const STEPS = [
   { id: 'jackett', title: 'Jackett Configuration', description: 'Configure your Jackett API key' },
   { id: 'organization', title: 'File Organization', description: 'Set up file organization preferences' },
+  { id: 'apikeys', title: 'External API Keys', description: 'Configure optional API keys for enhanced discovery' },
   { id: 'complete', title: 'Complete Setup', description: 'Finish your setup' },
 ]
 
@@ -77,6 +83,15 @@ export default function OnboardingWizard() {
       case 'organization':
         return (
           <OrganizationStep
+            data={onboardingData}
+            onUpdate={updateOnboardingData}
+            onNext={handleNext}
+            onPrevious={handlePrevious}
+          />
+        )
+      case 'apikeys':
+        return (
+          <ApiKeysStep
             data={onboardingData}
             onUpdate={updateOnboardingData}
             onNext={handleNext}

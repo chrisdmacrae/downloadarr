@@ -357,6 +357,12 @@ model AppConfiguration {
   jackettApiKey         String?
   jackettUrl            String   @default("http://jackett:9117")
 
+  // External API Keys for Discovery Services
+  omdbApiKey            String?  // OMDB API key for movie/TV metadata
+  tmdbApiKey            String?  // TMDB API key for movie/TV metadata
+  igdbClientId          String?  // IGDB Client ID for game metadata
+  igdbClientSecret      String?  // IGDB Client Secret for game metadata
+
   // Organization preferences
   organizationEnabled   Boolean  @default(true)
 

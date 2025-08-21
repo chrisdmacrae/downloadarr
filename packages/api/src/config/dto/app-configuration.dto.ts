@@ -33,6 +33,38 @@ export class UpdateAppConfigurationDto {
   @IsOptional()
   @IsBoolean()
   organizationEnabled?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'OMDB API key for movie/TV metadata',
+    example: 'your_omdb_api_key_here',
+  })
+  @IsOptional()
+  @IsString()
+  omdbApiKey?: string;
+
+  @ApiPropertyOptional({
+    description: 'TMDB API key for movie/TV metadata',
+    example: 'your_tmdb_api_key_here',
+  })
+  @IsOptional()
+  @IsString()
+  tmdbApiKey?: string;
+
+  @ApiPropertyOptional({
+    description: 'IGDB Client ID for game metadata',
+    example: 'your_igdb_client_id_here',
+  })
+  @IsOptional()
+  @IsString()
+  igdbClientId?: string;
+
+  @ApiPropertyOptional({
+    description: 'IGDB Client Secret for game metadata',
+    example: 'your_igdb_client_secret_here',
+  })
+  @IsOptional()
+  @IsString()
+  igdbClientSecret?: string;
 }
 
 export class OnboardingStepDto {
@@ -49,4 +81,36 @@ export class OnboardingStepDto {
   })
   @IsBoolean()
   organizationEnabled: boolean;
+
+  @ApiPropertyOptional({
+    description: 'OMDB API key for movie/TV metadata',
+    example: 'your_omdb_api_key_here',
+  })
+  @IsOptional()
+  @IsString()
+  omdbApiKey?: string;
+
+  @ApiPropertyOptional({
+    description: 'TMDB API key for movie/TV metadata',
+    example: 'your_tmdb_api_key_here',
+  })
+  @IsOptional()
+  @IsString()
+  tmdbApiKey?: string;
+
+  @ApiPropertyOptional({
+    description: 'IGDB Client ID for game metadata',
+    example: 'your_igdb_client_id_here',
+  })
+  @IsOptional()
+  @IsString()
+  igdbClientId?: string;
+
+  @ApiPropertyOptional({
+    description: 'IGDB Client Secret for game metadata',
+    example: 'your_igdb_client_secret_here',
+  })
+  @IsOptional()
+  @IsString()
+  igdbClientSecret?: string;
 }
