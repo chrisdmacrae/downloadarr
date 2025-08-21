@@ -116,8 +116,8 @@ export class RequestedTorrentsService {
       },
     });
 
-    // Populate season/episode metadata for ongoing shows
-    if (isOngoing && dto.tmdbId) {
+    // Populate season/episode metadata for all TV shows with TMDB ID
+    if (dto.tmdbId) {
       // Run metadata population in the background to avoid blocking the request
       setImmediate(() => {
         this.tvShowMetadataService.populateSeasonData(request.id).catch(error => {

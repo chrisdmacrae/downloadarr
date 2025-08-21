@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
+import { AppConfigurationService } from '../../config/services/app-configuration.service';
 import { ContentType, SeasonStatus, EpisodeStatus } from '../../../generated/prisma';
 
 interface TMDBTvShow {
@@ -36,10 +37,12 @@ interface TMDBSeasonDetails {
 @Injectable()
 export class TvShowMetadataService {
   private readonly logger = new Logger(TvShowMetadataService.name);
-  private readonly tmdbApiKey = process.env.TMDB_API_KEY;
   private readonly tmdbBaseUrl = 'https://api.themoviedb.org/3';
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly appConfigService: AppConfigurationService,
+  ) {}
 
   async populateSeasonData(requestId: string): Promise<void> {
     this.logger.log(`Populating season data for request ${requestId}`);
@@ -49,28 +52,32 @@ export class TvShowMetadataService {
     });
 
     if (!request) {
-      this.logger.warn(`Request ${requestId} not found`);
+      this.logger.error(`Request ${requestId} not found`);
       return;
     }
 
-    if (request.contentType !== ContentType.TV_SHOW || !request.isOngoing) {
-      this.logger.log(`Request ${requestId} is not an ongoing TV show, skipping`);
+    if (request.contentType !== ContentType.TV_SHOW) {
+      this.logger.log(`Request ${requestId} is not a TV show (type: ${request.contentType}), skipping`);
       return;
     }
 
     if (!request.tmdbId) {
-      this.logger.warn(`Request ${requestId} has no TMDB ID, cannot fetch metadata`);
+      this.logger.error(`Request ${requestId} (${request.title}) has no TMDB ID, cannot fetch metadata`);
       return;
     }
 
-    if (!this.tmdbApiKey) {
-      this.logger.warn('TMDB API key not configured, skipping metadata fetch');
+    // Get TMDB API key from database
+    const apiKeysConfig = await this.appConfigService.getApiKeysConfig();
+    if (!apiKeysConfig.tmdbApiKey) {
+      this.logger.error('TMDB API key not configured in database! Please configure it in the application settings.');
       return;
     }
+
+    this.logger.log(`Processing TV show: ${request.title} (TMDB ID: ${request.tmdbId}, Ongoing: ${request.isOngoing})`)
 
     try {
       // Fetch TV show details from TMDB
-      const tvShow = await this.fetchTvShowDetails(request.tmdbId);
+      const tvShow = await this.fetchTvShowDetails(request.tmdbId, apiKeysConfig.tmdbApiKey);
       if (!tvShow) {
         this.logger.warn(`Could not fetch TV show details for TMDB ID ${request.tmdbId}`);
         return;
@@ -92,7 +99,7 @@ export class TvShowMetadataService {
         // Skip season 0 (specials) for now
         if (tmdbSeason.season_number === 0) continue;
 
-        await this.createOrUpdateSeason(requestId, tmdbSeason);
+        await this.createOrUpdateSeason(requestId, tmdbSeason, apiKeysConfig.tmdbApiKey);
       }
 
       this.logger.log(`Successfully populated season data for request ${requestId}`);
@@ -101,10 +108,10 @@ export class TvShowMetadataService {
     }
   }
 
-  private async fetchTvShowDetails(tmdbId: number): Promise<TMDBTvShow | null> {
+  private async fetchTvShowDetails(tmdbId: number, apiKey: string): Promise<TMDBTvShow | null> {
     try {
       const response = await fetch(
-        `${this.tmdbBaseUrl}/tv/${tmdbId}?api_key=${this.tmdbApiKey}&append_to_response=seasons`
+        `${this.tmdbBaseUrl}/tv/${tmdbId}?api_key=${apiKey}&append_to_response=seasons`
       );
 
       if (!response.ok) {
@@ -119,10 +126,10 @@ export class TvShowMetadataService {
     }
   }
 
-  private async fetchSeasonDetails(tmdbId: number, seasonNumber: number): Promise<TMDBSeasonDetails | null> {
+  private async fetchSeasonDetails(tmdbId: number, seasonNumber: number, apiKey: string): Promise<TMDBSeasonDetails | null> {
     try {
       const response = await fetch(
-        `${this.tmdbBaseUrl}/tv/${tmdbId}/season/${seasonNumber}?api_key=${this.tmdbApiKey}`
+        `${this.tmdbBaseUrl}/tv/${tmdbId}/season/${seasonNumber}?api_key=${apiKey}`
       );
 
       if (!response.ok) {
@@ -137,7 +144,7 @@ export class TvShowMetadataService {
     }
   }
 
-  private async createOrUpdateSeason(requestId: string, tmdbSeason: TMDBSeason): Promise<void> {
+  private async createOrUpdateSeason(requestId: string, tmdbSeason: TMDBSeason, apiKey: string): Promise<void> {
     // Check if season already exists
     const existingSeason = await this.prisma.tvShowSeason.findUnique({
       where: {
@@ -175,7 +182,7 @@ export class TvShowMetadataService {
     });
 
     if (request?.tmdbId) {
-      const seasonDetails = await this.fetchSeasonDetails(request.tmdbId, tmdbSeason.season_number);
+      const seasonDetails = await this.fetchSeasonDetails(request.tmdbId, tmdbSeason.season_number, apiKey);
       if (seasonDetails) {
         await this.createOrUpdateEpisodes(requestId, tmdbSeason.season_number, seasonDetails.episodes);
       }
@@ -222,21 +229,28 @@ export class TvShowMetadataService {
   }
 
   async updateAllOngoingShows(): Promise<void> {
-    this.logger.log('Starting metadata update for all ongoing TV shows');
+    this.logger.log('Starting metadata update for all TV shows');
 
-    const ongoingRequests = await this.prisma.requestedTorrent.findMany({
+    // Check if TMDB API key is configured
+    const apiKeysConfig = await this.appConfigService.getApiKeysConfig();
+    if (!apiKeysConfig.tmdbApiKey) {
+      this.logger.warn('TMDB API key not configured in database! Skipping metadata update.');
+      return;
+    }
+
+    const tvShowRequests = await this.prisma.requestedTorrent.findMany({
       where: {
         contentType: ContentType.TV_SHOW,
-        isOngoing: true,
         tmdbId: { not: null },
       },
-      select: { id: true, title: true },
+      select: { id: true, title: true, isOngoing: true },
     });
 
-    this.logger.log(`Found ${ongoingRequests.length} ongoing TV show requests to update`);
+    this.logger.log(`Found ${tvShowRequests.length} TV show requests to update`);
 
-    for (const request of ongoingRequests) {
+    for (const request of tvShowRequests) {
       try {
+        this.logger.log(`Updating metadata for: ${request.title} (ongoing: ${request.isOngoing})`);
         await this.populateSeasonData(request.id);
         // Add a small delay to avoid hitting TMDB rate limits
         await new Promise(resolve => setTimeout(resolve, 250));
@@ -245,6 +259,6 @@ export class TvShowMetadataService {
       }
     }
 
-    this.logger.log('Completed metadata update for all ongoing TV shows');
+    this.logger.log('Completed metadata update for all TV shows');
   }
 }
