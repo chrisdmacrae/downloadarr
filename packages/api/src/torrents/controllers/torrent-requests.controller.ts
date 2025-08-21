@@ -849,6 +849,64 @@ export class TorrentRequestsController {
     }
   }
 
+  @Post('scan-tv-episodes')
+  @ApiOperation({
+    summary: 'Scan for new episodes in all ongoing TV shows',
+    description: 'Manually trigger episode scanning for all ongoing TV show requests',
+  })
+  @ApiResponse({ status: 200, description: 'TV episode scan completed successfully' })
+  async scanAllTvEpisodes(): Promise<{ success: boolean; message: string }> {
+    try {
+      this.logger.log('Manually triggering TV episode scan for all ongoing shows');
+
+      await this.tvShowMetadataService.updateAllOngoingShows();
+
+      return {
+        success: true,
+        message: 'TV episode scan completed successfully',
+      };
+    } catch (error) {
+      this.logger.error(`Error scanning TV episodes: ${error.message}`, error.stack);
+
+      throw new HttpException(
+        'Failed to scan TV episodes',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Post(':id/scan-episodes')
+  @ApiOperation({
+    summary: 'Scan for new episodes in a specific TV show',
+    description: 'Manually trigger episode scanning for a specific TV show request',
+  })
+  @ApiParam({ name: 'id', description: 'TV show request ID' })
+  @ApiResponse({ status: 200, description: 'TV show episode scan completed successfully' })
+  @ApiResponse({ status: 404, description: 'TV show request not found' })
+  async scanTvShowEpisodes(@Param('id') id: string): Promise<{ success: boolean; message: string }> {
+    try {
+      this.logger.log(`Manually triggering episode scan for TV show request ${id}`);
+
+      await this.tvShowMetadataService.populateSeasonData(id);
+
+      return {
+        success: true,
+        message: 'TV show episode scan completed successfully',
+      };
+    } catch (error) {
+      this.logger.error(`Error scanning episodes for TV show ${id}: ${error.message}`, error.stack);
+
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      throw new HttpException(
+        'Failed to scan TV show episodes',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
   @Get(':id/download-status')
   @ApiOperation({
     summary: 'Get live download status',

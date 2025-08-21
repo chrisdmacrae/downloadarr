@@ -204,9 +204,8 @@ export class TorrentCheckerService {
   private async buildSearchQuery(request: RequestedTorrent): Promise<string> {
     let query = request.title;
 
-    if (request.contentType === ContentType.MOVIE && request.year) {
-      query += ` ${request.year}`;
-    }
+    // For movies, don't add year here - JackettService will handle it
+    // This prevents duplicate years in the search query
 
     if (request.contentType === ContentType.TV_SHOW) {
       if (request.isOngoing) {

@@ -12,6 +12,8 @@ export const queryKeys = {
   organizationSettings: ['organization', 'settings'] as const,
   organizationRules: ['organization', 'rules'] as const,
   reverseIndexingStatus: ['organization', 'reverse-index', 'status'] as const,
+  organizeQueue: ['organization', 'queue'] as const,
+  organizeQueueStats: ['organization', 'queue', 'stats'] as const,
   gamePlatforms: ['game-platforms'] as const,
   gamePlatformOptions: ['game-platforms', 'options'] as const,
   appConfiguration: ['configuration'] as const,
@@ -211,6 +213,8 @@ export const useTriggerReverseIndexing = () => {
     mutationFn: apiService.triggerReverseIndexing,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.reverseIndexingStatus });
+      queryClient.invalidateQueries({ queryKey: queryKeys.organizeQueue });
+      queryClient.invalidateQueries({ queryKey: queryKeys.organizeQueueStats });
     },
   });
 };
@@ -221,6 +225,66 @@ export const useReverseIndexingStatus = () => {
     queryFn: apiService.getReverseIndexingStatus,
     refetchInterval: 5000, // Check every 5 seconds
     staleTime: 3000,
+  });
+};
+
+// Organize Queue hooks
+export const useOrganizeQueue = (params?: {
+  status?: string;
+  contentType?: string;
+  limit?: number;
+  offset?: number;
+}) => {
+  return useQuery({
+    queryKey: [...queryKeys.organizeQueue, params],
+    queryFn: () => apiService.getOrganizeQueue(params),
+    staleTime: 30 * 1000, // 30 seconds
+  });
+};
+
+export const useOrganizeQueueStats = () => {
+  return useQuery({
+    queryKey: queryKeys.organizeQueueStats,
+    queryFn: apiService.getOrganizeQueueStats,
+    staleTime: 30 * 1000, // 30 seconds
+    refetchInterval: 60 * 1000, // Refetch every minute
+  });
+};
+
+export const useProcessOrganizeQueueItem = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: any }) =>
+      apiService.processOrganizeQueueItem(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.organizeQueue });
+      queryClient.invalidateQueries({ queryKey: queryKeys.organizeQueueStats });
+    },
+  });
+};
+
+export const useSkipOrganizeQueueItem = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: apiService.skipOrganizeQueueItem,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.organizeQueue });
+      queryClient.invalidateQueries({ queryKey: queryKeys.organizeQueueStats });
+    },
+  });
+};
+
+export const useDeleteOrganizeQueueItem = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: apiService.deleteOrganizeQueueItem,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.organizeQueue });
+      queryClient.invalidateQueries({ queryKey: queryKeys.organizeQueueStats });
+    },
   });
 };
 

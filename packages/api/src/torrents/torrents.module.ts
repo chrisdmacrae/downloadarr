@@ -11,6 +11,7 @@ import { TorrentCheckerService } from './services/torrent-checker.service';
 import { DownloadProgressTrackerService } from './services/download-progress-tracker.service';
 import { TvShowMetadataService } from './services/tv-show-metadata.service';
 import { TvShowMetadataCronService } from './services/tv-show-metadata-cron.service';
+import { SeasonScanningService } from './services/season-scanning.service';
 import { RequestLifecycleOrchestrator } from './services/request-lifecycle-orchestrator.service';
 import { DownloadAggregationService } from './services/download-aggregation.service';
 
@@ -55,6 +56,7 @@ import { DownloadMetadataService } from '../download/download-metadata.service';
     DownloadProgressTrackerService,
     TvShowMetadataService,
     TvShowMetadataCronService,
+    SeasonScanningService,
   ],
   controllers: [
     TorrentRequestsController,
@@ -77,6 +79,7 @@ import { DownloadMetadataService } from '../download/download-metadata.service';
     TorrentCheckerService,
     DownloadProgressTrackerService,
     TvShowMetadataService,
+    SeasonScanningService,
   ],
 })
 export class TorrentsModule implements OnModuleInit {

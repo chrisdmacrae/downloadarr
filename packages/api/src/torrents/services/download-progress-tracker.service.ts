@@ -297,91 +297,11 @@ export class DownloadProgressTrackerService {
     }
   }
 
-  private async updateSeasonStatus(seasonId: string): Promise<void> {
-    try {
-      // Check if all torrent downloads for this season are complete
-      const seasonDownloads = await this.prisma.torrentDownload.findMany({
-        where: {
-          tvShowSeasonId: seasonId,
-        },
-      });
+  // NOTE: Season status updates are now handled by the season scanning service
+  // which checks organized files in the library rather than download completion
 
-      const allComplete = seasonDownloads.every(download => download.status === 'COMPLETED');
-      const anyFailed = seasonDownloads.some(download => download.status === 'FAILED');
-
-      let newStatus: string;
-      if (anyFailed) {
-        newStatus = 'FAILED';
-      } else if (allComplete) {
-        newStatus = 'COMPLETED';
-      } else {
-        // Still downloading
-        return;
-      }
-
-      await this.prisma.tvShowSeason.update({
-        where: { id: seasonId },
-        data: {
-          status: newStatus as any,
-          updatedAt: new Date(),
-        },
-      });
-
-      this.logger.log(`Updated season ${seasonId} status to ${newStatus}`);
-
-      // If this was a season pack, also update all episodes in the season
-      if (newStatus === 'COMPLETED') {
-        await this.prisma.tvShowEpisode.updateMany({
-          where: { tvShowSeasonId: seasonId },
-          data: {
-            status: 'COMPLETED',
-            updatedAt: new Date(),
-          },
-        });
-        this.logger.log(`Updated all episodes in season ${seasonId} to COMPLETED`);
-      }
-
-    } catch (error) {
-      this.logger.error(`Error updating season status for ${seasonId}:`, error);
-    }
-  }
-
-  private async updateEpisodeStatus(episodeId: string): Promise<void> {
-    try {
-      // Check if all torrent downloads for this episode are complete
-      const episodeDownloads = await this.prisma.torrentDownload.findMany({
-        where: {
-          tvShowEpisodeId: episodeId,
-        },
-      });
-
-      const allComplete = episodeDownloads.every(download => download.status === 'COMPLETED');
-      const anyFailed = episodeDownloads.some(download => download.status === 'FAILED');
-
-      let newStatus: string;
-      if (anyFailed) {
-        newStatus = 'FAILED';
-      } else if (allComplete) {
-        newStatus = 'COMPLETED';
-      } else {
-        // Still downloading
-        return;
-      }
-
-      await this.prisma.tvShowEpisode.update({
-        where: { id: episodeId },
-        data: {
-          status: newStatus as any,
-          updatedAt: new Date(),
-        },
-      });
-
-      this.logger.log(`Updated episode ${episodeId} status to ${newStatus}`);
-
-    } catch (error) {
-      this.logger.error(`Error updating episode status for ${episodeId}:`, error);
-    }
-  }
+  // NOTE: Episode status updates are now handled by the season scanning service
+  // which checks organized files in the library rather than download completion
 
   private async updateMainRequestStatus(requestId: string): Promise<void> {
     try {

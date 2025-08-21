@@ -1,8 +1,10 @@
 import { Link, useLocation } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { IssueReportFab } from '@/components/IssueReportFab'
 import { UpdateCard } from '@/components/UpdateCard'
+import { useOrganizeQueueStats } from '@/hooks/useApi'
 import {
   Download,
   Search,
@@ -30,8 +32,8 @@ const findNavigation = [
 ]
 
 const settingsNavigation = [
-  { name: 'Settings', href: '/settings', icon: Settings },
   { name: 'Organization', href: '/organization', icon: FolderTree },
+  { name: 'Settings', href: '/settings', icon: Settings },
 ]
 
 interface LayoutProps {
@@ -40,6 +42,7 @@ interface LayoutProps {
 
 export default function Layout({ children }: LayoutProps) {
   const location = useLocation()
+  const { data: queueStats } = useOrganizeQueueStats()
 
   return (
     <div className="flex h-screen bg-background">
@@ -113,18 +116,27 @@ export default function Layout({ children }: LayoutProps) {
               {settingsNavigation.map((item) => {
               const Icon = item.icon
               const isActive = location.pathname === item.href
+              const showBadge = item.name === 'Organization' && queueStats && queueStats.pending > 0
 
               return (
                 <Link key={item.name} to={item.href}>
                   <Button
                     variant={isActive ? "default" : "ghost"}
                     className={cn(
-                      "w-full justify-center md:justify-start",
+                      "w-full justify-center md:justify-start relative",
                       isActive && "bg-primary text-primary-foreground"
                     )}
                   >
                     <Icon className="w-4 h-4 md:mr-2" />
                     <span className="hidden md:inline">{item.name}</span>
+                    {showBadge && (
+                      <Badge className="ml-auto h-5 w-5 rounded-full p-0 text-xs bg-red-500 text-white hidden md:flex items-center justify-center">
+                        {queueStats.pending}
+                      </Badge>
+                    )}
+                    {showBadge && (
+                      <div className="absolute -top-1 -right-1 h-3 w-3 bg-red-500 rounded-full md:hidden" />
+                    )}
                   </Button>
                 </Link>
               )

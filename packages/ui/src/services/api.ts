@@ -213,6 +213,38 @@ export interface CreateOrganizationRuleDto {
   platform?: string;
 }
 
+export interface OrganizeQueueItem {
+  id: string;
+  folderPath: string;
+  contentType: 'MOVIE' | 'TV_SHOW' | 'GAME';
+  detectedTitle?: string;
+  detectedYear?: number;
+  detectedSeason?: number;
+  detectedEpisode?: number;
+  detectedPlatform?: string;
+  detectedQuality?: string;
+  detectedFormat?: string;
+  detectedEdition?: string;
+  status: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'SKIPPED';
+  selectedTmdbId?: string;
+  selectedIgdbId?: string;
+  selectedTitle?: string;
+  selectedYear?: number;
+  selectedPlatform?: string;
+  createdAt: string;
+  updatedAt: string;
+  processedAt?: string;
+}
+
+export interface OrganizeQueueStats {
+  total: number;
+  pending: number;
+  processing: number;
+  completed: number;
+  failed: number;
+  skipped: number;
+}
+
 export interface PathPreview {
   folderPath: string;
   fileName: string;
@@ -869,8 +901,61 @@ export const apiService = {
     return response.data;
   },
 
+  triggerSeasonScanning: async (): Promise<{ success: boolean; message: string; results?: any }> => {
+    const response = await api.post('/organization/season-scan');
+    return response.data;
+  },
+
+  triggerSeasonScanningForRequest: async (requestId: string): Promise<{ success: boolean; message: string; results?: any }> => {
+    const response = await api.post(`/organization/season-scan/${requestId}`);
+    return response.data;
+  },
+
   extractMetadata: async (fileName: string, contentType: 'MOVIE' | 'TV_SHOW' | 'GAME'): Promise<FileMetadata> => {
     const response = await api.get(`/organization/extract-metadata?fileName=${encodeURIComponent(fileName)}&contentType=${contentType}`);
+    return response.data;
+  },
+
+  // Organize Queue Services
+  getOrganizeQueue: async (params?: {
+    status?: string;
+    contentType?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<{ items: OrganizeQueueItem[]; total: number }> => {
+    const searchParams = new URLSearchParams();
+    if (params?.status) searchParams.append('status', params.status);
+    if (params?.contentType) searchParams.append('contentType', params.contentType);
+    if (params?.limit) searchParams.append('limit', params.limit.toString());
+    if (params?.offset) searchParams.append('offset', params.offset.toString());
+
+    const response = await api.get(`/organization/queue?${searchParams.toString()}`);
+    return response.data;
+  },
+
+  getOrganizeQueueStats: async (): Promise<OrganizeQueueStats> => {
+    const response = await api.get('/organization/queue/stats');
+    return response.data;
+  },
+
+  processOrganizeQueueItem: async (id: string, data: {
+    selectedTmdbId?: string;
+    selectedIgdbId?: string;
+    selectedTitle?: string;
+    selectedYear?: number;
+    selectedPlatform?: string;
+  }): Promise<{ success: boolean; message: string }> => {
+    const response = await api.post(`/organization/queue/${id}/process`, data);
+    return response.data;
+  },
+
+  skipOrganizeQueueItem: async (id: string): Promise<{ success: boolean; message: string }> => {
+    const response = await api.post(`/organization/queue/${id}/skip`);
+    return response.data;
+  },
+
+  deleteOrganizeQueueItem: async (id: string): Promise<{ success: boolean; message: string }> => {
+    const response = await api.delete(`/organization/queue/${id}`);
     return response.data;
   },
 

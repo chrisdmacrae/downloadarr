@@ -260,6 +260,14 @@ enum TorrentDownloadStatus {
   CANCELLED
 }
 
+enum OrganizeQueueStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  SKIPPED
+}
+
 model OrganizationRule {
   id                String      @id @default(cuid())
   contentType       ContentType
@@ -344,6 +352,41 @@ model OrganizedFile {
   requestedTorrent   RequestedTorrent? @relation(fields: [requestedTorrentId], references: [id], onDelete: SetNull)
 
   @@map("organized_files")
+}
+
+model OrganizeQueue {
+  id                String      @id @default(cuid())
+
+  // Folder information
+  folderPath        String      @unique
+  contentType       ContentType
+
+  // Detected metadata from folder name
+  detectedTitle     String?
+  detectedYear      Int?
+  detectedSeason    Int?        // For TV shows
+  detectedEpisode   Int?        // For TV shows
+  detectedPlatform  String?     // For games
+  detectedQuality   String?
+  detectedFormat    String?
+  detectedEdition   String?
+
+  // Processing status
+  status            OrganizeQueueStatus @default(PENDING)
+
+  // Selected metadata (after manual processing)
+  selectedTmdbId    String?     // For movies/TV shows
+  selectedIgdbId    String?     // For games
+  selectedTitle     String?
+  selectedYear      Int?
+  selectedPlatform  String?     // For games
+
+  // Timestamps
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+  processedAt       DateTime?
+
+  @@map("organize_queue")
 }
 
 model AppConfiguration {

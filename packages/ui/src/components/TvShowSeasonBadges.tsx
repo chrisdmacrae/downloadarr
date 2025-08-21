@@ -6,9 +6,12 @@ import {
   Download,
   Clock,
   Search,
-  XCircle
+  XCircle,
+  RefreshCw
 } from 'lucide-react'
-import { TorrentRequest } from '@/services/api'
+import { TorrentRequest, apiService } from '@/services/api'
+import { useToast } from '@/hooks/use-toast'
+import { useState } from 'react'
 
 interface TvShowSeasonBadgesProps {
   request: TorrentRequest
@@ -25,8 +28,41 @@ interface SeasonSummary {
 }
 
 export function TvShowSeasonBadges({ request, onSeasonClick, className }: TvShowSeasonBadgesProps) {
+  const { toast } = useToast()
+  const [isScanning, setIsScanning] = useState(false)
+
   if (request.contentType !== 'TV_SHOW') {
     return null
+  }
+
+  const handleSeasonScan = async () => {
+    setIsScanning(true)
+    try {
+      const response = await apiService.triggerSeasonScanningForRequest(request.id)
+      if (response.success) {
+        toast({
+          title: "Season Scan Complete",
+          description: response.message,
+        })
+        // Trigger a page refresh to show updated data
+        window.location.reload()
+      } else {
+        toast({
+          title: "Season Scan Failed",
+          description: response.message || "Failed to scan seasons",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error('Error scanning seasons:', error)
+      toast({
+        title: "Season Scan Failed",
+        description: "An error occurred while scanning seasons",
+        variant: "destructive",
+      })
+    } finally {
+      setIsScanning(false)
+    }
   }
 
   // If no tvShowSeasons data is available but this is an ongoing request, show a placeholder
@@ -38,9 +74,25 @@ export function TvShowSeasonBadges({ request, onSeasonClick, className }: TvShow
             <Clock className="h-3 w-3" />
             Ongoing Series
           </Badge>
-          <p className="text-xs text-muted-foreground">
-            Seasons will appear as episodes are discovered
-          </p>
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-muted-foreground">
+              Seasons will appear as episodes are discovered
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSeasonScan}
+              disabled={isScanning}
+              className="h-6 px-2 text-xs"
+            >
+              {isScanning ? (
+                <RefreshCw className="h-3 w-3 animate-spin" />
+              ) : (
+                <RefreshCw className="h-3 w-3" />
+              )}
+              <span className="ml-1">Scan</span>
+            </Button>
+          </div>
         </div>
       )
     }
@@ -166,6 +218,24 @@ export function TvShowSeasonBadges({ request, onSeasonClick, className }: TvShow
             <Clock className="h-3 w-3" />
             Ongoing
           </Badge>
+        )}
+
+        {/* Season scan button for shows with pending episodes */}
+        {overallProgress.totalEpisodes > 0 && overallProgress.completedEpisodes < overallProgress.totalEpisodes && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleSeasonScan}
+            disabled={isScanning}
+            className="h-6 px-2 text-xs"
+          >
+            {isScanning ? (
+              <RefreshCw className="h-3 w-3 animate-spin" />
+            ) : (
+              <RefreshCw className="h-3 w-3" />
+            )}
+            <span className="ml-1">Scan</span>
+          </Button>
         )}
       </div>
 

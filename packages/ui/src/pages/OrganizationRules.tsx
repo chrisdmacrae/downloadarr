@@ -8,10 +8,12 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 import { useToast } from '@/hooks/use-toast'
-import { useOrganizationRules, useUpdateOrganizationRule, useCreateOrganizationRule, useDeleteOrganizationRule, useGamePlatformOptions } from '@/hooks/useApi'
+import { useOrganizationRules, useUpdateOrganizationRule, useCreateOrganizationRule, useDeleteOrganizationRule, useGamePlatformOptions, useOrganizeQueueStats } from '@/hooks/useApi'
 import type { OrganizationRule } from '@/services/api'
+import { OrganizeQueue } from '@/components/OrganizeQueue'
 
 interface RuleFormData {
   contentType: 'MOVIE' | 'TV_SHOW' | 'GAME'
@@ -31,6 +33,7 @@ export default function OrganizationRules() {
   const createRule = useCreateOrganizationRule()
   const deleteRule = useDeleteOrganizationRule()
   const { data: platformOptions, isLoading: loadingPlatforms } = useGamePlatformOptions(false)
+  const { data: queueStats } = useOrganizeQueueStats()
 
   const [editingRule, setEditingRule] = useState<OrganizationRule | null>(null)
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
@@ -625,13 +628,36 @@ export default function OrganizationRules() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold">Organization Rules</h1>
+          <h1 className="text-3xl font-bold">Organization</h1>
           <p className="text-muted-foreground">
-            Configure how files are organized and renamed for different content types
+            Manage organization rules and process folders that need manual organization
           </p>
         </div>
-        <Button onClick={handleCreateRule}>Add New Rule</Button>
       </div>
+
+      <Tabs defaultValue="rules" className="space-y-6">
+        <TabsList>
+          <TabsTrigger value="rules">Organization Rules</TabsTrigger>
+          <TabsTrigger value="queue" className="relative">
+            Organize Queue
+            {queueStats && queueStats.pending > 0 && (
+              <Badge className="ml-2 h-5 w-5 rounded-full p-0 text-xs bg-red-500 text-white">
+                {queueStats.pending}
+              </Badge>
+            )}
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="rules" className="space-y-6">
+          <div className="flex justify-between items-center">
+            <div>
+              <h2 className="text-xl font-semibold">Organization Rules</h2>
+              <p className="text-muted-foreground">
+                Configure how files are organized and renamed for different content types
+              </p>
+            </div>
+            <Button onClick={handleCreateRule}>Add New Rule</Button>
+          </div>
 
       {/* Pattern Examples */}
       <Card>
@@ -994,6 +1020,18 @@ export default function OrganizationRules() {
           )}
         </CardContent>
       </Card>
+        </TabsContent>
+
+        <TabsContent value="queue" className="space-y-6">
+          <div>
+            <h2 className="text-xl font-semibold">Organize Queue</h2>
+            <p className="text-muted-foreground">
+              Folders that need manual organization after reverse indexing
+            </p>
+          </div>
+          <OrganizeQueue />
+        </TabsContent>
+      </Tabs>
 
       {/* Create Rule Dialog */}
       <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>

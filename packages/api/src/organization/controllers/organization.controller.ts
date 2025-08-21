@@ -1,8 +1,9 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UsePipes, ValidationPipe } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, UsePipes, ValidationPipe, Inject, forwardRef } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery } from '@nestjs/swagger';
 import { OrganizationRulesService } from '../services/organization-rules.service';
 import { FileOrganizationService } from '../services/file-organization.service';
 import { ReverseIndexingService } from '../services/reverse-indexing.service';
+import { SeasonScanningService } from '../../torrents/services/season-scanning.service';
 import { CreateOrganizationRuleDto, UpdateOrganizationRuleDto } from '../dto/organization-rule.dto';
 import { UpdateOrganizationSettingsDto } from '../dto/organization-settings.dto';
 import { ContentType } from '../../../generated/prisma';
@@ -14,6 +15,8 @@ export class OrganizationController {
     private readonly organizationRulesService: OrganizationRulesService,
     private readonly fileOrganizationService: FileOrganizationService,
     private readonly reverseIndexingService: ReverseIndexingService,
+    @Inject(forwardRef(() => SeasonScanningService))
+    private readonly seasonScanningService: SeasonScanningService,
   ) {}
 
   // Settings endpoints
@@ -162,5 +165,107 @@ export class OrganizationController {
   @ApiResponse({ status: 200, description: 'Reverse indexing status retrieved' })
   async getReverseIndexingStatus() {
     return this.reverseIndexingService.getStatus();
+  }
+
+  // Season scanning endpoints
+  @Post('season-scan')
+  @ApiOperation({ summary: 'Manually trigger season scanning' })
+  @ApiResponse({ status: 200, description: 'Season scanning triggered' })
+  async triggerSeasonScanning() {
+    try {
+      const results = await this.seasonScanningService.scanAllSeasons();
+      return {
+        success: true,
+        message: `Season scanning completed. Scanned ${results.seasonsScanned} seasons, updated ${results.episodesUpdated} episodes.`,
+        results,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: `Season scanning failed: ${error.message}`,
+      };
+    }
+  }
+
+  @Post('season-scan/:requestId')
+  @ApiOperation({ summary: 'Manually trigger season scanning for a specific request' })
+  @ApiParam({ name: 'requestId', description: 'Torrent request ID' })
+  @ApiResponse({ status: 200, description: 'Season scanning triggered for specific request' })
+  async triggerSeasonScanningForRequest(@Param('requestId') requestId: string) {
+    try {
+      const results = await this.seasonScanningService.scanTvShowRequest(requestId);
+      return {
+        success: true,
+        message: `Season scanning completed for request. Updated ${results.episodesUpdated} episodes.`,
+        results,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: `Season scanning failed: ${error.message}`,
+      };
+    }
+  }
+
+  // Organize queue endpoints
+  @Get('queue')
+  @ApiOperation({ summary: 'Get organize queue items' })
+  @ApiQuery({ name: 'status', required: false, description: 'Filter by status' })
+  @ApiQuery({ name: 'contentType', required: false, description: 'Filter by content type' })
+  @ApiQuery({ name: 'limit', required: false, description: 'Limit number of results' })
+  @ApiQuery({ name: 'offset', required: false, description: 'Offset for pagination' })
+  @ApiResponse({ status: 200, description: 'Organize queue items retrieved' })
+  async getOrganizeQueue(
+    @Query('status') status?: string,
+    @Query('contentType') contentType?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.reverseIndexingService.getOrganizeQueue({
+      status,
+      contentType,
+      limit: limit ? parseInt(limit) : undefined,
+      offset: offset ? parseInt(offset) : undefined,
+    });
+  }
+
+  @Get('queue/stats')
+  @ApiOperation({ summary: 'Get organize queue statistics' })
+  @ApiResponse({ status: 200, description: 'Organize queue statistics retrieved' })
+  async getOrganizeQueueStats() {
+    return this.reverseIndexingService.getOrganizeQueueStats();
+  }
+
+  @Post('queue/:id/process')
+  @ApiOperation({ summary: 'Process an organize queue item' })
+  @ApiParam({ name: 'id', description: 'Queue item ID' })
+  @ApiResponse({ status: 200, description: 'Queue item processed' })
+  async processOrganizeQueueItem(
+    @Param('id') id: string,
+    @Body() data: {
+      selectedTmdbId?: string;
+      selectedIgdbId?: string;
+      selectedTitle?: string;
+      selectedYear?: number;
+      selectedPlatform?: string;
+    },
+  ) {
+    return this.reverseIndexingService.processOrganizeQueueItem(id, data);
+  }
+
+  @Post('queue/:id/skip')
+  @ApiOperation({ summary: 'Skip an organize queue item' })
+  @ApiParam({ name: 'id', description: 'Queue item ID' })
+  @ApiResponse({ status: 200, description: 'Queue item skipped' })
+  async skipOrganizeQueueItem(@Param('id') id: string) {
+    return this.reverseIndexingService.skipOrganizeQueueItem(id);
+  }
+
+  @Delete('queue/:id')
+  @ApiOperation({ summary: 'Delete an organize queue item' })
+  @ApiParam({ name: 'id', description: 'Queue item ID' })
+  @ApiResponse({ status: 200, description: 'Queue item deleted' })
+  async deleteOrganizeQueueItem(@Param('id') id: string) {
+    return this.reverseIndexingService.deleteOrganizeQueueItem(id);
   }
 }

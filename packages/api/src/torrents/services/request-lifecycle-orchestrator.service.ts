@@ -238,53 +238,31 @@ export class RequestLifecycleOrchestrator {
 
   /**
    * Handle TV show season pack completion
+   * NOTE: Season and episode status updates are now handled by the season scanning service
+   * This method only logs the download completion for tracking purposes
    */
   async markSeasonPackCompleted(requestId: string, seasonId: string): Promise<void> {
-    // Get season and its episodes
-    const season = await this.prisma.tvShowSeason.findUnique({
-      where: { id: seasonId },
-      include: { episodes: true },
-    });
+    this.logger.log(`Season pack download completed for season ${seasonId} in request ${requestId}`);
 
-    if (!season) {
-      throw new Error(`Season ${seasonId} not found`);
-    }
+    // The season scanning service will handle updating episode and season status
+    // based on organized files in the library, not download completion
 
-    // Mark all episodes as completed
-    const episodeUpdates = this.tvShowStateMachine.markSeasonPackCompleted(seasonId, season.episodes);
-
-    for (const update of episodeUpdates) {
-      await this.prisma.tvShowEpisode.update({
-        where: { id: update.episodeId },
-        data: { status: update.newStatus },
-      });
-    }
-
-    // Update season status
-    await this.prisma.tvShowSeason.update({
-      where: { id: seasonId },
-      data: { status: 'COMPLETED' },
-    });
-
-    // Recalculate main request status
+    // Still recalculate main request status based on download completion
     await this.recalculateTvShowStatus(requestId);
   }
 
   /**
    * Handle individual episode completion
+   * NOTE: Episode status updates are now handled by the season scanning service
+   * This method only logs the download completion for tracking purposes
    */
   async markEpisodeCompleted(requestId: string, episodeId: string): Promise<void> {
-    // Mark episode as completed
-    const episodeUpdates = this.tvShowStateMachine.markEpisodeCompleted(episodeId);
+    this.logger.log(`Episode download completed for episode ${episodeId} in request ${requestId}`);
 
-    for (const update of episodeUpdates) {
-      await this.prisma.tvShowEpisode.update({
-        where: { id: update.episodeId },
-        data: { status: update.newStatus },
-      });
-    }
+    // The season scanning service will handle updating episode status
+    // based on organized files in the library, not download completion
 
-    // Recalculate main request status
+    // Still recalculate main request status based on download completion
     await this.recalculateTvShowStatus(requestId);
   }
 
