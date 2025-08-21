@@ -298,7 +298,7 @@ export function MovieDetailModal({ contentType, contentId, title, open, onOpenCh
 
       {/* Download Request Modal */}
       <DownloadRequestModal
-        item={movieDetails}
+        item={movieDetails ? { ...movieDetails, type: contentType } : null}
         open={showDownloadModal}
         onOpenChange={setShowDownloadModal}
         onRequestCreated={handleDownloadRequestCreated}
@@ -306,7 +306,7 @@ export function MovieDetailModal({ contentType, contentId, title, open, onOpenCh
 
       {/* Torrent Search Modal */}
       <TorrentSearchModal
-        searchItem={movieDetails}
+        searchItem={movieDetails ? { ...movieDetails, type: contentType } : null}
         isOpen={showTorrentSearchModal}
         onClose={() => setShowTorrentSearchModal(false)}
         onTorrentDownload={async (torrent) => {
