@@ -10,6 +10,10 @@ interface AppConfiguration {
   jackettApiKey: string | null
   jackettUrl: string
   organizationEnabled: boolean
+  omdbApiKey: string | null
+  tmdbApiKey: string | null
+  igdbClientId: string | null
+  igdbClientSecret: string | null
   createdAt: string
   updatedAt: string
 }
@@ -17,6 +21,10 @@ interface AppConfiguration {
 interface OnboardingData {
   jackettApiKey: string
   organizationEnabled: boolean
+  omdbApiKey?: string
+  tmdbApiKey?: string
+  igdbClientId?: string
+  igdbClientSecret?: string
 }
 
 interface JackettConfig {
@@ -79,11 +87,18 @@ export const useCompleteOnboarding = () => {
         },
         body: JSON.stringify(data),
       })
-      
+
       if (!response.ok) {
-        throw new Error('Failed to complete onboarding')
+        let errorMessage = 'Failed to complete onboarding'
+        try {
+          const errorData = await response.json()
+          errorMessage = errorData.message || errorMessage
+        } catch {
+          // If we can't parse the error response, use the default message
+        }
+        throw new Error(`${errorMessage} (Status: ${response.status})`)
       }
-      
+
       return response.json()
     },
     onSuccess: () => {

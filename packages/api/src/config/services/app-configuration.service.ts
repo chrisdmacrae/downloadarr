@@ -45,21 +45,39 @@ export class AppConfigurationService {
    * Complete onboarding with provided configuration
    */
   async completeOnboarding(dto: OnboardingStepDto): Promise<AppConfiguration> {
-    const existingConfig = await this.getConfiguration();
-
-    return this.prisma.appConfiguration.update({
-      where: { id: existingConfig.id },
-      data: {
-        onboardingCompleted: true,
-        onboardingCompletedAt: new Date(),
-        jackettApiKey: dto.jackettApiKey,
-        organizationEnabled: dto.organizationEnabled,
-        omdbApiKey: dto.omdbApiKey,
-        tmdbApiKey: dto.tmdbApiKey,
-        igdbClientId: dto.igdbClientId,
-        igdbClientSecret: dto.igdbClientSecret,
-      },
+    this.logger.log('Completing onboarding with data:', {
+      jackettApiKey: dto.jackettApiKey ? '[REDACTED]' : null,
+      organizationEnabled: dto.organizationEnabled,
+      omdbApiKey: dto.omdbApiKey ? '[REDACTED]' : null,
+      tmdbApiKey: dto.tmdbApiKey ? '[REDACTED]' : null,
+      igdbClientId: dto.igdbClientId ? '[REDACTED]' : null,
+      igdbClientSecret: dto.igdbClientSecret ? '[REDACTED]' : null,
     });
+
+    const existingConfig = await this.getConfiguration();
+    this.logger.log(`Updating configuration with ID: ${existingConfig.id}`);
+
+    try {
+      const updatedConfig = await this.prisma.appConfiguration.update({
+        where: { id: existingConfig.id },
+        data: {
+          onboardingCompleted: true,
+          onboardingCompletedAt: new Date(),
+          jackettApiKey: dto.jackettApiKey,
+          organizationEnabled: dto.organizationEnabled,
+          omdbApiKey: dto.omdbApiKey,
+          tmdbApiKey: dto.tmdbApiKey,
+          igdbClientId: dto.igdbClientId,
+          igdbClientSecret: dto.igdbClientSecret,
+        },
+      });
+
+      this.logger.log('Onboarding completed successfully');
+      return updatedConfig;
+    } catch (error) {
+      this.logger.error('Failed to complete onboarding:', error);
+      throw error;
+    }
   }
 
   /**

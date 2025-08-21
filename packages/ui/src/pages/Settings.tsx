@@ -5,17 +5,30 @@ import { Switch } from '@/components/ui/switch'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/hooks/use-toast'
 import { useOrganizationSettings, useUpdateOrganizationSettings, useTriggerReverseIndexing, useReverseIndexingStatus } from '@/hooks/useApi'
+import { useAppConfiguration, useUpdateAppConfiguration } from '@/hooks/useOnboarding'
+import ApiKeysSettings from '@/components/settings/ApiKeysSettings'
+import JackettSettings from '@/components/settings/JackettSettings'
 import type { OrganizationSettings } from '@/services/api'
 
 export default function Settings() {
   const { toast } = useToast()
   const { data: settings, isLoading: settingsLoading } = useOrganizationSettings()
   const { data: reverseIndexingStatus } = useReverseIndexingStatus()
+  const { data: appConfig, isLoading: appConfigLoading } = useAppConfiguration()
   const updateSettings = useUpdateOrganizationSettings()
+  const updateAppConfig = useUpdateAppConfiguration()
   const triggerReverseIndexing = useTriggerReverseIndexing()
 
-  // Local state for form
+  // Local state for forms
   const [formData, setFormData] = useState<Partial<OrganizationSettings>>({})
+  const [appConfigData, setAppConfigData] = useState({
+    jackettApiKey: '',
+    jackettUrl: '',
+    omdbApiKey: '',
+    tmdbApiKey: '',
+    igdbClientId: '',
+    igdbClientSecret: '',
+  })
 
   // Update form data when settings are loaded
   useEffect(() => {
@@ -24,8 +37,64 @@ export default function Settings() {
     }
   }, [settings])
 
+  // Update app config data when loaded
+  useEffect(() => {
+    if (appConfig) {
+      setAppConfigData({
+        jackettApiKey: appConfig.jackettApiKey || '',
+        jackettUrl: appConfig.jackettUrl || '',
+        omdbApiKey: appConfig.omdbApiKey || '',
+        tmdbApiKey: appConfig.tmdbApiKey || '',
+        igdbClientId: appConfig.igdbClientId || '',
+        igdbClientSecret: appConfig.igdbClientSecret || '',
+      })
+    }
+  }, [appConfig])
+
   const handleInputChange = (field: keyof OrganizationSettings, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }))
+  }
+
+  const handleAppConfigChange = (updates: Partial<typeof appConfigData>) => {
+    setAppConfigData(prev => ({ ...prev, ...updates }))
+  }
+
+  const handleSaveJackettConfig = async () => {
+    try {
+      await updateAppConfig.mutateAsync({
+        jackettApiKey: appConfigData.jackettApiKey || undefined,
+        jackettUrl: appConfigData.jackettUrl || undefined,
+      })
+      toast({
+        title: "Jackett settings saved",
+        description: "Jackett configuration has been updated successfully.",
+      })
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to save Jackett settings. Please try again.",
+      })
+    }
+  }
+
+  const handleSaveApiKeys = async () => {
+    try {
+      await updateAppConfig.mutateAsync({
+        omdbApiKey: appConfigData.omdbApiKey || undefined,
+        tmdbApiKey: appConfigData.tmdbApiKey || undefined,
+        igdbClientId: appConfigData.igdbClientId || undefined,
+        igdbClientSecret: appConfigData.igdbClientSecret || undefined,
+      })
+      toast({
+        title: "API keys saved",
+        description: "External API keys have been updated successfully.",
+      })
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to save API keys. Please try again.",
+      })
+    }
   }
 
   const handleSwitchChange = (field: keyof OrganizationSettings, checked: boolean) => {
@@ -93,7 +162,7 @@ export default function Settings() {
     }
   }
 
-  if (settingsLoading) {
+  if (settingsLoading || appConfigLoading) {
     return (
       <div className="space-y-6">
         <div>
@@ -141,6 +210,24 @@ export default function Settings() {
             <div className="flex space-x-2">
               <Skeleton className="h-10 w-32" />
               <Skeleton className="h-10 w-48" />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* API Keys Settings Skeleton */}
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-6 w-48" />
+            <Skeleton className="h-4 w-80" />
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="space-y-4">
+              <Skeleton className="h-32 w-full" />
+              <Skeleton className="h-32 w-full" />
+              <Skeleton className="h-32 w-full" />
+            </div>
+            <div className="flex justify-end">
+              <Skeleton className="h-10 w-32" />
             </div>
           </CardContent>
         </Card>
@@ -232,38 +319,28 @@ export default function Settings() {
 
       <div className="grid gap-6">
         {/* Jackett Settings */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Jackett Integration</CardTitle>
-            <CardDescription>
-              Configure Jackett for torrent search
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Jackett URL</label>
-              <input
-                type="text"
-                placeholder="http://localhost:9117"
-                className="w-full px-3 py-2 border border-input rounded-md bg-background"
-              />
-            </div>
+        <JackettSettings
+          data={{
+            jackettApiKey: appConfigData.jackettApiKey,
+            jackettUrl: appConfigData.jackettUrl,
+          }}
+          onUpdate={handleAppConfigChange}
+          onSave={handleSaveJackettConfig}
+          isLoading={updateAppConfig.isPending}
+        />
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium">API Key</label>
-              <input
-                type="password"
-                placeholder="Enter Jackett API key"
-                className="w-full px-3 py-2 border border-input rounded-md bg-background"
-              />
-            </div>
-
-            <div className="flex space-x-2">
-              <Button variant="outline">Test Connection</Button>
-              <Button>Save Jackett Settings</Button>
-            </div>
-          </CardContent>
-        </Card>
+        {/* API Keys Settings */}
+        <ApiKeysSettings
+          data={{
+            omdbApiKey: appConfigData.omdbApiKey,
+            tmdbApiKey: appConfigData.tmdbApiKey,
+            igdbClientId: appConfigData.igdbClientId,
+            igdbClientSecret: appConfigData.igdbClientSecret,
+          }}
+          onUpdate={handleAppConfigChange}
+          onSave={handleSaveApiKeys}
+          isLoading={updateAppConfig.isPending}
+        />
 
         {/* Organization Settings */}
         <Card>

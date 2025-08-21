@@ -253,20 +253,20 @@ export class OrganizationRulesService {
     switch (contentType) {
       case ContentType.MOVIE:
         folderNamePattern = '{title} ({year})';
-        fileNamePattern = '{title} ({year}) - {edition} - {quality} - {format}';
+        fileNamePattern = '{filename}';
         break;
       case ContentType.TV_SHOW:
         folderNamePattern = '{title} ({year})';
-        fileNamePattern = '{title} - S{seasonNumber}E{episodeNumber} - {edition} - {quality} - {format}';
+        fileNamePattern = '{filename}';
         seasonFolderPattern = 'Season {seasonNumber}';
         break;
       case ContentType.GAME:
         folderNamePattern = '{title} ({platform})';
-        fileNamePattern = '{title} ({platform}) - {edition}';
+        fileNamePattern = '{filename}';
         break;
       default:
         folderNamePattern = '{title}';
-        fileNamePattern = '{title}';
+        fileNamePattern = '{filename}';
     }
 
     return this.prisma.organizationRule.create({

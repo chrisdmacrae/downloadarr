@@ -30,6 +30,10 @@ export default function OnboardingWizard() {
   const [onboardingData, setOnboardingData] = useState<OnboardingData>({
     jackettApiKey: '',
     organizationEnabled: true,
+    omdbApiKey: undefined,
+    tmdbApiKey: undefined,
+    igdbClientId: undefined,
+    igdbClientSecret: undefined,
   })
   
   const navigate = useNavigate()
@@ -50,16 +54,37 @@ export default function OnboardingWizard() {
 
   const handleComplete = async () => {
     try {
-      await completeOnboarding.mutateAsync(onboardingData)
+      // Clean up the data - convert empty strings to undefined for optional fields
+      const cleanedData = {
+        jackettApiKey: onboardingData.jackettApiKey,
+        organizationEnabled: onboardingData.organizationEnabled,
+        omdbApiKey: onboardingData.omdbApiKey?.trim() || undefined,
+        tmdbApiKey: onboardingData.tmdbApiKey?.trim() || undefined,
+        igdbClientId: onboardingData.igdbClientId?.trim() || undefined,
+        igdbClientSecret: onboardingData.igdbClientSecret?.trim() || undefined,
+      }
+
+      console.log('Completing onboarding with data:', {
+        ...cleanedData,
+        jackettApiKey: cleanedData.jackettApiKey ? '[REDACTED]' : '',
+        omdbApiKey: cleanedData.omdbApiKey ? '[REDACTED]' : undefined,
+        tmdbApiKey: cleanedData.tmdbApiKey ? '[REDACTED]' : undefined,
+        igdbClientId: cleanedData.igdbClientId ? '[REDACTED]' : undefined,
+        igdbClientSecret: cleanedData.igdbClientSecret ? '[REDACTED]' : undefined,
+      })
+
+      await completeOnboarding.mutateAsync(cleanedData)
       toast({
         title: "Setup Complete!",
         description: "Welcome to Downloadarr! Your setup is now complete.",
       })
       navigate('/')
     } catch (error) {
+      console.error('Onboarding failed:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
       toast({
         title: "Setup Failed",
-        description: "There was an error completing your setup. Please try again.",
+        description: `There was an error completing your setup: ${errorMessage}. Please try again.`,
       })
     }
   }
