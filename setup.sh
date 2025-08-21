@@ -2,6 +2,7 @@
 
 # Downloadarr Setup Script
 # This script sets up the Downloadarr project with Docker and all required configuration
+# It automatically pulls the latest Docker images to ensure you get the most recent version
 
 # Note: We'll enable/disable set -e as needed to handle user input properly
 
@@ -34,6 +35,44 @@ print_error() {
 
 print_info() {
     echo -e "${BLUE}ℹ${NC} $1"
+}
+
+# Utility function to update environment variables in .env file
+update_env_var() {
+    local key="$1"
+    local value="$2"
+    local env_file=".env"
+
+    if grep -q "^${key}=" "$env_file" 2>/dev/null; then
+        # Update existing variable
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            # macOS
+            sed -i '' "s|^${key}=.*|${key}=${value}|" "$env_file"
+        else
+            # Linux
+            sed -i "s|^${key}=.*|${key}=${value}|" "$env_file"
+        fi
+    else
+        # Add new variable
+        echo "${key}=${value}" >> "$env_file"
+    fi
+}
+
+# Utility function to prompt user with default value
+prompt_with_default() {
+    local prompt="$1"
+    local default="$2"
+    local var_name="$3"
+    local user_input=""
+
+    echo -n -e "${BLUE}${prompt}${NC} [${default}]: "
+    read -r user_input
+
+    if [[ -z "$user_input" ]]; then
+        eval "${var_name}=\"${default}\""
+    else
+        eval "${var_name}=\"${user_input}\""
+    fi
 }
 
 # Check if Docker is installed
@@ -97,43 +136,6 @@ download_config_files() {
     set +e  # Disable exit on error after this function
 }
 
-# Prompt for user input with default value
-prompt_with_default() {
-    local prompt="$1"
-    local default="$2"
-    local var_name="$3"
-    local input=""
-
-    echo -n -e "${BLUE}${prompt}${NC} [${default}]: "
-    read -r input
-
-    if [[ -z "$input" ]]; then
-        eval "$var_name=\"$default\""
-    else
-        eval "$var_name=\"$input\""
-    fi
-}
-
-# Update environment variables in .env file
-update_env_var() {
-    local var_name="$1"
-    local var_value="$2"
-    local env_file=".env"
-    
-    if grep -q "^${var_name}=" "$env_file"; then
-        # Variable exists, replace it
-        if [[ "$OSTYPE" == "darwin"* ]]; then
-            # macOS
-            sed -i '' "s|^${var_name}=.*|${var_name}=${var_value}|" "$env_file"
-        else
-            # Linux
-            sed -i "s|^${var_name}=.*|${var_name}=${var_value}|" "$env_file"
-        fi
-    else
-        # Variable doesn't exist, add it
-        echo "${var_name}=${var_value}" >> "$env_file"
-    fi
-}
 
 # Configure environment variables
 configure_environment() {
@@ -155,44 +157,13 @@ configure_environment() {
     update_env_var "DOWNLOAD_PATH" "$DOWNLOAD_PATH"
     print_status "Set DOWNLOAD_PATH=$DOWNLOAD_PATH"
     
-    # API Keys configuration
+    # API Keys information
     echo
-    print_info "Configuring API keys for media discovery..."
-    
-    # OMDB API Key
+    print_info "API Keys for Enhanced Discovery:"
+    echo "  • API keys for OMDB, TMDB, and IGDB are now configured through the web interface"
+    echo "  • You'll be guided through the setup during the onboarding process"
+    echo "  • These are optional but recommended for the best experience"
     echo
-    print_info "OMDB API Key (for movie information):"
-    echo "  1. Go to: http://www.omdbapi.com/apikey.aspx"
-    echo "  2. Choose the FREE plan (1,000 daily requests)"
-    echo "  3. Enter your email and verify"
-    echo "  4. Copy the API key from the email"
-    prompt_with_default "Enter your OMDB API key" "your-omdb-api-key" OMDB_API_KEY
-    update_env_var "OMDB_API_KEY" "$OMDB_API_KEY"
-    
-    # TMDB API Key
-    echo
-    print_info "TMDB API Key (for TV show information):"
-    echo "  1. Go to: https://www.themoviedb.org/settings/api"
-    echo "  2. Create an account if you don't have one"
-    echo "  3. Request an API key (choose 'Developer' option)"
-    echo "  4. Fill out the application form"
-    echo "  5. Copy the API key (v3 auth)"
-    prompt_with_default "Enter your TMDB API key" "your-tmdb-api-key" TMDB_API_KEY
-    update_env_var "TMDB_API_KEY" "$TMDB_API_KEY"
-    
-    # IGDB credentials
-    echo
-    print_info "IGDB credentials (for game information):"
-    echo "  1. Go to: https://dev.twitch.tv/console/apps"
-    echo "  2. Create a new application"
-    echo "  3. Set OAuth Redirect URL to: http://localhost"
-    echo "  4. Copy the Client ID and Client Secret"
-    echo "  Note: Access tokens are now managed automatically by the application"
-    prompt_with_default "Enter your IGDB Client ID" "your-igdb-client-id" IGDB_CLIENT_ID
-    update_env_var "IGDB_CLIENT_ID" "$IGDB_CLIENT_ID"
-
-    prompt_with_default "Enter your IGDB Client Secret" "your-igdb-client-secret" IGDB_CLIENT_SECRET
-    update_env_var "IGDB_CLIENT_SECRET" "$IGDB_CLIENT_SECRET"
 
     print_status "Environment variables configured"
 }
@@ -232,13 +203,33 @@ configure_vpn() {
     fi
 }
 
+# Pull latest Docker images
+pull_latest_images() {
+    set -e  # Enable exit on error for this function
+    local use_vpn="$1"
+
+    print_info "Pulling latest Docker images..."
+
+    if [[ "$use_vpn" == "true" ]]; then
+        docker compose -f docker-compose.yml -f docker-compose.vpn.yml pull
+    else
+        docker compose -f docker-compose.yml pull
+    fi
+
+    print_status "Latest Docker images pulled successfully!"
+    set +e  # Disable exit on error after this function
+}
+
 # Start the application
 start_application() {
     set -e  # Enable exit on error for this function
     local use_vpn="$1"
 
+    # Always pull latest images before starting
+    pull_latest_images "$use_vpn"
+
     print_info "Starting Downloadarr..."
-    
+
     if [[ "$use_vpn" == "true" ]]; then
         print_info "Starting with VPN support..."
         docker compose -f docker-compose.yml -f docker-compose.vpn.yml up -d
@@ -246,7 +237,7 @@ start_application() {
         print_info "Starting without VPN..."
         docker compose -f docker-compose.yml up -d
     fi
-    
+
     print_status "Downloadarr started successfully!"
     set +e  # Disable exit on error after this function
 }
@@ -264,10 +255,16 @@ show_final_info() {
     echo "  • AriaNG:       http://localhost:6880"
     echo "  • FlareSolverr:  http://localhost:8191"
     echo
+    echo "Next steps:"
+    echo "  1. Open http://localhost:3000 in your browser"
+    echo "  2. Complete the onboarding process"
+    echo "  3. Configure API keys for enhanced discovery (optional)"
+    echo
     echo "Useful commands:"
     echo "  • View logs:    docker compose logs -f"
     echo "  • Stop:         docker compose down"
     echo "  • Restart:      docker compose restart"
+    echo "  • Update:       docker compose pull && docker compose up -d"
     echo
     if [[ -f "config.ovpn" ]]; then
         print_status "VPN config file detected"
@@ -275,6 +272,7 @@ show_final_info() {
         print_warning "Remember to add your VPN config file as 'config.ovpn' if using VPN"
     fi
     echo
+    print_info "Latest Docker images have been pulled automatically"
     print_info "Check the logs if any services fail to start: docker compose logs -f"
 }
 
