@@ -247,9 +247,7 @@ export default function Requests() {
     }
   }
 
-  const handleViewResults = (request: TorrentRequest) => {
-    setTorrentSelectionRequest(request)
-  }
+
 
   const handleTorrentSelected = () => {
     refreshRequests()

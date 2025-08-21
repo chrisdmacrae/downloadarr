@@ -49,7 +49,6 @@ export function TvShowSeasonBadges({ request, onSeasonClick, className }: TvShow
         toast({
           title: "Season Scan Failed",
           description: response.message || "Failed to scan seasons",
-          variant: "destructive",
         })
       }
     } catch (error) {
@@ -57,7 +56,6 @@ export function TvShowSeasonBadges({ request, onSeasonClick, className }: TvShow
       toast({
         title: "Season Scan Failed",
         description: "An error occurred while scanning seasons",
-        variant: "destructive",
       })
     } finally {
       setIsScanning(false)
