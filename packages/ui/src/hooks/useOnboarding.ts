@@ -1,7 +1,33 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from './useApi'
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+// Runtime configuration
+const getRuntimeApiUrl = (): string => {
+  // Check if we're in a browser environment
+  if (typeof window !== 'undefined') {
+    // Try to get config from window object (set by runtime config script)
+    const windowConfig = (window as any).__RUNTIME_CONFIG__;
+    if (windowConfig?.apiUrl) {
+      return windowConfig.apiUrl;
+    }
+
+    // Fallback: determine API URL based on current location
+    const { port } = window.location;
+
+    // If we're accessing via nginx proxy (production Docker), use relative URLs
+    if (port === '3000' || port === '') {
+      return '/api';
+    }
+
+    // Development fallback
+    return 'http://localhost:3001';
+  }
+
+  // Server-side rendering fallback
+  return import.meta.env.VITE_API_URL || 'http://localhost:3001';
+};
+
+const API_BASE_URL = getRuntimeApiUrl();
 
 interface AppConfiguration {
   id: string

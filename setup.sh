@@ -195,6 +195,10 @@ configure_environment() {
 
     update_env_var "FRONTEND_URL" "$frontend_urls"
 
+    # Configure API URL for frontend
+    # For Docker deployments, use nginx proxy
+    update_env_var "VITE_API_URL" "/api"
+
     print_status "Environment variables configured"
 }
 
@@ -356,6 +360,8 @@ show_final_info() {
     echo "  • Latest Docker images have been pulled automatically"
     echo "  • All services are configured with consistent user permissions"
     echo "  • CORS is configured to allow access from detected network interfaces"
+    echo "  • Frontend uses runtime configuration for flexible API URL handling"
+    echo "  • API communication uses nginx proxy for optimal Docker networking"
     echo "  • Check logs if any services fail to start: docker compose logs -f"
 }
 

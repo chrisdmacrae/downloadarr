@@ -1,8 +1,44 @@
 import axios from 'axios';
 
-// Create axios instance with base configuration
+// Runtime configuration
+interface RuntimeConfig {
+  apiUrl: string;
+}
+
+// Get runtime configuration
+const getRuntimeConfig = (): RuntimeConfig => {
+  // Check if we're in a browser environment
+  if (typeof window !== 'undefined') {
+    // Try to get config from window object (set by runtime config script)
+    const windowConfig = (window as any).__RUNTIME_CONFIG__;
+    if (windowConfig?.apiUrl) {
+      return windowConfig;
+    }
+
+    // Fallback: determine API URL based on current location
+    const { port } = window.location;
+
+    // If we're accessing via nginx proxy (production Docker), use relative URLs
+    if (port === '3000' || port === '') {
+      return { apiUrl: '/api' };
+    }
+
+    // Development fallback
+    return { apiUrl: 'http://localhost:3001' };
+  }
+
+  // Server-side rendering fallback
+  return { apiUrl: import.meta.env.VITE_API_URL || 'http://localhost:3001' };
+};
+
+const runtimeConfig = getRuntimeConfig();
+
+// Debug logging for runtime configuration
+console.log('Downloadarr Runtime Config:', runtimeConfig);
+
+// Create axios instance with runtime configuration
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3001',
+  baseURL: runtimeConfig.apiUrl,
   timeout: 5000, // Reduced timeout to 5 seconds
   headers: {
     'Content-Type': 'application/json',

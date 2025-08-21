@@ -38,6 +38,7 @@ services:
     container_name: downloadarr-frontend-dev
     environment:
       DOCKER_ENV: "true"
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:3001}
     volumes:
       # Mount source code for hot reloading
       - ./packages/ui/src:/app/packages/ui/src:ro
