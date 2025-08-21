@@ -146,16 +146,6 @@ configure_environment() {
     update_env_var "PGID" "1000"
     print_status "Set PUID=1000 and PGID=1000"
     
-    # Prompt for library path
-    prompt_with_default "Enter your library path (where organized media will be stored)" "/path/to/your/library" LIBRARY_PATH
-    update_env_var "LIBRARY_PATH" "$LIBRARY_PATH"
-    print_status "Set LIBRARY_PATH=$LIBRARY_PATH"
-    
-    # Prompt for download path
-    prompt_with_default "Enter your download path (where files will be downloaded)" "/path/to/your/downloads" DOWNLOAD_PATH
-    update_env_var "DOWNLOAD_PATH" "$DOWNLOAD_PATH"
-    print_status "Set DOWNLOAD_PATH=$DOWNLOAD_PATH"
-    
     # API Keys information
     echo
     print_info "API Keys for Enhanced Discovery:"
