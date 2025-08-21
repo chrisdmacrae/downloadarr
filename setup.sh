@@ -75,6 +75,46 @@ prompt_with_default() {
     fi
 }
 
+# Function to get the machine's LAN IP address
+get_lan_ip() {
+    local lan_ip=""
+
+    # Try different methods to get LAN IP based on OS
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        # macOS - try multiple methods
+        lan_ip=$(route get default 2>/dev/null | grep interface | awk '{print $2}' | xargs ifconfig 2>/dev/null | grep "inet " | grep -v 127.0.0.1 | awk '{print $2}' | head -1)
+        if [[ -z "$lan_ip" ]]; then
+            # Alternative method for macOS
+            lan_ip=$(ifconfig 2>/dev/null | grep "inet " | grep -v 127.0.0.1 | grep -E "192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\." | awk '{print $2}' | head -1)
+        fi
+        if [[ -z "$lan_ip" ]]; then
+            # Fallback for macOS
+            lan_ip=$(ifconfig 2>/dev/null | grep "inet " | grep -v 127.0.0.1 | awk '{print $2}' | head -1)
+        fi
+    elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
+        # Linux - try multiple methods
+        lan_ip=$(ip route get 1.1.1.1 2>/dev/null | grep -oP 'src \K\S+')
+        if [[ -z "$lan_ip" ]]; then
+            # Alternative method for Linux
+            lan_ip=$(hostname -I 2>/dev/null | awk '{print $1}')
+        fi
+        if [[ -z "$lan_ip" ]]; then
+            # Another fallback for Linux
+            lan_ip=$(ip addr show 2>/dev/null | grep "inet " | grep -v 127.0.0.1 | grep -E "192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\." | awk '{print $2}' | cut -d'/' -f1 | head -1)
+        fi
+    else
+        # Generic Unix/other systems
+        lan_ip=$(ifconfig 2>/dev/null | grep "inet " | grep -v 127.0.0.1 | awk '{print $2}' | head -1)
+    fi
+
+    # Validate IP address format
+    if [[ "$lan_ip" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
+        echo "$lan_ip"
+    else
+        echo "localhost"
+    fi
+}
+
 # Check if Docker is installed
 check_docker() {
     set -e  # Enable exit on error for this function
@@ -107,11 +147,9 @@ check_docker() {
 download_config_files() {
     set -e  # Enable exit on error for this function
     print_info "Downloading configuration files from GitHub..."
-    
 
-    
     if curl -fsSL "${GITHUB_RAW_URL}/docker-compose.yml" -o docker-compose.yml; then
-        print_status "Downloaded docker-compose.yml"
+        :  # Silent success
     else
         print_error "Failed to download docker-compose.yml"
         exit 1
@@ -119,19 +157,21 @@ download_config_files() {
 
     # Download docker-compose.prod.vpn.yml for VPN support
     if curl -fsSL "${GITHUB_RAW_URL}/docker-compose.vpn.yml" -o docker-compose.vpn.yml; then
-        print_status "Downloaded docker-compose.vpn.yml"
+        :  # Silent success
     else
         print_error "Failed to download docker-compose.vpn.yml"
         exit 1
     fi
-    
+
     # Download .env.example as .env
     if curl -fsSL "${GITHUB_RAW_URL}/.env.example" -o .env; then
-        print_status "Downloaded .env.example as .env"
+        :  # Silent success
     else
         print_error "Failed to download .env.example"
         exit 1
     fi
+
+    print_status "Configuration files downloaded"
     set +e  # Disable exit on error after this function
 }
 
@@ -139,20 +179,21 @@ download_config_files() {
 # Configure environment variables
 configure_environment() {
     print_info "Configuring environment variables..."
-    
+
     # Set PUID and PGID
-    print_info "Setting user permissions (PUID/PGID)..."
     update_env_var "PUID" "1000"
     update_env_var "PGID" "1000"
-    print_status "Set PUID=1000 and PGID=1000"
-    
-    # API Keys information
-    echo
-    print_info "API Keys for Enhanced Discovery:"
-    echo "  • API keys for OMDB, TMDB, and IGDB are now configured through the web interface"
-    echo "  • You'll be guided through the setup during the onboarding process"
-    echo "  • These are optional but recommended for the best experience"
-    echo
+
+    # Configure CORS/Frontend URL
+    local lan_ip=$(get_lan_ip)
+
+    if [[ "$lan_ip" == "localhost" ]]; then
+        local frontend_urls="http://localhost:3000,http://downloadarr:3000"
+    else
+        local frontend_urls="http://localhost:3000,http://${lan_ip}:3000,http://downloadarr:3000"
+    fi
+
+    update_env_var "FRONTEND_URL" "$frontend_urls"
 
     print_status "Environment variables configured"
 }
@@ -200,12 +241,12 @@ pull_latest_images() {
     print_info "Pulling latest Docker images..."
 
     if [[ "$use_vpn" == "true" ]]; then
-        docker compose -f docker-compose.yml -f docker-compose.vpn.yml pull
+        docker compose -f docker-compose.yml -f docker-compose.vpn.yml pull > /dev/null 2>&1
     else
-        docker compose -f docker-compose.yml pull
+        docker compose -f docker-compose.yml pull > /dev/null 2>&1
     fi
 
-    print_status "Latest Docker images pulled successfully!"
+    print_status "Docker images pulled"
     set +e  # Disable exit on error after this function
 }
 
@@ -217,35 +258,77 @@ start_application() {
     # Always pull latest images before starting
     pull_latest_images "$use_vpn"
 
-    print_info "Starting Downloadarr..."
+    print_info "Starting Downloadarr services..."
 
     if [[ "$use_vpn" == "true" ]]; then
-        print_info "Starting with VPN support..."
-        docker compose -f docker-compose.yml -f docker-compose.vpn.yml up -d
+        docker compose -f docker-compose.yml -f docker-compose.vpn.yml up -d > /dev/null 2>&1
     else
-        print_info "Starting without VPN..."
-        docker compose -f docker-compose.yml up -d
+        docker compose -f docker-compose.yml up -d > /dev/null 2>&1
     fi
 
-    print_status "Downloadarr started successfully!"
+    print_status "Services started"
     set +e  # Disable exit on error after this function
 }
 
 # Display final information
 show_final_info() {
+    local lan_ip=$(get_lan_ip)
+
     echo
     echo -e "${GREEN}🎉 Setup Complete!${NC}"
     echo "==================="
     echo
     echo "Downloadarr services are now running:"
     echo "  • Frontend:     http://localhost:3000"
+    if [[ "$lan_ip" != "localhost" ]]; then
+        echo "  • Frontend (LAN): http://${lan_ip}:3000"
+    fi
     echo "  • API Server:   http://localhost:3001"
     echo "  • Jackett:      http://localhost:9117"
     echo "  • AriaNG:       http://localhost:6880"
     echo "  • FlareSolverr:  http://localhost:8191"
     echo
+    echo "Access Options:"
+    echo "  • Local:        http://localhost:3000"
+    if [[ "$lan_ip" != "localhost" ]]; then
+        echo "  • From LAN:     http://${lan_ip}:3000"
+    fi
+    echo
+
+    # CORS Configuration Information
+    echo -e "${BLUE}CORS Configuration:${NC}"
+    if [[ "$lan_ip" == "localhost" ]]; then
+        print_warning "Could not detect LAN IP address"
+        echo "  • Configured for localhost access only"
+        echo "  • If you need LAN access, manually set FRONTEND_URL in .env"
+    else
+        print_status "Detected LAN IP: $lan_ip"
+        echo "  • Configured to allow access from:"
+        echo "    - http://localhost:3000 (local access)"
+        echo "    - http://${lan_ip}:3000 (LAN access)"
+        echo "    - http://downloadarr:3000 (Docker internal)"
+        echo "  • This resolves CORS errors when accessing from different devices"
+    fi
+    echo
+
+    # User Permissions Information
+    echo -e "${BLUE}User Permissions:${NC}"
+    echo "  • Set PUID=1000 and PGID=1000 for consistent file permissions"
+    echo "  • Downloaded files will be owned by user ID 1000"
+    echo
+
+    # API Keys Information
+    echo -e "${BLUE}API Keys for Enhanced Discovery:${NC}"
+    echo "  • API keys for OMDB, TMDB, and IGDB are configured through the web interface"
+    echo "  • You'll be guided through the setup during the onboarding process"
+    echo "  • These are optional but recommended for the best experience"
+    echo
+
     echo "Next steps:"
     echo "  1. Open http://localhost:3000 in your browser"
+    if [[ "$lan_ip" != "localhost" ]]; then
+        echo "     (or http://${lan_ip}:3000 from other devices on your network)"
+    fi
     echo "  2. Complete the onboarding process"
     echo "  3. Configure API keys for enhanced discovery (optional)"
     echo
@@ -255,14 +338,25 @@ show_final_info() {
     echo "  • Restart:      docker compose restart"
     echo "  • Update:       docker compose pull && docker compose up -d"
     echo
+
+    # VPN Information
     if [[ -f "config.ovpn" ]]; then
         print_status "VPN config file detected"
     else
-        print_warning "Remember to add your VPN config file as 'config.ovpn' if using VPN"
+        if grep -q "VPN_ENABLED=true" .env 2>/dev/null; then
+            print_warning "VPN is enabled but no config.ovpn file found"
+            echo "  • Add your OpenVPN configuration file as 'config.ovpn'"
+            echo "  • Create 'credentials.txt' if your VPN requires username/password"
+        fi
     fi
     echo
-    print_info "Latest Docker images have been pulled automatically"
-    print_info "Check the logs if any services fail to start: docker compose logs -f"
+
+    # Technical Information
+    echo -e "${BLUE}Technical Notes:${NC}"
+    echo "  • Latest Docker images have been pulled automatically"
+    echo "  • All services are configured with consistent user permissions"
+    echo "  • CORS is configured to allow access from detected network interfaces"
+    echo "  • Check logs if any services fail to start: docker compose logs -f"
 }
 
 # Main execution

@@ -49,6 +49,7 @@ services:
       FLARESOLVERR_URL: http://flaresolverr:8191
       DOWNLOAD_PATH: /app/downloads
       LIBRARY_PATH: /app/library
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
       PUID: 1000
       PGID: 1000
     volumes:

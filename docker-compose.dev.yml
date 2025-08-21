@@ -21,6 +21,7 @@ services:
     container_name: downloadarr-api-dev
     environment:
       NODE_ENV: development
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
     volumes:
       # Inherit base volumes from docker-compose.yml
       - ${DOWNLOAD_PATH}:/app/downloads

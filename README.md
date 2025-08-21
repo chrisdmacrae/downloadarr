@@ -76,11 +76,18 @@ Copy `.env.example` to `.env` and configure:
 - `VPN_ENABLED` - Enable/disable VPN integration
 - `VPN_CONFIG_PATH` - Path to OpenVPN configuration
 - `DOWNLOAD_PATH` - Directory for downloaded files
+- `FRONTEND_URL` - Allowed frontend origins for CORS (see [CORS Configuration](docs/CORS_CONFIGURATION.md))
 - `FLARESOLVERR_URL` - FlareSolverr URL for Cloudflare bypass
 - `OMDB_API_KEY` - OMDb API key for movie search
 - `TMDB_API_KEY` - TMDB API key for TV show search
 - `IGDB_CLIENT_ID` - IGDB client ID for game search
 - `IGDB_CLIENT_SECRET` - IGDB client secret for game search
+
+## Troubleshooting
+
+### CORS Issues
+
+If you encounter "Origin not allowed by Access-Control-Allow-Origin" errors, see the [CORS Configuration Guide](docs/CORS_CONFIGURATION.md) for detailed setup instructions.
 
 ## License
 

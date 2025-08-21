@@ -13,7 +13,10 @@ import { DownloadService } from './download.service';
 
 @WebSocketGateway({
   cors: {
-    origin: '*',
+    origin: process.env.FRONTEND_URL
+      ? process.env.FRONTEND_URL.split(',').map(origin => origin.trim())
+      : ['http://localhost:3000'],
+    credentials: true,
   },
   namespace: '/downloads',
 })
