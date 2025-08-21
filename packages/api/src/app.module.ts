@@ -11,6 +11,7 @@ import { GameConfigModule } from './config/config.module';
 import { JackettModule } from './jackett/jackett.module';
 import { OrganizationModule } from './organization/organization.module';
 import { InitializationModule } from './initialization/initialization.module';
+import { SystemModule } from './system/system.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { InitializationModule } from './initialization/initialization.module';
     GameConfigModule,
     JackettModule,
     OrganizationModule,
+    SystemModule,
   ],
   controllers: [AppController],
   providers: [AppService],

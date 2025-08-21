@@ -63,6 +63,24 @@ export interface VpnStatus {
   message?: string;
 }
 
+export interface UpdateInfo {
+  updateAvailable: boolean;
+  currentVersion: string;
+  latestVersion: string;
+  releaseUrl: string;
+  publishedAt: string;
+  updateCommand: string;
+  description?: string;
+}
+
+export interface SystemInfo {
+  version: string;
+  vpnEnabled: boolean;
+  environment: string;
+  uptime: number;
+  memory: object;
+}
+
 export interface Aria2Stats {
   downloadSpeed: string;
   uploadSpeed: string;
@@ -860,6 +878,17 @@ export const apiService = {
   getTmdbPosterUrl: async (tmdbId: number, contentType: 'movie' | 'tv' = 'movie'): Promise<{ success: boolean; data?: string; error?: string }> => {
     const endpoint = contentType === 'tv' ? 'tv-shows' : 'movies';
     const response = await api.get(`/discovery/${endpoint}/tmdb/${tmdbId}/poster`);
+    return response.data;
+  },
+
+  // System management
+  checkForUpdates: async (): Promise<UpdateInfo> => {
+    const response = await api.get('/system/updates/check');
+    return response.data;
+  },
+
+  getSystemInfo: async (): Promise<SystemInfo> => {
+    const response = await api.get('/system/info');
     return response.data;
   },
 };

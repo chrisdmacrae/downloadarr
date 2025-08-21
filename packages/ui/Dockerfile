@@ -1,6 +1,9 @@
 # Build stage
 FROM node:18-alpine AS builder
 
+# Accept version as build argument
+ARG APP_VERSION=latest
+
 WORKDIR /app
 
 # Copy package files (excluding lock files to avoid platform issues)
@@ -13,12 +16,17 @@ RUN npm install && npm cache clean --force
 # Copy source code
 COPY packages/ui ./packages/ui
 
-# Build the application
+# Build the application with version
 WORKDIR /app/packages/ui
+ENV VITE_APP_VERSION=${APP_VERSION}
 RUN npm run build
 
 # Production stage
 FROM nginx:alpine AS production
+
+# Accept version as build argument and set as environment variable
+ARG APP_VERSION=latest
+ENV APP_VERSION=${APP_VERSION}
 
 # Copy built application
 COPY --from=builder /app/packages/ui/dist /usr/share/nginx/html

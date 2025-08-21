@@ -2,6 +2,7 @@ import { Link, useLocation } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { IssueReportFab } from '@/components/IssueReportFab'
+import { UpdateCard } from '@/components/UpdateCard'
 import {
   Download,
   Search,
@@ -101,9 +102,15 @@ export default function Layout({ children }: LayoutProps) {
             </div>
           </div>
 
-          {/* Settings at bottom */}
-          <div className="mt-auto space-y-2">
-            {settingsNavigation.map((item) => {
+          {/* Update Card above settings */}
+          <div className="mt-auto space-y-3">
+            <div className="px-2">
+              <UpdateCard />
+            </div>
+
+            {/* Settings */}
+            <div className="space-y-2">
+              {settingsNavigation.map((item) => {
               const Icon = item.icon
               const isActive = location.pathname === item.href
 
@@ -122,6 +129,7 @@ export default function Layout({ children }: LayoutProps) {
                 </Link>
               )
             })}
+            </div>
           </div>
         </nav>
       </div>

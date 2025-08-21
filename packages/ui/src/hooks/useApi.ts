@@ -17,6 +17,8 @@ export const queryKeys = {
   appConfiguration: ['configuration'] as const,
   onboardingStatus: ['configuration', 'onboarding', 'status'] as const,
   jackettConfig: ['configuration', 'jackett'] as const,
+  updateCheck: ['system', 'updates'] as const,
+  systemInfo: ['system', 'info'] as const,
 };
 
 // Hook for queue statistics
@@ -243,5 +245,24 @@ export const useGamePlatformOptions = (grouped = false) => {
 export const usePreviewOrganizationPath = () => {
   return useMutation({
     mutationFn: apiService.previewOrganizationPath,
+  });
+};
+
+// System hooks
+export const useUpdateCheck = () => {
+  return useQuery({
+    queryKey: queryKeys.updateCheck,
+    queryFn: apiService.checkForUpdates,
+    refetchInterval: 30 * 60 * 1000, // Check every 30 minutes
+    staleTime: 15 * 60 * 1000, // Consider stale after 15 minutes
+    retry: 1, // Only retry once on failure
+  });
+};
+
+export const useSystemInfo = () => {
+  return useQuery({
+    queryKey: queryKeys.systemInfo,
+    queryFn: apiService.getSystemInfo,
+    staleTime: 5 * 60 * 1000, // Consider stale after 5 minutes
   });
 };

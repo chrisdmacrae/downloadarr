@@ -1,6 +1,9 @@
 # Build stage
 FROM node:20-alpine AS builder
 
+# Accept version as build argument
+ARG APP_VERSION=latest
+
 WORKDIR /app
 
 # Copy package files (excluding lock files to avoid platform issues)
@@ -28,6 +31,10 @@ RUN npm install --only=production && npm cache clean --force
 
 # Production stage
 FROM node:20-alpine AS production
+
+# Accept version as build argument and set as environment variable
+ARG APP_VERSION=latest
+ENV APP_VERSION=${APP_VERSION}
 
 # Install system dependencies for VPN, downloading, and Docker
 RUN apk add --no-cache \
