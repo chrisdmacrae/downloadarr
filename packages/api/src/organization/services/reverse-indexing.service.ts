@@ -2,10 +2,12 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../../database/prisma.service';
 import { OrganizationRulesService } from './organization-rules.service';
+import { FileOrganizationService } from './file-organization.service';
 import { SeasonScanningService } from '../../torrents/services/season-scanning.service';
 import { TmdbService } from '../../discovery/services/tmdb.service';
 import { IgdbService } from '../../discovery/services/igdb.service';
 import { ContentType } from '../../../generated/prisma';
+import { OrganizationContext } from '../interfaces/organization.interface';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
@@ -17,6 +19,7 @@ export class ReverseIndexingService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly organizationRulesService: OrganizationRulesService,
+    private readonly fileOrganizationService: FileOrganizationService,
     private readonly seasonScanningService: SeasonScanningService,
     private readonly tmdbService: TmdbService,
     private readonly igdbService: IgdbService,
@@ -1190,6 +1193,9 @@ export class ReverseIndexingService {
 
       const createdRequest = await this.createCompletedRequest(metadata, item.contentType);
 
+      // Re-organize files in the folder to match organization rules
+      await this.reorganizeFilesInFolder(item.folderPath, metadata, item.contentType, createdRequest.id);
+
       // Mark as completed
       await this.prisma.organizeQueue.update({
         where: { id },
@@ -1254,6 +1260,284 @@ export class ReverseIndexingService {
     } catch (error) {
       this.logger.error(`Failed to delete organize queue item ${id}:`, error);
       return { success: false, message: 'Failed to delete item' };
+    }
+  }
+
+  /**
+   * Re-organize files in a folder to match organization rules
+   */
+  private async reorganizeFilesInFolder(folderPath: string, metadata: any, contentType: ContentType, requestedTorrentId: string): Promise<void> {
+    try {
+      this.logger.log(`Re-organizing files in folder: ${folderPath}`);
+
+      // Check if folder exists
+      try {
+        await fs.access(folderPath);
+      } catch {
+        this.logger.warn(`Folder does not exist, skipping reorganization: ${folderPath}`);
+        return;
+      }
+
+      // Get all media files in the folder recursively
+      const mediaFiles = await this.getMediaFilesRecursively(folderPath);
+
+      if (mediaFiles.length === 0) {
+        this.logger.warn(`No media files found in folder: ${folderPath}`);
+        return;
+      }
+
+      this.logger.log(`Found ${mediaFiles.length} media files to reorganize in: ${folderPath}`);
+
+      // Organize each media file
+      let reorganizedCount = 0;
+      let skippedCount = 0;
+
+      for (const filePath of mediaFiles) {
+        try {
+          // Check if file is already organized (has an organized file record)
+          const existingOrganizedFile = await this.prisma.organizedFile.findFirst({
+            where: {
+              OR: [
+                { originalPath: filePath },
+                { organizedPath: filePath },
+              ],
+            },
+          });
+
+          // Create organization context for the file
+          const fileName = path.basename(filePath);
+          const fileMetadata = this.organizationRulesService.extractMetadataFromFileName(fileName, contentType);
+
+          // For TV shows, also try to extract season/episode info from the folder structure
+          let enhancedMetadata = { ...fileMetadata };
+          if (contentType === ContentType.TV_SHOW) {
+            enhancedMetadata = this.extractTvShowMetadataFromPath(filePath, fileMetadata);
+          }
+
+          // Use the selected metadata from the queue item, falling back to enhanced detected metadata
+          const organizationContext: OrganizationContext = {
+            originalPath: filePath,
+            fileName,
+            contentType,
+            title: metadata.title || enhancedMetadata.title || 'Unknown',
+            year: metadata.year || enhancedMetadata.year,
+            season: metadata.season || enhancedMetadata.season,
+            episode: metadata.episode || enhancedMetadata.episode,
+            platform: metadata.platform || enhancedMetadata.platform,
+            quality: metadata.quality || enhancedMetadata.quality,
+            format: metadata.format || enhancedMetadata.format,
+            edition: metadata.edition || enhancedMetadata.edition,
+          };
+
+          // Use the file organization service to move the file
+          const result = await this.fileOrganizationService.organizeFile(organizationContext, requestedTorrentId);
+
+          if (result.success) {
+            this.logger.log(`Successfully reorganized: ${filePath} -> ${result.organizedPath}`);
+            reorganizedCount++;
+
+            // If there was an existing organized file record, update it
+            if (existingOrganizedFile) {
+              await this.prisma.organizedFile.update({
+                where: { id: existingOrganizedFile.id },
+                data: {
+                  organizedPath: result.organizedPath,
+                  isReverseIndexed: false, // Now it's properly organized
+                },
+              });
+            }
+          } else {
+            this.logger.warn(`Failed to reorganize ${filePath}: ${result.error}`);
+            skippedCount++;
+          }
+
+        } catch (error) {
+          this.logger.error(`Error reorganizing file ${filePath}:`, error);
+          skippedCount++;
+        }
+      }
+
+      this.logger.log(`Reorganization complete for folder ${folderPath}: ${reorganizedCount} reorganized, ${skippedCount} skipped`);
+
+      // Clean up empty directories after reorganization
+      if (reorganizedCount > 0) {
+        await this.cleanupEmptyDirectories(folderPath);
+      }
+
+    } catch (error) {
+      this.logger.error(`Error reorganizing files in folder ${folderPath}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Extract TV show metadata from file path, including season/episode info from folder structure
+   */
+  private extractTvShowMetadataFromPath(filePath: string, baseMetadata: any): any {
+    const enhancedMetadata = { ...baseMetadata };
+
+    // Get the directory path and file name
+    const dirPath = path.dirname(filePath);
+    const fileName = path.basename(filePath);
+
+    // Try to extract season from the parent directory name
+    const parentDirName = path.basename(dirPath);
+    const seasonMatch = parentDirName.match(/season\s*(\d+)/i) || parentDirName.match(/s(\d+)/i);
+
+    if (seasonMatch) {
+      enhancedMetadata.season = parseInt(seasonMatch[1]);
+      this.logger.debug(`Extracted season ${enhancedMetadata.season} from directory: ${parentDirName}`);
+    }
+
+    // Try to extract episode from the file name if not already extracted
+    if (!enhancedMetadata.episode) {
+      // Look for episode patterns in the filename
+      const episodePatterns = [
+        /[Ss](\d+)[Ee](\d+)/,  // S01E01
+        /[Ss](\d+)\s*[Ee](\d+)/, // S01 E01
+        /Season\s*(\d+).*Episode\s*(\d+)/i, // Season 1 Episode 1
+        /(\d+)x(\d+)/, // 1x01
+      ];
+
+      for (const pattern of episodePatterns) {
+        const match = fileName.match(pattern);
+        if (match) {
+          if (!enhancedMetadata.season && match[1]) {
+            enhancedMetadata.season = parseInt(match[1]);
+          }
+          if (match[2]) {
+            enhancedMetadata.episode = parseInt(match[2]);
+          }
+          this.logger.debug(`Extracted S${enhancedMetadata.season}E${enhancedMetadata.episode} from filename: ${fileName}`);
+          break;
+        }
+      }
+    }
+
+    // If we still don't have season info, try to extract from the show folder structure
+    if (!enhancedMetadata.season) {
+      // Look at the grandparent directory (show folder) and parent directory (season folder)
+      const pathParts = filePath.split(path.sep);
+
+      // Find season folder in the path
+      for (let i = pathParts.length - 2; i >= 0; i--) {
+        const folderName = pathParts[i];
+        const seasonMatch = folderName.match(/season\s*(\d+)/i) || folderName.match(/s(\d+)$/i);
+        if (seasonMatch) {
+          enhancedMetadata.season = parseInt(seasonMatch[1]);
+          this.logger.debug(`Extracted season ${enhancedMetadata.season} from path part: ${folderName}`);
+          break;
+        }
+      }
+    }
+
+    return enhancedMetadata;
+  }
+
+  /**
+   * Clean up empty directories recursively after file reorganization
+   */
+  private async cleanupEmptyDirectories(startPath: string): Promise<void> {
+    try {
+      await this.cleanupEmptyDirectoriesRecursive(startPath);
+    } catch (error) {
+      this.logger.warn(`Error during directory cleanup for ${startPath}:`, error);
+    }
+  }
+
+  /**
+   * Recursively clean up empty directories, working from deepest to shallowest
+   */
+  private async cleanupEmptyDirectoriesRecursive(dirPath: string): Promise<boolean> {
+    try {
+      // Check if directory exists
+      try {
+        await fs.access(dirPath);
+      } catch {
+        // Directory doesn't exist, consider it "cleaned"
+        return true;
+      }
+
+      // Get directory contents
+      const entries = await fs.readdir(dirPath, { withFileTypes: true });
+
+      // Track if any subdirectories were removed
+      let removedSubdirs = false;
+
+      // First, recursively clean up subdirectories
+      for (const entry of entries) {
+        if (entry.isDirectory()) {
+          const subDirPath = path.join(dirPath, entry.name);
+          const wasRemoved = await this.cleanupEmptyDirectoriesRecursive(subDirPath);
+          if (wasRemoved) {
+            removedSubdirs = true;
+          }
+        }
+      }
+
+      // If we removed subdirectories, re-read the directory contents
+      if (removedSubdirs) {
+        const updatedEntries = await fs.readdir(dirPath, { withFileTypes: true });
+
+        // Check if directory is now empty
+        if (updatedEntries.length === 0) {
+          await fs.rmdir(dirPath);
+          this.logger.log(`Removed empty directory: ${dirPath}`);
+          return true;
+        }
+      } else {
+        // Check if directory is empty (no files or subdirectories)
+        if (entries.length === 0) {
+          await fs.rmdir(dirPath);
+          this.logger.log(`Removed empty directory: ${dirPath}`);
+          return true;
+        }
+
+        // Check if directory only contains empty subdirectories or hidden files
+        const hasRealContent = entries.some(entry => {
+          // Skip hidden files/directories (starting with .)
+          if (entry.name.startsWith('.')) {
+            return false;
+          }
+          // If it's a file, it's real content
+          if (entry.isFile()) {
+            return true;
+          }
+          // For directories, we'll check them recursively above
+          return false;
+        });
+
+        if (!hasRealContent) {
+          // Directory only has hidden files or empty subdirectories
+          // Remove any remaining hidden files first
+          for (const entry of entries) {
+            if (entry.isFile() && entry.name.startsWith('.')) {
+              const hiddenFilePath = path.join(dirPath, entry.name);
+              try {
+                await fs.unlink(hiddenFilePath);
+                this.logger.debug(`Removed hidden file: ${hiddenFilePath}`);
+              } catch (error) {
+                this.logger.warn(`Failed to remove hidden file ${hiddenFilePath}:`, error);
+              }
+            }
+          }
+
+          // Try to remove the directory
+          try {
+            await fs.rmdir(dirPath);
+            this.logger.log(`Removed empty directory: ${dirPath}`);
+            return true;
+          } catch (error) {
+            // Directory might not be empty due to system files or permissions
+            this.logger.debug(`Could not remove directory ${dirPath}:`, error.message);
+          }
+        }
+      }
+
+      return false;
+    } catch (error) {
+      this.logger.warn(`Error cleaning up directory ${dirPath}:`, error);
+      return false;
     }
   }
 }

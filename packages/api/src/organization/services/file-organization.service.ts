@@ -224,6 +224,10 @@ export class FileOrganizationService {
 
       this.logger.log(`Successfully organized: ${context.originalPath} -> ${resolvedDestinationPath}`);
 
+      // Clean up empty directories from the original location
+      const originalDir = path.dirname(resolvedOriginalPath);
+      await this.cleanupEmptyDirectories(originalDir);
+
       return {
         success: true,
         originalPath: context.originalPath,
@@ -298,5 +302,112 @@ export class FileOrganizationService {
     }
 
     return files;
+  }
+
+  /**
+   * Clean up empty directories recursively after file organization
+   */
+  private async cleanupEmptyDirectories(startPath: string): Promise<void> {
+    try {
+      await this.cleanupEmptyDirectoriesRecursive(startPath);
+    } catch (error) {
+      this.logger.warn(`Error during directory cleanup for ${startPath}:`, error);
+    }
+  }
+
+  /**
+   * Recursively clean up empty directories, working from deepest to shallowest
+   */
+  private async cleanupEmptyDirectoriesRecursive(dirPath: string): Promise<boolean> {
+    try {
+      // Check if directory exists
+      try {
+        await fs.access(dirPath);
+      } catch {
+        // Directory doesn't exist, consider it "cleaned"
+        return true;
+      }
+
+      // Get directory contents
+      const entries = await fs.readdir(dirPath, { withFileTypes: true });
+
+      // Track if any subdirectories were removed
+      let removedSubdirs = false;
+
+      // First, recursively clean up subdirectories
+      for (const entry of entries) {
+        if (entry.isDirectory()) {
+          const subDirPath = path.join(dirPath, entry.name);
+          const wasRemoved = await this.cleanupEmptyDirectoriesRecursive(subDirPath);
+          if (wasRemoved) {
+            removedSubdirs = true;
+          }
+        }
+      }
+
+      // If we removed subdirectories, re-read the directory contents
+      if (removedSubdirs) {
+        const updatedEntries = await fs.readdir(dirPath, { withFileTypes: true });
+
+        // Check if directory is now empty
+        if (updatedEntries.length === 0) {
+          await fs.rmdir(dirPath);
+          this.logger.log(`Removed empty directory: ${dirPath}`);
+          return true;
+        }
+      } else {
+        // Check if directory is empty (no files or subdirectories)
+        if (entries.length === 0) {
+          await fs.rmdir(dirPath);
+          this.logger.log(`Removed empty directory: ${dirPath}`);
+          return true;
+        }
+
+        // Check if directory only contains hidden files
+        const hasRealContent = entries.some(entry => {
+          // Skip hidden files/directories (starting with .)
+          if (entry.name.startsWith('.')) {
+            return false;
+          }
+          // If it's a file, it's real content
+          if (entry.isFile()) {
+            return true;
+          }
+          // For directories, we'll check them recursively above
+          return false;
+        });
+
+        if (!hasRealContent) {
+          // Directory only has hidden files
+          // Remove any remaining hidden files first
+          for (const entry of entries) {
+            if (entry.isFile() && entry.name.startsWith('.')) {
+              const hiddenFilePath = path.join(dirPath, entry.name);
+              try {
+                await fs.unlink(hiddenFilePath);
+                this.logger.debug(`Removed hidden file: ${hiddenFilePath}`);
+              } catch (error) {
+                this.logger.warn(`Failed to remove hidden file ${hiddenFilePath}:`, error);
+              }
+            }
+          }
+
+          // Try to remove the directory
+          try {
+            await fs.rmdir(dirPath);
+            this.logger.log(`Removed empty directory: ${dirPath}`);
+            return true;
+          } catch (error) {
+            // Directory might not be empty due to system files or permissions
+            this.logger.debug(`Could not remove directory ${dirPath}:`, error.message);
+          }
+        }
+      }
+
+      return false;
+    } catch (error) {
+      this.logger.warn(`Error cleaning up directory ${dirPath}:`, error);
+      return false;
+    }
   }
 }
