@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Badge } from '@/components/ui/badge'
 import { useUpdateCheck } from '@/hooks/useApi'
 import { useToast } from '@/hooks/use-toast'
-import { Download, ExternalLink, Copy, AlertCircle, CheckCircle, Loader2 } from 'lucide-react'
+import { Download, ExternalLink, Copy, AlertCircle } from 'lucide-react'
 
 export function UpdateCard() {
   const [showModal, setShowModal] = useState(false)
