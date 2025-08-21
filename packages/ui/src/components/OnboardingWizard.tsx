@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { useToast } from '@/hooks/use-toast'
 import { useCompleteOnboarding } from '@/hooks/useOnboarding'
@@ -55,7 +54,6 @@ export default function OnboardingWizard() {
       toast({
         title: "Setup Failed",
         description: "There was an error completing your setup. Please try again.",
-        variant: "destructive",
       })
     }
   }
