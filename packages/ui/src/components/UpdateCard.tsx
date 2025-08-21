@@ -34,7 +34,14 @@ export function UpdateCard() {
 
   return (
     <>
-      <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 border-blue-200 dark:border-blue-800">
+      {/* Mobile */}
+      <Card className='md:hidden cursor-pointer p-2 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 border-blue-200 dark:border-blue-800' onClick={() => setShowModal(true)}>
+        <div className='flex items-center justify-center'>
+          <Download className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+        </div>
+      </Card>
+      {/* Desktop */}
+      <Card className="hidden md:block bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 border-blue-200 dark:border-blue-800">
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
@@ -43,18 +50,12 @@ export function UpdateCard() {
                 Update Available
               </CardTitle>
             </div>
-            <Badge variant="secondary" className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-              {updateInfo.latestVersion}
-            </Badge>
           </div>
-          <CardDescription className="text-xs text-blue-700 dark:text-blue-300">
-            New version available
-          </CardDescription>
         </CardHeader>
         <CardContent className="pt-0">
-          <Button 
+          <Button
             onClick={() => setShowModal(true)}
-            size="sm" 
+            size="sm"
             className="w-full bg-blue-600 hover:bg-blue-700 text-white"
           >
             View Update
@@ -63,7 +64,7 @@ export function UpdateCard() {
       </Card>
 
       <Dialog open={showModal} onOpenChange={setShowModal}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="w-full max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center space-x-2">
               <Download className="w-5 h-5" />
@@ -105,8 +106,10 @@ export function UpdateCard() {
             <div>
               <label className="text-sm font-medium text-muted-foreground mb-2 block">Update Command</label>
               <div className="relative">
-                <pre className="bg-muted p-3 rounded-md text-sm font-mono overflow-x-auto border">
-                  {updateInfo.updateCommand}
+                <pre className="bg-muted p-3 rounded-md text-sm font-mono overflow-hidden border">
+                  <code className="w-full whitespace-pre-wrap">
+                    {updateInfo.updateCommand}
+                  </code>
                 </pre>
                 <Button
                   size="sm"
@@ -143,12 +146,12 @@ export function UpdateCard() {
                 <ExternalLink className="w-4 h-4" />
                 <span>View on GitHub</span>
               </Button>
-              
+
               <div className="flex space-x-2">
                 <Button variant="outline" onClick={() => setShowModal(false)}>
                   Later
                 </Button>
-                <Button 
+                <Button
                   onClick={() => {
                     copyToClipboard(updateInfo.updateCommand)
                     setShowModal(false)
@@ -168,7 +171,7 @@ export function UpdateCard() {
                 <div className="text-sm">
                   <p className="font-medium text-yellow-800 dark:text-yellow-200">Important</p>
                   <p className="text-yellow-700 dark:text-yellow-300">
-                    Run the update command on your host system (not inside a container). 
+                    Run the update command on your host system (not inside a container).
                     This will pull new images and restart your containers.
                   </p>
                 </div>

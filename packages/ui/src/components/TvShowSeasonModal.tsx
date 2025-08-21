@@ -21,7 +21,7 @@ import {
   Play,
   RefreshCw
 } from 'lucide-react'
-import { apiService, TorrentRequest, TvShowSeason, TvShowEpisode, TorrentDownload } from '@/services/api'
+import { apiService, TorrentRequest, TvShowSeason, TvShowEpisode } from '@/services/api'
 import { useToast } from '@/hooks/use-toast'
 
 interface TvShowSeasonModalProps {
@@ -34,7 +34,6 @@ interface TvShowSeasonModalProps {
 export function TvShowSeasonModal({ isOpen, onClose, request, seasonNumber }: TvShowSeasonModalProps) {
   const [season, setSeason] = useState<TvShowSeason | null>(null)
   const [episodes, setEpisodes] = useState<TvShowEpisode[]>([])
-  const [downloads, setDownloads] = useState<TorrentDownload[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const { toast } = useToast()
 
@@ -60,16 +59,6 @@ export function TvShowSeasonModal({ isOpen, onClose, request, seasonNumber }: Tv
       if (episodesResponse.success && episodesResponse.data) {
         setEpisodes(episodesResponse.data)
       }
-
-      // Fetch downloads
-      const downloadsResponse = await apiService.getTorrentDownloads(request.id)
-      if (downloadsResponse.success && downloadsResponse.data) {
-        // Filter downloads for this season
-        const seasonDownloads = downloadsResponse.data.filter(
-          download => download.tvShowSeasonId === seasonResponse.data?.id
-        )
-        setDownloads(seasonDownloads)
-      }
     } catch (error) {
       console.error('Error fetching season data:', error)
       toast({
@@ -84,7 +73,6 @@ export function TvShowSeasonModal({ isOpen, onClose, request, seasonNumber }: Tv
   const getEpisodeIcon = (episode: TvShowEpisode) => {
     switch (episode.status) {
       case 'COMPLETED': return CheckCircle
-      case 'DOWNLOADING': return Download
       case 'SEARCHING': return Search
       case 'FOUND': return AlertCircle
       case 'FAILED': return XCircle
@@ -95,15 +83,12 @@ export function TvShowSeasonModal({ isOpen, onClose, request, seasonNumber }: Tv
   const getEpisodeVariant = (episode: TvShowEpisode): "default" | "secondary" | "destructive" | "outline" => {
     switch (episode.status) {
       case 'COMPLETED': return 'default'
-      case 'DOWNLOADING': return 'default'
       case 'FAILED': return 'destructive'
       default: return 'secondary'
     }
   }
 
-  const getDownloadForEpisode = (episode: TvShowEpisode): TorrentDownload | undefined => {
-    return downloads.find(download => download.tvShowEpisodeId === episode.id)
-  }
+
 
   const formatDate = (dateString?: string) => {
     if (!dateString) return 'Unknown'
@@ -127,7 +112,7 @@ export function TvShowSeasonModal({ isOpen, onClose, request, seasonNumber }: Tv
             {request?.title} - Season {seasonNumber}
           </DialogTitle>
           <DialogDescription>
-            Episode details and download status
+            Episode details and completion status
           </DialogDescription>
         </DialogHeader>
 
@@ -192,7 +177,6 @@ export function TvShowSeasonModal({ isOpen, onClose, request, seasonNumber }: Tv
                 <div className="grid gap-3">
                   {episodes.map((episode) => {
                     const Icon = getEpisodeIcon(episode)
-                    const download = getDownloadForEpisode(episode)
                     
                     return (
                       <div
@@ -229,17 +213,7 @@ export function TvShowSeasonModal({ isOpen, onClose, request, seasonNumber }: Tv
                           </div>
                         </div>
 
-                        {/* Download Progress */}
-                        {download && download.downloadProgress !== null && (
-                          <div className="flex items-center gap-2 min-w-0">
-                            <div className="w-20">
-                              <Progress value={download.downloadProgress} className="h-1" />
-                            </div>
-                            <span className="text-xs text-muted-foreground whitespace-nowrap">
-                              {download.downloadProgress?.toFixed(1) ?? 0}%
-                            </span>
-                          </div>
-                        )}
+
                       </div>
                     )
                   })}
@@ -247,33 +221,7 @@ export function TvShowSeasonModal({ isOpen, onClose, request, seasonNumber }: Tv
               )}
             </div>
 
-            {/* Season Downloads */}
-            {downloads.length > 0 && (
-              <div className="space-y-3">
-                <h3 className="text-lg font-semibold">Downloads</h3>
-                <div className="space-y-2">
-                  {downloads.map((download) => (
-                    <div
-                      key={download.id}
-                      className="flex items-center justify-between p-3 border rounded-lg"
-                    >
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium truncate">{download.torrentTitle}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {download.torrentSize && <span>Size: {download.torrentSize}</span>}
-                          {download.seeders && <span> • Seeders: {download.seeders}</span>}
-                          {download.indexer && <span> • {download.indexer}</span>}
-                        </div>
-                      </div>
-                      
-                      <Badge variant={download.status === 'COMPLETED' ? 'default' : 'secondary'}>
-                        {download.status}
-                      </Badge>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+
           </div>
         )}
       </DialogContent>

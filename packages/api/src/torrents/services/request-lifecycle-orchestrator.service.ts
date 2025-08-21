@@ -5,7 +5,7 @@ import { RequestStateMachine, StateTransitionContext, StateAction } from '../sta
 import { TvShowStateMachine, TvShowStateContext } from '../state-machine/tv-show-state-machine';
 import { DownloadAggregationService } from './download-aggregation.service';
 import { Aria2Service } from '../../download/aria2.service';
-import { DownloadMetadataService } from '../../download/download-metadata.service';
+import { TvShowGapAnalysisService } from './tv-show-gap-analysis.service';
 
 export interface TransitionRequestDto {
   requestId: string;
@@ -40,6 +40,7 @@ export class RequestLifecycleOrchestrator {
     private readonly downloadAggregationService: DownloadAggregationService,
     @Inject(forwardRef(() => Aria2Service))
     private readonly aria2Service: Aria2Service,
+    private readonly gapAnalysisService: TvShowGapAnalysisService,
   ) {}
 
   /**
@@ -115,6 +116,39 @@ export class RequestLifecycleOrchestrator {
   }
 
   /**
+   * Check if a TV show should continue searching for more content
+   */
+  async shouldContinueSearching(requestId: string): Promise<boolean> {
+    const request = await this.prisma.requestedTorrent.findUnique({
+      where: { id: requestId },
+    });
+
+    if (!request || request.contentType !== ContentType.TV_SHOW) {
+      return false;
+    }
+
+    // Use gap analysis to determine if more content is needed
+    return await this.gapAnalysisService.needsMoreContent(requestId);
+  }
+
+  /**
+   * Reset TV show to PENDING if it needs more content
+   */
+  async resetTvShowForContinuedSearch(requestId: string): Promise<RequestedTorrent | null> {
+    const shouldContinue = await this.shouldContinueSearching(requestId);
+
+    if (shouldContinue) {
+      return this.transitionRequest({
+        requestId,
+        targetStatus: RequestStatus.PENDING,
+        reason: 'TV show needs more content - continuing search',
+      });
+    }
+
+    return null;
+  }
+
+  /**
    * Mark request as found with torrent information
    */
   async markAsFound(requestId: string, torrentInfo: TorrentInfo): Promise<RequestedTorrent> {
@@ -150,13 +184,31 @@ export class RequestLifecycleOrchestrator {
    * Mark request as completed
    */
   async markAsCompleted(requestId: string): Promise<RequestedTorrent> {
-    // Verify download is actually complete using aggregation service
     const request = await this.prisma.requestedTorrent.findUnique({
       where: { id: requestId },
       include: { torrentDownloads: true },
     });
 
-    if (request?.torrentDownloads.length > 0) {
+    if (!request) {
+      throw new Error(`Request ${requestId} not found`);
+    }
+
+    // For TV shows, use gap analysis to determine if truly complete
+    if (request.contentType === ContentType.TV_SHOW) {
+      const needsMoreContent = await this.gapAnalysisService.needsMoreContent(requestId);
+      if (needsMoreContent) {
+        this.logger.warn(`Cannot mark TV show ${request.title} as completed - still needs more content`);
+        // Reset to PENDING to continue searching
+        return this.transitionRequest({
+          requestId,
+          targetStatus: RequestStatus.PENDING,
+          reason: 'TV show still needs more content',
+        });
+      }
+    }
+
+    // For non-TV shows or complete TV shows, verify downloads are complete
+    if (request.torrentDownloads.length > 0) {
       // Check if all downloads are actually complete
       for (const torrentDownload of request.torrentDownloads) {
         if (torrentDownload.aria2Gid) {
@@ -171,7 +223,7 @@ export class RequestLifecycleOrchestrator {
     return this.transitionRequest({
       requestId,
       targetStatus: RequestStatus.COMPLETED,
-      reason: 'Download completed successfully',
+      reason: 'Content fully downloaded and complete',
       metadata: {
         downloadComplete: true,
       },
@@ -405,6 +457,12 @@ export class RequestLifecycleOrchestrator {
       case 'CANCEL_DOWNLOAD_JOBS':
         await this.cancelDownloadJobs(requestId);
         break;
+      case 'RESET_SEARCH_DATA':
+        await this.resetSearchData(requestId);
+        break;
+      case 'CLEAR_FOUND_TORRENT_DATA':
+        await this.clearFoundTorrentData(requestId);
+        break;
       default:
         this.logger.debug(`Unknown state action: ${action.type}`);
     }
@@ -629,6 +687,37 @@ export class RequestLifecycleOrchestrator {
       updateData.aria2Gid = metadata.aria2Gid;
     }
 
+    // Handle re-search specific fields
+    if (metadata?.searchAttempts !== undefined) {
+      updateData.searchAttempts = metadata.searchAttempts;
+    }
+    if (metadata?.nextSearchAt !== undefined) {
+      updateData.nextSearchAt = metadata.nextSearchAt;
+    }
+    if (metadata?.lastSearchAt !== undefined) {
+      updateData.lastSearchAt = metadata.lastSearchAt;
+    }
+
+    // Handle found torrent fields (for clearing them during re-search)
+    if (metadata?.foundTorrentTitle !== undefined) {
+      updateData.foundTorrentTitle = metadata.foundTorrentTitle;
+    }
+    if (metadata?.foundTorrentLink !== undefined) {
+      updateData.foundTorrentLink = metadata.foundTorrentLink;
+    }
+    if (metadata?.foundMagnetUri !== undefined) {
+      updateData.foundMagnetUri = metadata.foundMagnetUri;
+    }
+    if (metadata?.foundTorrentSize !== undefined) {
+      updateData.foundTorrentSize = metadata.foundTorrentSize;
+    }
+    if (metadata?.foundSeeders !== undefined) {
+      updateData.foundSeeders = metadata.foundSeeders;
+    }
+    if (metadata?.foundIndexer !== undefined) {
+      updateData.foundIndexer = metadata.foundIndexer;
+    }
+
     return this.prisma.requestedTorrent.update({
       where: { id: requestId },
       data: updateData,
@@ -639,6 +728,31 @@ export class RequestLifecycleOrchestrator {
           },
         },
         torrentDownloads: true,
+      },
+    });
+  }
+
+  private async resetSearchData(requestId: string): Promise<void> {
+    await this.prisma.requestedTorrent.update({
+      where: { id: requestId },
+      data: {
+        searchAttempts: 0,
+        nextSearchAt: new Date(),
+        lastSearchAt: null,
+      },
+    });
+  }
+
+  private async clearFoundTorrentData(requestId: string): Promise<void> {
+    await this.prisma.requestedTorrent.update({
+      where: { id: requestId },
+      data: {
+        foundTorrentTitle: null,
+        foundTorrentLink: null,
+        foundMagnetUri: null,
+        foundTorrentSize: null,
+        foundSeeders: null,
+        foundIndexer: null,
       },
     });
   }

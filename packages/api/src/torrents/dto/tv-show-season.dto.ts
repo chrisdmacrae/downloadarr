@@ -143,19 +143,7 @@ export class CreateTorrentDownloadDto {
   @IsString()
   indexer?: string;
 
-  @ApiPropertyOptional({
-    description: 'TV show season ID (for season pack downloads)',
-  })
-  @IsOptional()
-  @IsString()
-  tvShowSeasonId?: string;
 
-  @ApiPropertyOptional({
-    description: 'TV show episode ID (for individual episode downloads)',
-  })
-  @IsOptional()
-  @IsString()
-  tvShowEpisodeId?: string;
 }
 
 export class UpdateTorrentDownloadDto {
@@ -226,13 +214,7 @@ export class TvShowSeasonQueryDto {
   @Type(() => Boolean)
   includeEpisodes?: boolean;
 
-  @ApiPropertyOptional({
-    description: 'Include download details',
-    example: true,
-  })
-  @IsOptional()
-  @Type(() => Boolean)
-  includeDownloads?: boolean;
+
 }
 
 export class TvShowEpisodeQueryDto {
@@ -244,11 +226,5 @@ export class TvShowEpisodeQueryDto {
   @IsEnum(EpisodeStatus)
   status?: EpisodeStatus;
 
-  @ApiPropertyOptional({
-    description: 'Include download details',
-    example: true,
-  })
-  @IsOptional()
-  @Type(() => Boolean)
-  includeDownloads?: boolean;
+
 }

@@ -45,7 +45,6 @@ import { MovieDetailModal } from '@/components/MovieDetailModal'
 import { GameDetailModal } from '@/components/GameDetailModal'
 import { apiService, TorrentRequest } from '@/services/api'
 import { useTorrentRequests } from '@/hooks/useTorrentRequests'
-import { useDownloadSummary } from '@/hooks/useDownloadStatus'
 import { useToast } from '@/hooks/use-toast'
 
 type StatusFilter = 'all' | TorrentRequest['status']
@@ -59,6 +58,7 @@ export default function Requests() {
   const [isDeleting, setIsDeleting] = useState<string | null>(null)
   const [isCancelling, setIsCancelling] = useState<string | null>(null)
   const [isSearching, setIsSearching] = useState<string | null>(null)
+  const [isReSearching, setIsReSearching] = useState<string | null>(null)
   const [isSearchingAll, setIsSearchingAll] = useState(false)
   const [torrentSelectionRequest, setTorrentSelectionRequest] = useState<TorrentRequest | null>(null)
   const [editRequest, setEditRequest] = useState<TorrentRequest | null>(null)
@@ -72,7 +72,6 @@ export default function Requests() {
   const [showDetailModal, setShowDetailModal] = useState(false)
 
   const { requests, isLoading, error, refreshRequests, isOngoingTvShow } = useTorrentRequests()
-  const { summary: downloadSummary } = useDownloadSummary()
   const { toast } = useToast()
 
   // Filter and sort requests
@@ -187,6 +186,35 @@ export default function Requests() {
       })
     } finally {
       setIsSearching(null)
+    }
+  }
+
+  const handleReSearch = async (id: string) => {
+    setIsReSearching(id)
+
+    try {
+      const response = await apiService.reSearchCancelledRequest(id)
+
+      if (response.success) {
+        toast({
+          title: "Re-search Triggered",
+          description: response.message || "Cancelled request reset and search started",
+        })
+        refreshRequests()
+      } else {
+        toast({
+          title: "Re-search Failed",
+          description: response.error || "Failed to re-search cancelled request",
+        })
+      }
+    } catch (error) {
+      console.error('Error re-searching cancelled request:', error)
+      toast({
+        title: "Re-search Failed",
+        description: "An error occurred while re-searching the cancelled request",
+      })
+    } finally {
+      setIsReSearching(null)
     }
   }
 
@@ -406,36 +434,6 @@ export default function Requests() {
           </Card>
         </div>
 
-        {/* Live Download Summary */}
-        {downloadSummary && downloadSummary.downloading > 0 && (
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-medium">Active Downloads</h3>
-                <div className="text-sm text-muted-foreground">
-                  {downloadSummary.downloading} downloading
-                </div>
-              </div>
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span>Overall Progress</span>
-                  <span>{downloadSummary.totalProgress}%</span>
-                </div>
-                <div className="w-full bg-secondary rounded-full h-2">
-                  <div
-                    className="bg-primary h-2 rounded-full transition-all duration-300"
-                    style={{ width: `${downloadSummary.totalProgress}%` }}
-                  />
-                </div>
-                <div className="flex justify-between text-xs text-muted-foreground">
-                  <span>Speed: {downloadSummary.totalSpeed}</span>
-                  <span>{downloadSummary.completed} completed</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
         {/* Filters and Search */}
         <div className="flex flex-col gap-3 md:flex-row md:gap-4">
           <div className="relative flex-1">
@@ -503,8 +501,8 @@ export default function Requests() {
               const canCancel = ['PENDING', 'SEARCHING'].includes(request.status)
               const canDelete = true // Allow deletion of all requests - backend will handle download cancellation
               const canSearch = ['PENDING', 'FAILED', 'EXPIRED'].includes(request.status)
-              const canViewResults = request.status === 'FOUND'
-              const canEdit = request.status === 'PENDING' // Only allow editing before search begins
+              const canReSearch = request.status === 'CANCELLED'
+              const canEdit = ['PENDING', 'SEARCHING', 'FAILED', 'CANCELLED'].includes(request.status)
 
               return (
                 <Card key={request.id} className="overflow-hidden">
@@ -556,12 +554,22 @@ export default function Requests() {
                                       )}
                                     </DropdownMenuItem>
                                   )}
-                                  {canViewResults && (
+                                  {canReSearch && (
                                     <DropdownMenuItem
-                                      onClick={() => handleViewResults(request)}
+                                      onClick={() => handleReSearch(request.id)}
+                                      disabled={isReSearching === request.id}
                                     >
-                                      <PlayCircle className="h-4 w-4 mr-2" />
-                                      View Results
+                                      {isReSearching === request.id ? (
+                                        <>
+                                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                          Re-searching...
+                                        </>
+                                      ) : (
+                                        <>
+                                          <RefreshCw className="h-4 w-4 mr-2" />
+                                          Re-search
+                                        </>
+                                      )}
                                     </DropdownMenuItem>
                                   )}
                                   {canEdit && (
@@ -742,12 +750,22 @@ export default function Requests() {
                                 )}
                               </DropdownMenuItem>
                             )}
-                            {canViewResults && (
+                            {canReSearch && (
                               <DropdownMenuItem
-                                onClick={() => handleViewResults(request)}
+                                onClick={() => handleReSearch(request.id)}
+                                disabled={isReSearching === request.id}
                               >
-                                <PlayCircle className="h-4 w-4 mr-2" />
-                                View Results
+                                {isReSearching === request.id ? (
+                                  <>
+                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                    Re-searching...
+                                  </>
+                                ) : (
+                                  <>
+                                    <RefreshCw className="h-4 w-4 mr-2" />
+                                    Re-search
+                                  </>
+                                )}
                               </DropdownMenuItem>
                             )}
                             {canEdit && (

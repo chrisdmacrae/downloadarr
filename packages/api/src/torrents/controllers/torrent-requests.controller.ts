@@ -494,6 +494,70 @@ export class TorrentRequestsController {
     }
   }
 
+  @Post(':id/re-search')
+  @ApiOperation({
+    summary: 'Re-search a cancelled request',
+    description: 'Reset a cancelled request to PENDING status and trigger a new search',
+  })
+  @ApiParam({ name: 'id', description: 'Torrent request ID' })
+  @ApiResponse({ status: 200, description: 'Re-search triggered successfully' })
+  @ApiResponse({ status: 404, description: 'Request not found' })
+  @ApiResponse({ status: 400, description: 'Request is not in cancelled state' })
+  async reSearchCancelledRequest(@Param('id') id: string): Promise<{ success: boolean; message: string }> {
+    try {
+      this.logger.log(`[RE-SEARCH] Starting re-search for request ${id}`);
+
+      // Get the request to ensure it exists and is cancelled
+      const request = await this.requestedTorrentsService.getRequestById(id);
+      this.logger.log(`[RE-SEARCH] Found request: ${request ? request.title : 'null'} with status: ${request?.status}`);
+
+      if (!request) {
+        this.logger.warn(`[RE-SEARCH] Request ${id} not found`);
+        throw new HttpException('Request not found', HttpStatus.NOT_FOUND);
+      }
+
+      // Only allow re-search for cancelled requests
+      if (request.status !== RequestStatus.CANCELLED) {
+        throw new HttpException(
+          `Cannot re-search request in ${request.status} state. Only cancelled requests can be re-searched.`,
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      // Reset the request to PENDING status and clear cancellation data
+      await this.requestedTorrentsService.updateRequestStatus(id, RequestStatus.PENDING, {
+        searchAttempts: 0, // Reset search attempts
+        nextSearchAt: new Date(), // Allow immediate search
+        lastSearchAt: null, // Clear last search timestamp
+        foundTorrentTitle: null, // Clear any previous found torrent
+        foundTorrentLink: null,
+        foundMagnetUri: null,
+        foundTorrentSize: null,
+        foundSeeders: null,
+        foundIndexer: null,
+      });
+
+      // Trigger the torrent checker for this specific request
+      await this.torrentCheckerService.searchForSpecificRequest(id);
+
+      return {
+        success: true,
+        message: 'Cancelled request reset and search triggered successfully',
+      };
+    } catch (error) {
+      this.logger.error(`Error re-searching cancelled request ${id}: ${error.message}`, error.stack);
+
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      throw new HttpException(
+        'Failed to re-search cancelled request',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
   @Post(':id/search')
   @ApiOperation({
     summary: 'Trigger manual search',
@@ -513,7 +577,7 @@ export class TorrentRequestsController {
       }
 
       // Only allow search for requests that are in searchable states
-      const searchableStates: RequestStatus[] = ['PENDING', 'FAILED', 'EXPIRED'];
+      const searchableStates: RequestStatus[] = ['PENDING', 'FAILED', 'EXPIRED', 'CANCELLED'];
       if (!searchableStates.includes(request.status)) {
         throw new HttpException(
           `Cannot search for request in ${request.status} state`,
@@ -554,7 +618,7 @@ export class TorrentRequestsController {
       this.logger.log('Triggering manual search for all pending requests');
 
       // Get all requests that can be searched
-      const searchableStates: RequestStatus[] = ['PENDING', 'FAILED', 'EXPIRED'];
+      const searchableStates: RequestStatus[] = ['PENDING', 'FAILED', 'EXPIRED', 'CANCELLED'];
       const searchableRequests = await this.requestedTorrentsService.getRequestsByStatuses(searchableStates);
 
       if (searchableRequests.length === 0) {
@@ -675,7 +739,6 @@ export class TorrentRequestsController {
   @ApiParam({ name: 'id', description: 'Torrent request ID' })
   @ApiQuery({ name: 'status', required: false, description: 'Filter by season status' })
   @ApiQuery({ name: 'includeEpisodes', required: false, description: 'Include episode details' })
-  @ApiQuery({ name: 'includeDownloads', required: false, description: 'Include download details' })
   @ApiResponse({ status: 200, description: 'TV show seasons retrieved successfully' })
   @ApiResponse({ status: 404, description: 'Torrent request not found' })
   async getTvShowSeasons(
@@ -751,7 +814,6 @@ export class TorrentRequestsController {
   @ApiParam({ name: 'id', description: 'Torrent request ID' })
   @ApiParam({ name: 'seasonNumber', description: 'Season number' })
   @ApiQuery({ name: 'status', required: false, description: 'Filter by episode status' })
-  @ApiQuery({ name: 'includeDownloads', required: false, description: 'Include download details' })
   @ApiResponse({ status: 200, description: 'TV show episodes retrieved successfully' })
   @ApiResponse({ status: 404, description: 'Season not found' })
   async getTvShowEpisodes(
@@ -1085,8 +1147,6 @@ export class TorrentRequestsController {
       await this.prisma.torrentDownload.create({
         data: {
           requestedTorrentId: id,
-          tvShowSeasonId: null,
-          tvShowEpisodeId: null,
           torrentTitle: body.torrentTitle || 'Manual Download',
           torrentLink: '',
           magnetUri: undefined,

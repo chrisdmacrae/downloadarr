@@ -64,6 +64,7 @@ export function DownloadRequestModal({ item, open, onOpenChange, onRequestCreate
     if (open && item) {
       setFormData(prev => ({
         ...prev,
+        isOngoing: isTvShow,
         preferredQualities: isGame ? [] : ['HD_1080P', 'UHD_4K'],
         preferredFormats: isGame ? [] : ['X264', 'X265'],
         minSeeders: 1,

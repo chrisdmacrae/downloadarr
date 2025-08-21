@@ -152,8 +152,11 @@ export class FileOrganizationService {
       const resolvedOriginalPath = this.resolvePath(context.originalPath);
       this.logger.log(`Organizing individual file: ${context.originalPath} -> resolved: ${resolvedOriginalPath}`);
 
+      // Enhance context with extracted metadata from filename if missing
+      const enhancedContext = await this.enhanceContextWithFileMetadata(context);
+
       // Generate organized path
-      const pathResult = await this.organizationRulesService.generateOrganizedPath(context);
+      const pathResult = await this.organizationRulesService.generateOrganizedPath(enhancedContext);
       const resolvedDestinationPath = this.resolvePath(pathResult.fullPath);
       this.logger.log(`Generated organized path: ${pathResult.fullPath} -> resolved: ${resolvedDestinationPath}`);
 
@@ -409,5 +412,46 @@ export class FileOrganizationService {
       this.logger.warn(`Error cleaning up directory ${dirPath}:`, error);
       return false;
     }
+  }
+
+  /**
+   * Enhance organization context with metadata extracted from filename
+   */
+  private async enhanceContextWithFileMetadata(context: OrganizationContext): Promise<OrganizationContext> {
+    // If season and episode are already provided, no need to extract
+    if (context.season && context.episode) {
+      return context;
+    }
+
+    // For TV shows, try to extract season and episode from filename
+    if (context.contentType === 'TV_SHOW') {
+      const fileName = context.fileName;
+
+      // Use regex patterns to extract season and episode information
+      const episodePatterns = [
+        /[Ss](\d+)[Ee](\d+)/,  // S01E01, s01e01
+        /[Ss](\d+)\s*[Ee](\d+)/, // S01 E01
+        /Season\s*(\d+).*Episode\s*(\d+)/i, // Season 1 Episode 1
+        /(\d+)x(\d+)/, // 1x01
+      ];
+
+      for (const pattern of episodePatterns) {
+        const match = fileName.match(pattern);
+        if (match) {
+          const extractedSeason = parseInt(match[1]);
+          const extractedEpisode = parseInt(match[2]);
+
+          this.logger.log(`Extracted S${extractedSeason}E${extractedEpisode} from filename: ${fileName}`);
+
+          return {
+            ...context,
+            season: context.season || extractedSeason,
+            episode: context.episode || extractedEpisode,
+          };
+        }
+      }
+    }
+
+    return context;
   }
 }

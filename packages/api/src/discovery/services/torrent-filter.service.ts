@@ -23,6 +23,7 @@ export class TorrentFilterService {
 
   // Quality scoring weights
   private readonly qualityScores: Record<string, number> = {
+    '8K': 120,
     '4K': 100,
     '2160p': 100,
     '1080p': 80,
@@ -72,9 +73,12 @@ export class TorrentFilterService {
   }
 
   private applyHardFilters(torrents: TorrentResult[], criteria: FilterCriteria): TorrentResult[] {
-    return torrents.filter(torrent => {
+    const rejectionReasons: Record<string, number> = {};
+
+    const filtered = torrents.filter(torrent => {
       // Minimum seeders filter
       if (criteria.minSeeders && torrent.seeders < criteria.minSeeders) {
+        rejectionReasons['minSeeders'] = (rejectionReasons['minSeeders'] || 0) + 1;
         return false;
       }
 
@@ -83,6 +87,7 @@ export class TorrentFilterService {
         const maxSizeBytes = this.parseSize(criteria.maxSize);
         const torrentSizeBytes = this.parseSize(torrent.size);
         if (torrentSizeBytes > maxSizeBytes) {
+          rejectionReasons['maxSize'] = (rejectionReasons['maxSize'] || 0) + 1;
           return false;
         }
       }
@@ -90,16 +95,68 @@ export class TorrentFilterService {
       // Blacklisted words filter
       if (criteria.blacklistedWords && criteria.blacklistedWords.length > 0) {
         const titleLower = torrent.title.toLowerCase();
-        const hasBlacklistedWord = criteria.blacklistedWords.some(word => 
+        const hasBlacklistedWord = criteria.blacklistedWords.some(word =>
           titleLower.includes(word.toLowerCase())
         );
         if (hasBlacklistedWord) {
+          rejectionReasons['blacklistedWords'] = (rejectionReasons['blacklistedWords'] || 0) + 1;
+          return false;
+        }
+      }
+
+      // Preferred qualities filter (hard filter - reject if no accepted quality found)
+      if (criteria.preferredQualities && criteria.preferredQualities.length > 0) {
+        const detectedQuality = this.detectQuality(torrent.title);
+        if (!detectedQuality) {
+          // No quality detected - reject
+          rejectionReasons['noQualityDetected'] = (rejectionReasons['noQualityDetected'] || 0) + 1;
+          return false;
+        }
+
+        const hasAcceptedQuality = criteria.preferredQualities.some(pq =>
+          detectedQuality.toLowerCase().includes(pq.toLowerCase()) ||
+          pq.toLowerCase().includes(detectedQuality.toLowerCase())
+        );
+
+        if (!hasAcceptedQuality) {
+          // Quality detected but not in accepted list - reject
+          rejectionReasons['unacceptedQuality'] = (rejectionReasons['unacceptedQuality'] || 0) + 1;
+          this.logger.debug(`Rejected torrent "${torrent.title}" - detected quality "${detectedQuality}" not in accepted list: [${criteria.preferredQualities.join(', ')}]`);
+          return false;
+        }
+      }
+
+      // Preferred formats filter (hard filter - reject if no accepted format found)
+      if (criteria.preferredFormats && criteria.preferredFormats.length > 0) {
+        const detectedFormat = this.detectFormat(torrent.title);
+        if (!detectedFormat) {
+          // No format detected - reject
+          rejectionReasons['noFormatDetected'] = (rejectionReasons['noFormatDetected'] || 0) + 1;
+          return false;
+        }
+
+        const hasAcceptedFormat = criteria.preferredFormats.some(pf =>
+          detectedFormat.toLowerCase().includes(pf.toLowerCase()) ||
+          pf.toLowerCase().includes(detectedFormat.toLowerCase())
+        );
+
+        if (!hasAcceptedFormat) {
+          // Format detected but not in accepted list - reject
+          rejectionReasons['unacceptedFormat'] = (rejectionReasons['unacceptedFormat'] || 0) + 1;
+          this.logger.debug(`Rejected torrent "${torrent.title}" - detected format "${detectedFormat}" not in accepted list: [${criteria.preferredFormats.join(', ')}]`);
           return false;
         }
       }
 
       return true;
     });
+
+    // Log filtering summary
+    if (Object.keys(rejectionReasons).length > 0) {
+      this.logger.debug(`Hard filter rejections: ${JSON.stringify(rejectionReasons)}`);
+    }
+
+    return filtered;
   }
 
   private scoreTorrents(torrents: TorrentResult[], criteria: FilterCriteria): TorrentScore[] {
@@ -159,22 +216,21 @@ export class TorrentFilterService {
 
   private getQualityScore(torrent: TorrentResult, preferredQualities?: (TorrentQuality | string)[]): number {
     const detectedQuality = this.detectQuality(torrent.title);
-    
+
     if (!detectedQuality) return 0;
 
     let baseScore = this.qualityScores[detectedQuality] || 0;
 
-    // Bonus if it matches preferred qualities
+    // Bonus if it matches preferred qualities (no penalty since hard filtering handles rejection)
     if (preferredQualities && preferredQualities.length > 0) {
-      const isPreferred = preferredQualities.some(pq => 
+      const isPreferred = preferredQualities.some(pq =>
         detectedQuality.toLowerCase().includes(pq.toLowerCase()) ||
         pq.toLowerCase().includes(detectedQuality.toLowerCase())
       );
       if (isPreferred) {
         baseScore *= 1.5; // 50% bonus for preferred quality
-      } else {
-        baseScore *= 0.7; // 30% penalty for non-preferred quality
       }
+      // Note: No penalty for non-preferred since hard filtering already rejected those
     }
 
     return Math.round(baseScore);
@@ -182,22 +238,21 @@ export class TorrentFilterService {
 
   private getFormatScore(torrent: TorrentResult, preferredFormats?: (TorrentFormat | string)[]): number {
     const detectedFormat = this.detectFormat(torrent.title);
-    
+
     if (!detectedFormat) return 0;
 
     let baseScore = this.formatScores[detectedFormat] || 0;
 
-    // Bonus if it matches preferred formats
+    // Bonus if it matches preferred formats (no penalty since hard filtering handles rejection)
     if (preferredFormats && preferredFormats.length > 0) {
-      const isPreferred = preferredFormats.some(pf => 
+      const isPreferred = preferredFormats.some(pf =>
         detectedFormat.toLowerCase().includes(pf.toLowerCase()) ||
         pf.toLowerCase().includes(detectedFormat.toLowerCase())
       );
       if (isPreferred) {
         baseScore *= 1.3; // 30% bonus for preferred format
-      } else {
-        baseScore *= 0.8; // 20% penalty for non-preferred format
       }
+      // Note: No penalty for non-preferred since hard filtering already rejected those
     }
 
     return Math.round(baseScore);
@@ -249,25 +304,26 @@ export class TorrentFilterService {
 
   private detectQuality(title: string): string | undefined {
     const titleLower = title.toLowerCase();
-    
-    // Check for specific quality indicators
-    if (titleLower.includes('2160p') || titleLower.includes('4k')) return '4K';
-    if (titleLower.includes('1080p')) return '1080p';
-    if (titleLower.includes('720p')) return '720p';
+
+    // Check for specific quality indicators (ordered by priority - higher quality first)
+    if (titleLower.includes('2160p') || titleLower.includes('4k') || titleLower.includes('uhd')) return '4K';
+    if (titleLower.includes('8k')) return '8K';
+    if (titleLower.includes('1080p') || titleLower.includes('fhd')) return '1080p';
+    if (titleLower.includes('720p') || titleLower.includes('hd')) return '720p';
     if (titleLower.includes('480p')) return '480p';
-    if (titleLower.includes('sd') || titleLower.includes('dvdrip')) return 'SD';
+    if (titleLower.includes('sd') || titleLower.includes('dvdrip') || titleLower.includes('480i')) return 'SD';
 
     return undefined;
   }
 
   private detectFormat(title: string): string | undefined {
     const titleLower = title.toLowerCase();
-    
-    // Check for format indicators
-    if (titleLower.includes('x265') || titleLower.includes('h265')) return 'x265';
-    if (titleLower.includes('hevc')) return 'HEVC';
+
+    // Check for format indicators (ordered by preference - newer/better codecs first)
     if (titleLower.includes('av1')) return 'AV1';
-    if (titleLower.includes('x264') || titleLower.includes('h264')) return 'x264';
+    if (titleLower.includes('x265') || titleLower.includes('h265') || titleLower.includes('h.265')) return 'x265';
+    if (titleLower.includes('hevc')) return 'HEVC';
+    if (titleLower.includes('x264') || titleLower.includes('h264') || titleLower.includes('h.264')) return 'x264';
     if (titleLower.includes('xvid')) return 'XviD';
     if (titleLower.includes('divx')) return 'DivX';
 

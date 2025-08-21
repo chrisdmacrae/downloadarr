@@ -176,7 +176,7 @@ export class OrganizationController {
       const results = await this.seasonScanningService.scanAllSeasons();
       return {
         success: true,
-        message: `Season scanning completed. Scanned ${results.seasonsScanned} seasons, updated ${results.episodesUpdated} episodes.`,
+        message: `Season scanning completed. Scanned ${results.seasonsScanned} seasons, updated ${results.episodesUpdated} episodes, marked ${results.episodesMarkedMissing} episodes as missing.`,
         results,
       };
     } catch (error) {
@@ -196,7 +196,7 @@ export class OrganizationController {
       const results = await this.seasonScanningService.scanTvShowRequest(requestId);
       return {
         success: true,
-        message: `Season scanning completed for request. Updated ${results.episodesUpdated} episodes.`,
+        message: `Season scanning completed for request. Updated ${results.episodesUpdated} episodes, marked ${results.episodesMarkedMissing} episodes as missing.`,
         results,
       };
     } catch (error) {

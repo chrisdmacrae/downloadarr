@@ -40,9 +40,9 @@ export class RequestStateMachine {
     [RequestStatus.PENDING, [RequestStatus.SEARCHING, RequestStatus.CANCELLED, RequestStatus.EXPIRED]],
     [RequestStatus.SEARCHING, [RequestStatus.FOUND, RequestStatus.PENDING, RequestStatus.CANCELLED, RequestStatus.EXPIRED]],
     [RequestStatus.FOUND, [RequestStatus.DOWNLOADING, RequestStatus.SEARCHING, RequestStatus.CANCELLED, RequestStatus.EXPIRED]],
-    [RequestStatus.DOWNLOADING, [RequestStatus.COMPLETED, RequestStatus.FAILED, RequestStatus.CANCELLED]],
+    [RequestStatus.DOWNLOADING, [RequestStatus.COMPLETED, RequestStatus.FAILED, RequestStatus.CANCELLED, RequestStatus.PENDING]],
     [RequestStatus.FAILED, [RequestStatus.SEARCHING, RequestStatus.CANCELLED, RequestStatus.EXPIRED]],
-    [RequestStatus.CANCELLED, [RequestStatus.SEARCHING]],
+    [RequestStatus.CANCELLED, [RequestStatus.PENDING, RequestStatus.SEARCHING]],
     [RequestStatus.EXPIRED, [RequestStatus.SEARCHING]],
     [RequestStatus.COMPLETED, []], // Final state - no transitions allowed
   ]);
@@ -187,9 +187,31 @@ export class RequestStateMachine {
       },
       reason: 'Download not yet complete',
     });
+
+    // Guard: Can only reset to PENDING from DOWNLOADING for TV shows that need more content
+    this.registerGuard(RequestStatus.DOWNLOADING, RequestStatus.PENDING, {
+      canTransition: (context) => {
+        return context.metadata?.contentType === 'TV_SHOW' && context.reason?.includes('needs more content');
+      },
+      reason: 'Only TV shows needing more content can transition from DOWNLOADING to PENDING',
+    });
   }
 
   private initializeStateHandlers(): void {
+    // PENDING state handler (for re-search scenarios)
+    this.registerStateHandler(RequestStatus.PENDING, {
+      onEnter: (context) => {
+        // Only reset data if this is a re-search from CANCELLED state
+        if (context.currentStatus === RequestStatus.CANCELLED) {
+          return [
+            { type: 'RESET_SEARCH_DATA' },
+            { type: 'CLEAR_FOUND_TORRENT_DATA' },
+          ];
+        }
+        return [];
+      },
+    });
+
     // SEARCHING state handler
     this.registerStateHandler(RequestStatus.SEARCHING, {
       onEnter: (context) => [

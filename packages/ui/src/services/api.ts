@@ -319,14 +319,11 @@ export interface TvShowEpisode {
   status: 'PENDING' | 'SEARCHING' | 'FOUND' | 'DOWNLOADING' | 'COMPLETED' | 'FAILED';
   createdAt: string;
   updatedAt: string;
-  torrentDownloads?: TorrentDownload[];
 }
 
 export interface TorrentDownload {
   id: string;
   requestedTorrentId: string;
-  tvShowSeasonId?: string;
-  tvShowEpisodeId?: string;
   torrentTitle: string;
   torrentLink?: string;
   magnetUri?: string;
@@ -661,6 +658,11 @@ export const apiService = {
 
   triggerRequestSearch: async (id: string): Promise<{ success: boolean; message?: string; error?: string }> => {
     const response = await api.post(`/torrent-requests/${id}/search`);
+    return response.data;
+  },
+
+  reSearchCancelledRequest: async (id: string): Promise<{ success: boolean; message?: string; error?: string }> => {
+    const response = await api.post(`/torrent-requests/${id}/re-search`);
     return response.data;
   },
 

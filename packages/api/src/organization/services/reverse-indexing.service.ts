@@ -54,7 +54,7 @@ export class ReverseIndexingService {
       const seasonResults = await this.seasonScanningService.scanAllSeasons();
 
       const duration = Date.now() - startTime;
-      this.logger.log(`Reverse indexing completed in ${duration}ms. Found ${results.totalFolders} folders, processed ${results.newFolders} new folders. Updated ${seasonResults.episodesUpdated} episodes.`);
+      this.logger.log(`Reverse indexing completed in ${duration}ms. Found ${results.totalFolders} folders, processed ${results.newFolders} new folders. Updated ${seasonResults.episodesUpdated} episodes, marked ${seasonResults.episodesMarkedMissing} episodes as missing.`);
 
       if (results.errors > 0 || seasonResults.errors > 0) {
         this.logger.warn(`Reverse indexing completed with ${results.errors + seasonResults.errors} errors`);
@@ -92,7 +92,7 @@ export class ReverseIndexingService {
 
       return {
         success: true,
-        message: `Reverse indexing completed in ${duration}ms. Found ${results.totalFolders} folders, processed ${results.newFolders} new folders. Updated ${seasonResults.episodesUpdated} episodes.`,
+        message: `Reverse indexing completed in ${duration}ms. Found ${results.totalFolders} folders, processed ${results.newFolders} new folders. Updated ${seasonResults.episodesUpdated} episodes, marked ${seasonResults.episodesMarkedMissing} episodes as missing.`,
         results: {
           ...results,
           seasonScanning: seasonResults,

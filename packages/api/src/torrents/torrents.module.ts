@@ -14,6 +14,11 @@ import { TvShowMetadataCronService } from './services/tv-show-metadata-cron.serv
 import { SeasonScanningService } from './services/season-scanning.service';
 import { RequestLifecycleOrchestrator } from './services/request-lifecycle-orchestrator.service';
 import { DownloadAggregationService } from './services/download-aggregation.service';
+import { TvShowTorrentSelectionService } from './services/tv-show-torrent-selection.service';
+import { TvShowGapAnalysisService } from './services/tv-show-gap-analysis.service';
+import { TvShowReleaseValidatorService } from './services/tv-show-release-validator.service';
+import { TorrentTitleMatcherService } from './services/torrent-title-matcher.service';
+import { TvShowSearchLoopService } from './services/tv-show-search-loop.service';
 
 // State Machine
 import { RequestStateMachine } from './state-machine/request-state-machine';
@@ -57,6 +62,11 @@ import { DownloadMetadataService } from '../download/download-metadata.service';
     TvShowMetadataService,
     TvShowMetadataCronService,
     SeasonScanningService,
+    TvShowTorrentSelectionService,
+    TvShowGapAnalysisService,
+    TvShowReleaseValidatorService,
+    TorrentTitleMatcherService,
+    TvShowSearchLoopService,
   ],
   controllers: [
     TorrentRequestsController,
@@ -80,6 +90,11 @@ import { DownloadMetadataService } from '../download/download-metadata.service';
     DownloadProgressTrackerService,
     TvShowMetadataService,
     SeasonScanningService,
+    TvShowTorrentSelectionService,
+    TvShowGapAnalysisService,
+    TvShowReleaseValidatorService,
+    TorrentTitleMatcherService,
+    TvShowSearchLoopService,
   ],
 })
 export class TorrentsModule implements OnModuleInit {

@@ -5,6 +5,7 @@ import { ContentType, OrganizationRule, OrganizationSettings } from '../../../ge
 import { CreateOrganizationRuleDto, UpdateOrganizationRuleDto } from '../dto/organization-rule.dto';
 import { UpdateOrganizationSettingsDto } from '../dto/organization-settings.dto';
 import { OrganizationContext, PathGenerationResult, FileMetadata } from '../interfaces/organization.interface';
+import { sanitizeTitleForFilesystem } from '../../common/utils/filesystem.utils';
 
 @Injectable()
 export class OrganizationRulesService {
@@ -357,16 +358,10 @@ export class OrganizationRulesService {
   }
 
   private sanitizePath(path: string): string {
-    return path
-      .replace(/[<>:"/\\|?*]/g, '_')
-      .replace(/\s+/g, ' ')
-      .trim();
+    return sanitizeTitleForFilesystem(path);
   }
 
   private sanitizeFileName(fileName: string): string {
-    return fileName
-      .replace(/[<>:"/\\|?*]/g, '_')
-      .replace(/\s+/g, ' ')
-      .trim();
+    return sanitizeTitleForFilesystem(fileName);
   }
 }

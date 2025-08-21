@@ -332,14 +332,6 @@ export class DownloadMetadataService {
           aria2Gid: aria2Gid,
           status: 'DOWNLOADING',
         },
-        include: {
-          tvShowSeason: true,
-          tvShowEpisode: {
-            include: {
-              tvShowSeason: true,
-            },
-          },
-        },
       });
 
       if (torrentDownloads.length > 0) {

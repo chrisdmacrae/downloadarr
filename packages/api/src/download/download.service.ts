@@ -3,6 +3,8 @@ import { CreateDownloadDto } from './dto/create-download.dto';
 import { Aria2Service } from './aria2.service';
 import { DownloadMetadataService } from './download-metadata.service';
 import { RequestedTorrentsService } from '../torrents/services/requested-torrents.service';
+
+import { PrismaService } from '../database/prisma.service';
 import { RequestStatus } from '../../generated/prisma';
 
 @Injectable()
@@ -14,6 +16,7 @@ export class DownloadService {
     private downloadMetadataService: DownloadMetadataService,
     @Inject(forwardRef(() => RequestedTorrentsService))
     private requestedTorrentsService: RequestedTorrentsService,
+    private prisma: PrismaService,
   ) {}
 
   async createDownload(createDownloadDto: CreateDownloadDto) {
@@ -288,6 +291,9 @@ export class DownloadService {
           return;
         }
 
+        // Create torrent download record
+        await this.createTorrentDownloadRecord(matchingRequest, torrentInfo, downloadId, aria2Gid);
+
         this.logger.log(`Updated torrent request ${matchingRequest.title} status to DOWNLOADING`);
       }
     } catch (error) {
@@ -304,7 +310,17 @@ export class DownloadService {
     url: string,
     name?: string
   ): Promise<any | null> {
-    // If we have a name, try to match by title similarity
+    // If we have a magnet link, try to match by exact magnet URI first
+    if (url.startsWith('magnet:')) {
+      for (const request of requests) {
+        // Check if any previous search results had this exact magnet
+        if (request.foundMagnetUri === url) {
+          return request;
+        }
+      }
+    }
+
+    // If we have a name, try to match by title similarity and content analysis
     if (name) {
       const normalizedName = this.normalizeTitle(name);
 
@@ -313,20 +329,10 @@ export class DownloadService {
 
         // Check for title similarity
         if (this.isTitleMatch(normalizedName, normalizedRequestTitle)) {
-          // Additional checks based on content type
+          // Use content type matching for all content types
           if (await this.isContentTypeMatch(request, name)) {
             return request;
           }
-        }
-      }
-    }
-
-    // If we have a magnet link, try to match by exact magnet URI
-    if (url.startsWith('magnet:')) {
-      for (const request of requests) {
-        // Check if any previous search results had this exact magnet
-        if (request.foundMagnetUri === url) {
-          return request;
         }
       }
     }
@@ -377,8 +383,6 @@ export class DownloadService {
    * Check if the content type matches based on the download name and request type
    */
   private async isContentTypeMatch(request: any, downloadName: string): Promise<boolean> {
-    const lowerName = downloadName.toLowerCase();
-
     // For TV shows, look for season/episode patterns
     if (request.contentType === 'TV_SHOW') {
       const hasSeasonEpisode = /s\d+e\d+|season\s*\d+|episode\s*\d+/i.test(downloadName);
@@ -426,6 +430,39 @@ export class DownloadService {
       seeders: 0,
       indexer: 'Manual',
     };
+  }
+
+  /**
+   * Create a torrent download record
+   */
+  private async createTorrentDownloadRecord(
+    request: any,
+    torrentInfo: any,
+    downloadId: string,
+    aria2Gid: string
+  ): Promise<void> {
+    try {
+      // Create the torrent download record
+      await this.prisma.torrentDownload.create({
+        data: {
+          requestedTorrentId: request.id,
+          torrentTitle: torrentInfo.title,
+          torrentLink: torrentInfo.link,
+          magnetUri: torrentInfo.magnetUri,
+          torrentSize: torrentInfo.size,
+          seeders: torrentInfo.seeders,
+          indexer: torrentInfo.indexer,
+          downloadJobId: downloadId,
+          aria2Gid: aria2Gid,
+          status: 'DOWNLOADING',
+        },
+      });
+
+      this.logger.log(`Created torrent download record for ${request.title}`);
+    } catch (error) {
+      this.logger.error('Error creating torrent download record:', error);
+      // Don't throw - we don't want to fail the download if record creation fails
+    }
   }
 
   /**

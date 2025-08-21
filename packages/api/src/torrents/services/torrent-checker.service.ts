@@ -11,6 +11,8 @@ import { DownloadType } from '../../download/dto/create-download.dto';
 import { PrismaService } from '../../database/prisma.service';
 import { RequestedTorrent, ContentType, RequestStatus } from '../../../generated/prisma';
 import { TorrentResult } from '../../discovery/interfaces/external-api.interface';
+import { TvShowTorrentSelectionService } from './tv-show-torrent-selection.service';
+import { TvShowGapAnalysisService } from './tv-show-gap-analysis.service';
 
 @Injectable()
 export class TorrentCheckerService {
@@ -27,6 +29,8 @@ export class TorrentCheckerService {
     @Inject(forwardRef(() => DownloadService))
     private readonly downloadService: DownloadService,
     private readonly prisma: PrismaService,
+    private readonly tvShowTorrentSelection: TvShowTorrentSelectionService,
+    private readonly tvShowGapAnalysis: TvShowGapAnalysisService,
   ) {}
 
   @Cron(CronExpression.EVERY_30_SECONDS)
@@ -84,8 +88,6 @@ export class TorrentCheckerService {
   }
 
   async processRequest(request: RequestedTorrent): Promise<void> {
-    const startTime = Date.now();
-
     try {
       this.logger.log(`Processing torrent request: ${request.title} (${request.contentType})`);
 
@@ -119,80 +121,89 @@ export class TorrentCheckerService {
   }
 
   private async processOngoingTvShowRequest(request: RequestedTorrent): Promise<void> {
-    // Get the next season that needs to be downloaded
-    const nextSeason = await this.getNextSeasonToSearch(request.id);
-    if (!nextSeason) {
-      this.logger.log(`No more seasons to search for: ${request.title}`);
+    this.logger.log(`Processing ongoing TV show request: ${request.title}`);
+
+    // Check if we need more content for this show
+    const needsMoreContent = await this.tvShowGapAnalysis.needsMoreContent(request.id);
+    if (!needsMoreContent) {
+      this.logger.log(`No more content needed for: ${request.title}`);
       await this.requestedTorrentsService.updateRequestStatus(request.id, RequestStatus.PENDING);
       return;
     }
 
-    this.logger.log(`Searching for season ${nextSeason} of ${request.title}`);
+    // Use general query (show title only) to search for torrents
+    const generalQuery = request.title;
+    this.logger.log(`Searching with general query: "${generalQuery}"`);
 
-    // First, try to find a complete season pack
-    const seasonPackQuery = `${request.title} S${nextSeason.toString().padStart(2, '0')}`;
-    const seasonPackResult = await this.searchForTorrents(request, seasonPackQuery);
+    const searchResult = await this.searchForTorrents(request, generalQuery);
 
-    if (seasonPackResult.torrents.length > 0) {
-      const bestTorrent = seasonPackResult.bestTorrent || seasonPackResult.torrents[0];
-      this.logger.log(`Found season pack for ${request.title} S${nextSeason}: ${bestTorrent.title}`);
-
-      // Download the season pack and associate it with the season
-      await this.initiateTorrentDownloadForSeason(request, bestTorrent, nextSeason);
-
-      // Update the main request status to show we found and initiated a download
-      await this.orchestrator.markAsFound(request.id, {
-        title: bestTorrent.title,
-        link: bestTorrent.link,
-        magnetUri: bestTorrent.magnetUri,
-        size: bestTorrent.size,
-        seeders: bestTorrent.seeders,
-        indexer: bestTorrent.indexer,
+    if (searchResult.torrents.length === 0) {
+      this.logger.log(`No torrents found for: ${request.title}`);
+      await this.orchestrator.transitionRequest({
+        requestId: request.id,
+        targetStatus: RequestStatus.PENDING,
+        reason: 'No torrents found with general query',
       });
       return;
     }
 
-    // If no season pack found, try to find individual episodes
-    this.logger.log(`No season pack found for ${request.title} S${nextSeason}, searching for individual episodes`);
+    // Analyze missing content and select the best torrent
+    const missingContent = await this.tvShowTorrentSelection.analyzeMissingContent(request.id);
+    const bestMatch = await this.tvShowTorrentSelection.selectBestTorrent(
+      searchResult.torrents,
+      missingContent,
+      request.title
+    );
 
-    // Get episode count for this season from metadata
-    const season = await this.prisma.tvShowSeason.findUnique({
-      where: {
-        requestedTorrentId_seasonNumber: {
-          requestedTorrentId: request.id,
-          seasonNumber: nextSeason,
-        },
-      },
-      include: { episodes: true },
+    if (!bestMatch) {
+      this.logger.log(`No suitable torrent found for missing content: ${request.title}`);
+      await this.orchestrator.transitionRequest({
+        requestId: request.id,
+        targetStatus: RequestStatus.PENDING,
+        reason: 'No torrents match missing content requirements',
+      });
+      return;
+    }
+
+    this.logger.log(`Selected best torrent: ${bestMatch.torrent.title} (${bestMatch.reason})`);
+
+    // Initiate download based on torrent type
+    const downloadInfo = await this.initiateTorrentDownloadForTvShow(request, bestMatch);
+
+    // Update the main request status to FOUND first
+    await this.orchestrator.markAsFound(request.id, {
+      title: bestMatch.torrent.title,
+      link: bestMatch.torrent.link,
+      magnetUri: bestMatch.torrent.magnetUri,
+      size: bestMatch.torrent.size,
+      seeders: bestMatch.torrent.seeders,
+      indexer: bestMatch.torrent.indexer,
     });
 
-    if (season && season.episodes.length > 0) {
-      // Search for individual episodes that haven't been downloaded
-      await this.searchForIndividualEpisodes(request, nextSeason, season.episodes);
-    } else {
-      // If we don't have episode metadata, try searching for the first few episodes
-      await this.searchForFirstEpisodes(request, nextSeason);
+    // Then transition to DOWNLOADING since we've initiated downloads
+    if (downloadInfo) {
+      await this.orchestrator.startDownload(request.id, downloadInfo);
     }
   }
 
   private async processRegularRequest(request: RequestedTorrent): Promise<void> {
-    // Build search query for regular requests
-    const searchQuery = await this.buildSearchQuery(request);
+    // For TV shows, use the new strategy
+    if (request.contentType === ContentType.TV_SHOW) {
+      return this.processOngoingTvShowRequest(request);
+    }
 
-    // Search for torrents
+    // For movies and games, use the existing logic
+    const searchQuery = await this.buildSearchQuery(request);
     const searchResult = await this.searchForTorrents(request, searchQuery);
 
-    // Automatically download the best torrent if found
     if (searchResult.torrents.length > 0) {
       const bestTorrent = searchResult.bestTorrent || searchResult.torrents[0];
       this.logger.log(`Found ${searchResult.torrents.length} torrents for: ${request.title}`);
       this.logger.log(`Auto-selecting best torrent: ${bestTorrent.title} (${bestTorrent.seeders} seeders)`);
 
-      // Automatically initiate download for the best torrent
       await this.initiateTorrentDownload(request, bestTorrent);
     } else {
       this.logger.log(`No suitable torrent found for: ${request.title}`);
-      // Reset status back to PENDING so it can be searched again later
       await this.orchestrator.transitionRequest({
         requestId: request.id,
         targetStatus: RequestStatus.PENDING,
@@ -202,67 +213,16 @@ export class TorrentCheckerService {
   }
 
   private async buildSearchQuery(request: RequestedTorrent): Promise<string> {
-    let query = request.title;
-
-    // For movies, don't add year here - JackettService will handle it
-    // This prevents duplicate years in the search query
-
+    // For TV shows, use general query (show title only) for the new strategy
     if (request.contentType === ContentType.TV_SHOW) {
-      if (request.isOngoing) {
-        // For ongoing shows, search for the next season that needs to be downloaded
-        const nextSeason = await this.getNextSeasonToSearch(request.id);
-        if (nextSeason) {
-          query += ` S${nextSeason.toString().padStart(2, '0')}`;
-        }
-      } else {
-        // For specific season/episode requests
-        if (request.season && request.episode) {
-          query += ` S${request.season.toString().padStart(2, '0')}E${request.episode.toString().padStart(2, '0')}`;
-        } else if (request.season) {
-          query += ` S${request.season.toString().padStart(2, '0')}`;
-        }
-      }
+      return request.title;
     }
 
-    return query;
+    // For movies and games, keep the existing logic
+    return request.title;
   }
 
-  private async getNextSeasonToSearch(requestId: string): Promise<number | null> {
-    try {
-      // Get all seasons for this request
-      const seasons = await this.prisma.tvShowSeason.findMany({
-        where: { requestedTorrentId: requestId },
-        include: {
-          torrentDownloads: {
-            where: {
-              status: { in: ['COMPLETED', 'DOWNLOADING'] }
-            }
-          }
-        },
-        orderBy: { seasonNumber: 'asc' }
-      });
 
-      // Find the first season that doesn't have any completed or downloading torrents
-      for (const season of seasons) {
-        if (season.torrentDownloads.length === 0) {
-          return season.seasonNumber;
-        }
-      }
-
-      // If all existing seasons have downloads, check if we should search for the next season
-      if (seasons.length > 0) {
-        const lastSeason = Math.max(...seasons.map(s => s.seasonNumber));
-        // Search for the next season (this will help discover new seasons)
-        return lastSeason + 1;
-      }
-
-      // If no seasons exist yet, start with season 1
-      return 1;
-    } catch (error) {
-      this.logger.error(`Error getting next season to search for request ${requestId}:`, error);
-      return 1; // Default to season 1
-    }
-  }
 
   private async searchForTorrents(request: RequestedTorrent, searchQuery: string): Promise<{
     torrents: TorrentResult[];
@@ -410,8 +370,6 @@ export class TorrentCheckerService {
       await this.prisma.torrentDownload.create({
         data: {
           requestedTorrentId: request.id,
-          tvShowSeasonId: null, // Only used for TV shows
-          tvShowEpisodeId: null, // Only used for TV shows
           torrentTitle: torrent.title,
           torrentLink: torrent.link,
           magnetUri: torrent.magnetUri,
@@ -448,9 +406,14 @@ export class TorrentCheckerService {
     }
   }
 
-  private async initiateTorrentDownloadForSeason(request: RequestedTorrent, torrent: TorrentResult, seasonNumber: number): Promise<void> {
+  /**
+   * Initiate torrent download for TV show based on the torrent match type
+   */
+  private async initiateTorrentDownloadForTvShow(request: RequestedTorrent, torrentMatch: any): Promise<{ downloadJobId: string; aria2Gid: string; torrentInfo: any } | null> {
+    const { torrent, type } = torrentMatch;
+
     try {
-      this.logger.log(`Initiating season pack download for: ${torrent.title} (Season ${seasonNumber})`);
+      this.logger.log(`Initiating ${type} download for: ${torrent.title}`);
 
       // Create actual download job
       const downloadUrl = torrent.magnetUri || torrent.link;
@@ -466,164 +429,50 @@ export class TorrentCheckerService {
       const downloadJobId = downloadJob.id.toString();
       const aria2Gid = downloadJob.aria2Gid;
 
-      // Create a torrent download record associated with the season
-      const season = await this.prisma.tvShowSeason.findUnique({
-        where: {
-          requestedTorrentId_seasonNumber: {
-            requestedTorrentId: request.id,
-            seasonNumber: seasonNumber,
-          },
+      // Create a single TorrentDownload record for the request
+      await this.prisma.torrentDownload.create({
+        data: {
+          requestedTorrentId: request.id,
+          torrentTitle: torrent.title,
+          torrentLink: torrent.link,
+          magnetUri: torrent.magnetUri,
+          torrentSize: torrent.size,
+          seeders: torrent.seeders,
+          indexer: torrent.indexer,
+          downloadJobId,
+          aria2Gid,
+          status: 'DOWNLOADING',
         },
       });
 
-      if (season) {
-        await this.prisma.torrentDownload.create({
-          data: {
-            requestedTorrentId: request.id,
-            tvShowSeasonId: season.id,
-            torrentTitle: torrent.title,
-            torrentLink: torrent.link,
-            magnetUri: torrent.magnetUri,
-            torrentSize: torrent.size,
-            seeders: torrent.seeders,
-            indexer: torrent.indexer,
-            downloadJobId,
-            aria2Gid,
-            status: 'DOWNLOADING',
-          },
-        });
+      this.logger.log(`Successfully initiated ${type} download for: ${request.title}`);
 
-        // Update season status
-        await this.prisma.tvShowSeason.update({
-          where: { id: season.id },
-          data: { status: 'DOWNLOADING' },
-        });
-      }
-
-      this.logger.log(`Successfully initiated season pack download for: ${request.title} S${seasonNumber}`);
-
-    } catch (error) {
-      this.logger.error(`Error initiating season download for ${request.title} S${seasonNumber}:`, error);
-    }
-  }
-
-  private async initiateTorrentDownloadForEpisode(request: RequestedTorrent, torrent: TorrentResult, seasonNumber: number, episodeNumber: number): Promise<void> {
-    try {
-      this.logger.log(`Initiating episode download for: ${torrent.title} (S${seasonNumber}E${episodeNumber})`);
-
-      // Create actual download job
-      const downloadUrl = torrent.magnetUri || torrent.link;
-      const downloadType = torrent.magnetUri ? DownloadType.MAGNET : DownloadType.TORRENT;
-
-      const downloadJob = await this.downloadService.createDownload({
-        url: downloadUrl,
-        type: downloadType,
-        name: this.sanitizeFilename(torrent.title),
-        destination: this.getDownloadDestination(request),
-      });
-
-      const downloadJobId = downloadJob.id.toString();
-      const aria2Gid = downloadJob.aria2Gid;
-
-      // Find the specific episode
-      const episode = await this.prisma.tvShowEpisode.findFirst({
-        where: {
-          tvShowSeason: {
-            requestedTorrentId: request.id,
-            seasonNumber: seasonNumber,
-          },
-          episodeNumber: episodeNumber,
+      // Return download info for status transition
+      return {
+        downloadJobId,
+        aria2Gid,
+        torrentInfo: {
+          title: torrent.title,
+          link: torrent.link,
+          magnetUri: torrent.magnetUri,
+          size: torrent.size,
+          seeders: torrent.seeders,
+          indexer: torrent.indexer,
         },
-        include: { tvShowSeason: true },
-      });
-
-      if (episode) {
-        await this.prisma.torrentDownload.create({
-          data: {
-            requestedTorrentId: request.id,
-            tvShowSeasonId: episode.tvShowSeasonId,
-            tvShowEpisodeId: episode.id,
-            torrentTitle: torrent.title,
-            torrentLink: torrent.link,
-            magnetUri: torrent.magnetUri,
-            torrentSize: torrent.size,
-            seeders: torrent.seeders,
-            indexer: torrent.indexer,
-            downloadJobId,
-            aria2Gid,
-            status: 'DOWNLOADING',
-          },
-        });
-
-        // Update episode status
-        await this.prisma.tvShowEpisode.update({
-          where: { id: episode.id },
-          data: { status: 'DOWNLOADING' },
-        });
-      }
-
-      this.logger.log(`Successfully initiated episode download for: ${request.title} S${seasonNumber}E${episodeNumber}`);
-
+      };
     } catch (error) {
-      this.logger.error(`Error initiating episode download for ${request.title} S${seasonNumber}E${episodeNumber}:`, error);
+      this.logger.error(`Error initiating TV show download for ${request.title}:`, error);
+      throw error;
     }
   }
 
-  private async searchForIndividualEpisodes(request: RequestedTorrent, seasonNumber: number, episodes: any[]): Promise<void> {
-    // Search for the first few episodes that haven't been downloaded
-    const undownloadedEpisodes = episodes.filter(ep => ep.status === 'PENDING').slice(0, 3);
 
-    for (const episode of undownloadedEpisodes) {
-      const episodeQuery = `${request.title} S${seasonNumber.toString().padStart(2, '0')}E${episode.episodeNumber.toString().padStart(2, '0')}`;
-      const episodeResult = await this.searchForTorrents(request, episodeQuery);
 
-      if (episodeResult.torrents.length > 0) {
-        const bestTorrent = episodeResult.bestTorrent || episodeResult.torrents[0];
-        this.logger.log(`Found episode torrent: ${bestTorrent.title}`);
 
-        // Download the episode and associate it with the specific episode
-        await this.initiateTorrentDownloadForEpisode(request, bestTorrent, seasonNumber, episode.episodeNumber);
 
-        // Update the main request status to show we found and initiated a download
-        await this.requestedTorrentsService.markAsFound(request.id, {
-          title: bestTorrent.title,
-          link: bestTorrent.link,
-          magnetUri: bestTorrent.magnetUri,
-          size: bestTorrent.size,
-          seeders: bestTorrent.seeders,
-          indexer: bestTorrent.indexer,
-        });
-        break; // Download one episode at a time
-      }
-    }
-  }
 
-  private async searchForFirstEpisodes(request: RequestedTorrent, seasonNumber: number): Promise<void> {
-    // Try to find the first few episodes of the season
-    for (let episode = 1; episode <= 3; episode++) {
-      const episodeQuery = `${request.title} S${seasonNumber.toString().padStart(2, '0')}E${episode.toString().padStart(2, '0')}`;
-      const episodeResult = await this.searchForTorrents(request, episodeQuery);
 
-      if (episodeResult.torrents.length > 0) {
-        const bestTorrent = episodeResult.bestTorrent || episodeResult.torrents[0];
-        this.logger.log(`Found episode torrent: ${bestTorrent.title}`);
 
-        // Download the episode
-        await this.initiateTorrentDownloadForEpisode(request, bestTorrent, seasonNumber, episode);
-
-        // Update the main request status to show we found and initiated a download
-        await this.requestedTorrentsService.markAsFound(request.id, {
-          title: bestTorrent.title,
-          link: bestTorrent.link,
-          magnetUri: bestTorrent.magnetUri,
-          size: bestTorrent.size,
-          seeders: bestTorrent.seeders,
-          indexer: bestTorrent.indexer,
-        });
-        break; // Download one episode at a time
-      }
-    }
-  }
 
   private sanitizeFilename(filename: string): string {
     return filename

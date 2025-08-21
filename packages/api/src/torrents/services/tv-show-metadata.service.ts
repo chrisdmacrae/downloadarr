@@ -1,7 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
 import { AppConfigurationService } from '../../config/services/app-configuration.service';
 import { ContentType, SeasonStatus, EpisodeStatus } from '../../../generated/prisma';
+import { SeasonScanningService } from './season-scanning.service';
 
 interface TMDBTvShow {
   id: number;
@@ -42,6 +43,8 @@ export class TvShowMetadataService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly appConfigService: AppConfigurationService,
+    @Inject(forwardRef(() => SeasonScanningService))
+    private readonly seasonScanningService: SeasonScanningService,
   ) {}
 
   async populateSeasonData(requestId: string): Promise<void> {
@@ -229,7 +232,7 @@ export class TvShowMetadataService {
   }
 
   async updateAllOngoingShows(): Promise<void> {
-    this.logger.log('Starting metadata update for all TV shows');
+    this.logger.log('Starting metadata update and filesystem scanning for all TV shows');
 
     // Check if TMDB API key is configured
     const apiKeysConfig = await this.appConfigService.getApiKeysConfig();
@@ -248,17 +251,34 @@ export class TvShowMetadataService {
 
     this.logger.log(`Found ${tvShowRequests.length} TV show requests to update`);
 
+    let metadataUpdated = 0;
+    let filesystemScanned = 0;
+    let errors = 0;
+
     for (const request of tvShowRequests) {
       try {
-        this.logger.log(`Updating metadata for: ${request.title} (ongoing: ${request.isOngoing})`);
+        // Step 1: Update metadata from TMDB
+        this.logger.debug(`Updating metadata for: ${request.title} (ongoing: ${request.isOngoing})`);
         await this.populateSeasonData(request.id);
+        metadataUpdated++;
+
+        // Step 2: Scan filesystem for organized files and update episode status
+        this.logger.debug(`Scanning filesystem for: ${request.title}`);
+        const scanResults = await this.seasonScanningService.scanTvShowRequest(request.id);
+        filesystemScanned++;
+
+        if (scanResults.episodesUpdated > 0 || scanResults.episodesMarkedMissing > 0) {
+          this.logger.log(`Updated ${scanResults.episodesUpdated} episodes and marked ${scanResults.episodesMarkedMissing} episodes as missing for ${request.title} based on filesystem scan`);
+        }
+
         // Add a small delay to avoid hitting TMDB rate limits
         await new Promise(resolve => setTimeout(resolve, 250));
       } catch (error) {
-        this.logger.error(`Error updating metadata for ${request.title}: ${error.message}`);
+        this.logger.error(`Error updating ${request.title}: ${error.message}`);
+        errors++;
       }
     }
 
-    this.logger.log('Completed metadata update for all TV shows');
+    this.logger.log(`Completed TV show update: ${metadataUpdated} metadata updated, ${filesystemScanned} filesystem scanned, ${errors} errors`);
   }
 }

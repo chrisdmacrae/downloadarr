@@ -23,7 +23,6 @@ interface SeasonSummary {
   seasonNumber: number
   totalEpisodes: number
   completedEpisodes: number
-  downloadingEpisodes: number
   status: string
 }
 
@@ -103,7 +102,6 @@ export function TvShowSeasonBadges({ request, onSeasonClick, className }: TvShow
     seasonNumber: season.seasonNumber,
     totalEpisodes: season.totalEpisodes || 0,
     completedEpisodes: season.episodes?.filter(ep => ep.status === 'COMPLETED').length || 0,
-    downloadingEpisodes: season.episodes?.filter(ep => ep.status === 'DOWNLOADING').length || 0,
     status: season.status,
   })).sort((a, b) => a.seasonNumber - b.seasonNumber)
 
@@ -111,11 +109,8 @@ export function TvShowSeasonBadges({ request, onSeasonClick, className }: TvShow
     if (season.completedEpisodes === season.totalEpisodes && season.totalEpisodes > 0) {
       return CheckCircle
     }
-    if (season.downloadingEpisodes > 0) {
-      return Download
-    }
     if (season.completedEpisodes > 0 && season.completedEpisodes < season.totalEpisodes) {
-      return Download // Partially downloaded - same icon but different color
+      return Download // Partially completed - same icon but different color
     }
     if (season.status === 'SEARCHING') {
       return Search
@@ -128,18 +123,15 @@ export function TvShowSeasonBadges({ request, onSeasonClick, className }: TvShow
 
   const getSeasonVariant = (season: SeasonSummary): "default" | "secondary" | "destructive" | "outline" => {
     if (season.completedEpisodes === season.totalEpisodes && season.totalEpisodes > 0) {
-      return 'default' // Green for fully downloaded
-    }
-    if (season.downloadingEpisodes > 0) {
-      return 'secondary' // Blue for currently downloading
+      return 'default' // Green for fully completed
     }
     if (season.completedEpisodes > 0 && season.completedEpisodes < season.totalEpisodes) {
-      return 'outline' // Gray outline for partially downloaded
+      return 'outline' // Gray outline for partially completed
     }
     if (season.status === 'FAILED') {
       return 'destructive' // Red for failed
     }
-    return 'secondary' // Gray for not downloaded/pending
+    return 'secondary' // Gray for not completed/pending
   }
 
   const getSeasonProgress = (season: SeasonSummary): number => {
@@ -157,7 +149,6 @@ export function TvShowSeasonBadges({ request, onSeasonClick, className }: TvShow
   const overallProgress = {
     totalEpisodes: seasons.reduce((sum, s) => sum + s.totalEpisodes, 0),
     completedEpisodes: seasons.reduce((sum, s) => sum + s.completedEpisodes, 0),
-    downloadingEpisodes: seasons.reduce((sum, s) => sum + s.downloadingEpisodes, 0),
   }
 
   return (
@@ -227,7 +218,7 @@ export function TvShowSeasonBadges({ request, onSeasonClick, className }: TvShow
             size="sm"
             onClick={handleSeasonScan}
             disabled={isScanning}
-            className="h-6 px-2 text-xs"
+            className="ml-auto h-6 px-2 text-xs"
           >
             {isScanning ? (
               <RefreshCw className="h-3 w-3 animate-spin" />
@@ -244,9 +235,6 @@ export function TvShowSeasonBadges({ request, onSeasonClick, className }: TvShow
         {seasons.length} season{seasons.length !== 1 ? 's' : ''}
         {overallProgress.totalEpisodes > 0 && (
           <> • {overallProgress.completedEpisodes}/{overallProgress.totalEpisodes} episodes</>
-        )}
-        {overallProgress.downloadingEpisodes > 0 && (
-          <> • {overallProgress.downloadingEpisodes} downloading</>
         )}
       </div>
     </div>

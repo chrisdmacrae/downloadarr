@@ -119,14 +119,6 @@ export class DownloadProgressTrackerService {
           aria2Gid: aria2Gid,
           status: 'DOWNLOADING',
         },
-        include: {
-          tvShowSeason: true,
-          tvShowEpisode: {
-            include: {
-              tvShowSeason: true,
-            },
-          },
-        },
       });
 
       if (torrentDownloads.length > 0) {
@@ -155,10 +147,7 @@ export class DownloadProgressTrackerService {
           aria2Gid: aria2Gid,
           status: 'DOWNLOADING',
         },
-        include: {
-          tvShowSeason: true,
-          tvShowEpisode: true,
-        },
+
       });
 
       if (torrentDownloads.length > 0) {
@@ -195,17 +184,8 @@ export class DownloadProgressTrackerService {
         await this.organizeDownloadedFiles(torrentDownload.requestedTorrentId, torrentDownload.aria2Gid);
       }
 
-      // Update associated TV show status via orchestrator
-      if (torrentDownload.tvShowSeasonId && !torrentDownload.tvShowEpisodeId) {
-        // Season pack download
-        await this.orchestrator.markSeasonPackCompleted(torrentDownload.requestedTorrentId, torrentDownload.tvShowSeasonId);
-      } else if (torrentDownload.tvShowEpisodeId) {
-        // Individual episode download
-        await this.orchestrator.markEpisodeCompleted(torrentDownload.requestedTorrentId, torrentDownload.tvShowEpisodeId);
-      } else {
-        // Movie or game download
-        await this.orchestrator.markAsCompleted(torrentDownload.requestedTorrentId);
-      }
+      // Mark the request as completed
+      await this.orchestrator.markAsCompleted(torrentDownload.requestedTorrentId);
     } catch (error) {
       this.logger.error(`Error completing TorrentDownload ${torrentDownload.id}:`, error);
     }
@@ -224,17 +204,8 @@ export class DownloadProgressTrackerService {
 
       this.logger.warn(`TorrentDownload failed: ${torrentDownload.torrentTitle}`);
 
-      // Update associated TV show status via orchestrator
-      if (torrentDownload.tvShowSeasonId && !torrentDownload.tvShowEpisodeId) {
-        // Season pack download
-        await this.orchestrator.markSeasonPackFailed(torrentDownload.requestedTorrentId, torrentDownload.tvShowSeasonId);
-      } else if (torrentDownload.tvShowEpisodeId) {
-        // Individual episode download
-        await this.orchestrator.markEpisodeFailed(torrentDownload.requestedTorrentId, torrentDownload.tvShowEpisodeId);
-      } else {
-        // Movie or game download
-        await this.orchestrator.markAsFailed(torrentDownload.requestedTorrentId, 'Download failed');
-      }
+      // Mark the request as failed
+      await this.orchestrator.markAsFailed(torrentDownload.requestedTorrentId, 'Download failed');
     } catch (error) {
       this.logger.error(`Error failing TorrentDownload ${torrentDownload.id}:`, error);
     }

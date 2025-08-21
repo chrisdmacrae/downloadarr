@@ -204,7 +204,6 @@ export class RequestedTorrentsService {
         tvShowSeasons: {
           include: {
             episodes: true,
-            torrentDownloads: true,
           },
           orderBy: {
             seasonNumber: 'asc',
@@ -234,7 +233,6 @@ export class RequestedTorrentsService {
         tvShowSeasons: {
           include: {
             episodes: true,
-            torrentDownloads: true,
           },
           orderBy: {
             seasonNumber: 'asc',
@@ -290,7 +288,7 @@ export class RequestedTorrentsService {
     const request = await this.getRequestById(id);
 
     // Only allow updates for requests that haven't started searching yet
-    if (request.status !== RequestStatus.PENDING) {
+    if (request.status == RequestStatus.DOWNLOADING || request.status == RequestStatus.COMPLETED) {
       throw new Error(`Cannot update request in ${request.status} status. Only PENDING requests can be edited.`);
     }
 
@@ -662,7 +660,6 @@ export class RequestedTorrentsService {
     }
 
     const includeEpisodes = query.includeEpisodes === true;
-    const includeDownloads = query.includeDownloads === true;
 
     return this.prisma.tvShowSeason.findMany({
       where: {
@@ -670,12 +667,7 @@ export class RequestedTorrentsService {
         ...(query.status && { status: query.status }),
       },
       include: {
-        episodes: includeEpisodes ? {
-          include: {
-            torrentDownloads: includeDownloads,
-          },
-        } : false,
-        torrentDownloads: includeDownloads,
+        episodes: includeEpisodes,
       },
       orderBy: {
         seasonNumber: 'asc',
@@ -707,14 +699,10 @@ export class RequestedTorrentsService {
       },
       include: {
         episodes: {
-          include: {
-            torrentDownloads: true,
-          },
           orderBy: {
             episodeNumber: 'asc',
           },
         },
-        torrentDownloads: true,
       },
     });
 
@@ -744,15 +732,10 @@ export class RequestedTorrentsService {
       throw new NotFoundException(`Season ${seasonNumber} not found for request ${requestId}`);
     }
 
-    const includeDownloads = query.includeDownloads === true;
-
     return this.prisma.tvShowEpisode.findMany({
       where: {
         tvShowSeasonId: season.id,
         ...(query.status && { status: query.status }),
-      },
-      include: {
-        torrentDownloads: includeDownloads,
       },
       orderBy: {
         episodeNumber: 'asc',
@@ -774,10 +757,6 @@ export class RequestedTorrentsService {
     const downloads = await this.prisma.torrentDownload.findMany({
       where: {
         requestedTorrentId: requestId,
-      },
-      include: {
-        tvShowSeason: true,
-        tvShowEpisode: true,
       },
       orderBy: {
         createdAt: 'desc',

@@ -111,7 +111,7 @@ model TvShowSeason {
   updatedAt          DateTime         @updatedAt
   requestedTorrent   RequestedTorrent @relation(fields: [requestedTorrentId], references: [id], onDelete: Cascade)
   episodes           TvShowEpisode[]
-  torrentDownloads   TorrentDownload[]
+
 
   @@unique([requestedTorrentId, seasonNumber])
   @@map("tv_show_seasons")
@@ -127,7 +127,7 @@ model TvShowEpisode {
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
   tvShowSeason     TvShowSeason     @relation(fields: [tvShowSeasonId], references: [id], onDelete: Cascade)
-  torrentDownloads TorrentDownload[]
+
 
   @@unique([tvShowSeasonId, episodeNumber])
   @@map("tv_show_episodes")
@@ -136,8 +136,6 @@ model TvShowEpisode {
 model TorrentDownload {
   id                 String            @id @default(cuid())
   requestedTorrentId String
-  tvShowSeasonId     String?           // For season pack downloads
-  tvShowEpisodeId    String?           // For individual episode downloads
   torrentTitle       String
   torrentLink        String?
   magnetUri          String?
@@ -152,8 +150,6 @@ model TorrentDownload {
   completedAt        DateTime?
   // Removed downloadProgress, downloadSpeed, downloadEta - now fetched live from aria2
   requestedTorrent   RequestedTorrent  @relation(fields: [requestedTorrentId], references: [id], onDelete: Cascade)
-  tvShowSeason       TvShowSeason?     @relation(fields: [tvShowSeasonId], references: [id], onDelete: Cascade)
-  tvShowEpisode      TvShowEpisode?    @relation(fields: [tvShowEpisodeId], references: [id], onDelete: Cascade)
 
   @@map("torrent_downloads")
 }
