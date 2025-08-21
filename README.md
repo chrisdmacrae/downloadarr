@@ -45,7 +45,21 @@ After setup, visit http://localhost:3000 to complete the onboarding wizard where
 
 ### Development
 
-TODO: add dev script
+To spin up a dockerized development environment, run:
+
+```
+npm run dev
+# optionally run the following to run in detached mode:
+# npm run dev:detached
+```
+
+To spin up a dockerized development environment with VPN support, run:
+
+```
+npm run dev:vpn
+# optionally run the following to run in detached mode:
+# npm run dev:vpn:detached
+```
 
 ## Services
 
