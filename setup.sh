@@ -110,8 +110,7 @@ download_config_files() {
     
 
     
-    # Download docker-compose.prod.yml (production version with deployed images)
-    if curl -fsSL "${GITHUB_RAW_URL}/docker-compose.yml"; then
+    if curl -fsSL "${GITHUB_RAW_URL}/docker-compose.yml" -o docker-compose.yml; then
         print_status "Downloaded docker-compose.yml"
     else
         print_error "Failed to download docker-compose.yml"
@@ -119,7 +118,7 @@ download_config_files() {
     fi
 
     # Download docker-compose.prod.vpn.yml for VPN support
-    if curl -fsSL "${GITHUB_RAW_URL}/docker-compose.vpn.yml"; then
+    if curl -fsSL "${GITHUB_RAW_URL}/docker-compose.vpn.yml" -o docker-compose.vpn.yml; then
         print_status "Downloaded docker-compose.vpn.yml"
     else
         print_error "Failed to download docker-compose.vpn.yml"
