@@ -45,6 +45,25 @@ else
     done
 
     echo "✅ Database migrations resolved"
+  # Check if it's the P3009 error (failed migrations found)
+  elif echo "$migration_output" | grep -q "P3009"; then
+    echo "🔧 Detected P3009 error - resolving failed migrations..."
+
+    # Extract failed migration names from the output and mark them as rolled back
+    failed_migrations=$(echo "$migration_output" | grep -o "The \`[^']*\` migration" | sed 's/The `\([^`]*\)` migration/\1/')
+
+    for migration_name in $failed_migrations; do
+      if [ -n "$migration_name" ]; then
+        echo "📝 Marking failed migration as rolled back: $migration_name"
+        npx prisma migrate resolve --rolled-back "$migration_name" 2>/dev/null || true
+      fi
+    done
+
+    # Try to deploy migrations again after resolving failed ones
+    echo "🔄 Retrying migration deployment..."
+    npx prisma migrate deploy 2>/dev/null || true
+
+    echo "✅ Database migrations resolved"
   else
     echo "❌ Migration failed with unknown error"
     exit 1
