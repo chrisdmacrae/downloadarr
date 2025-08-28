@@ -98,6 +98,12 @@ export class TvShowGapAnalysisService {
       }
     }
 
+    // Sort missing seasons chronologically to ensure proper download order
+    analysis.missingSeasons.sort((a, b) => a - b);
+
+    // Sort incomplete seasons chronologically as well
+    analysis.incompleteSeasons.sort((a, b) => a.seasonNumber - b.seasonNumber);
+
     // Generate download recommendations
     analysis.recommendations = await this.generateRecommendations(analysis);
 
@@ -174,14 +180,18 @@ export class TvShowGapAnalysisService {
       }
     }
 
-    // Recommendation 2: Individual season packs for missing seasons
-    for (const seasonNumber of analysis.missingSeasons) {
+    // Recommendation 2: Individual season packs for missing seasons (prioritize chronologically)
+    for (let i = 0; i < analysis.missingSeasons.length; i++) {
+      const seasonNumber = analysis.missingSeasons[i];
+      // Give higher priority to earlier seasons: first missing season gets highest priority
+      const chronologicalBonus = Math.max(0, 20 - (i * 5)); // First season gets +20, second gets +15, etc.
+
       recommendations.push({
         type: 'season-pack',
-        priority: 70,
+        priority: 70 + chronologicalBonus,
         description: `Season ${seasonNumber} pack`,
         targets: { seasons: [seasonNumber] },
-        reasoning: `Complete season pack for missing season ${seasonNumber}`,
+        reasoning: `Complete season pack for missing season ${seasonNumber} (chronological priority: ${i + 1})`,
       });
     }
 

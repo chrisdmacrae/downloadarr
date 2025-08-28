@@ -412,12 +412,15 @@ export class DownloadProgressTrackerService {
           this.logger.log(`Converted path: ${file.path} -> ${actualFilePath}`);
 
           // Create organization context
+          // For TV shows, extract season/episode from file path if not available in request
+          const extractedSeasonEpisode = this.extractSeasonEpisodeFromPath(file.path);
+
           const context = {
             contentType: request.contentType as ContentType,
             title: request.title,
             year: request.year || undefined,
-            season: request.season || undefined,
-            episode: request.episode || undefined,
+            season: request.season || extractedSeasonEpisode.season,
+            episode: request.episode || extractedSeasonEpisode.episode,
             platform: request.platform || undefined,
             quality: this.extractQualityFromPath(file.path),
             format: this.extractFormatFromPath(file.path),
@@ -551,5 +554,54 @@ export class DownloadProgressTrackerService {
     if (fileName.includes('dvdrip')) return 'DVDRip';
 
     return undefined;
+  }
+
+  /**
+   * Extract season and episode information from file path
+   */
+  private extractSeasonEpisodeFromPath(filePath: string): { season?: number; episode?: number } {
+    const fileName = filePath.toLowerCase();
+
+    // Common TV show patterns
+    const patterns = [
+      /s(\d+)e(\d+)/i,           // S01E01, s01e01
+      /s(\d+)\s*e(\d+)/i,        // S01 E01
+      /season\s*(\d+).*episode\s*(\d+)/i, // Season 1 Episode 1
+      /(\d+)x(\d+)/,             // 1x01
+      /s(\d+)\.e(\d+)/i,         // S01.E01
+      /season[\s\._-]*(\d+)[\s\._-]*episode[\s\._-]*(\d+)/i, // Various season/episode formats
+    ];
+
+    for (const pattern of patterns) {
+      const match = fileName.match(pattern);
+      if (match) {
+        const season = parseInt(match[1], 10);
+        const episode = parseInt(match[2], 10);
+
+        // Validate reasonable ranges
+        if (season >= 1 && season <= 50 && episode >= 1 && episode <= 999) {
+          return { season, episode };
+        }
+      }
+    }
+
+    // Try to extract just season information from directory structure
+    const seasonOnlyPatterns = [
+      /season[\s\._-]*(\d+)/i,   // Season 1, season_1, etc.
+      /s(\d+)/i,                 // S01, s1, etc.
+    ];
+
+    for (const pattern of seasonOnlyPatterns) {
+      const match = fileName.match(pattern);
+      if (match) {
+        const season = parseInt(match[1], 10);
+
+        if (season >= 1 && season <= 50) {
+          return { season };
+        }
+      }
+    }
+
+    return {};
   }
 }
