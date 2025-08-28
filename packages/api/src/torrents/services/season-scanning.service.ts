@@ -434,7 +434,7 @@ export class SeasonScanningService {
       if (completedEpisodes.length === totalEpisodes) {
         newStatus = 'COMPLETED';
       } else if (completedEpisodes.length > 0) {
-        newStatus = 'PARTIAL';
+        newStatus = 'DOWNLOADING'; // Use DOWNLOADING to represent partially completed seasons
       } else {
         newStatus = 'PENDING';
       }

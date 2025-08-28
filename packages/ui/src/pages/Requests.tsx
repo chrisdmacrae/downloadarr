@@ -496,8 +496,8 @@ export default function Requests() {
         ) : (
           <div className="space-y-4">
             {filteredRequests.map((request) => {
-              const canCancel = ['PENDING', 'SEARCHING'].includes(request.status)
-              const canDelete = true // Allow deletion of all requests - backend will handle download cancellation
+              const canCancel = ['PENDING', 'SEARCHING', 'DOWNLOADING'].includes(request.status)
+              const canDelete = ['FAILED', 'CANCELLED', 'EXPIRED', 'COMPLETED'].includes(request.status) // Allow deletion of all requests - backend will handle download cancellation
               const canSearch = ['PENDING', 'FAILED', 'EXPIRED'].includes(request.status)
               const canReSearch = request.status === 'CANCELLED'
               const canEdit = ['PENDING', 'SEARCHING', 'FAILED', 'CANCELLED'].includes(request.status)
