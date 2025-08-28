@@ -41,6 +41,8 @@ jobs:
           VERSION=latest
         fi
         echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Extracted version: $VERSION"
+        echo "GITHUB_REF: $GITHUB_REF"
 
     - name: Extract metadata
       id: meta
@@ -98,6 +100,8 @@ jobs:
           VERSION=latest
         fi
         echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Extracted version: $VERSION"
+        echo "GITHUB_REF: $GITHUB_REF"
 
     - name: Extract metadata
       id: meta
