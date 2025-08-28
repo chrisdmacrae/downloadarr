@@ -54,9 +54,19 @@ export default function OnboardingWizard() {
 
   const handleComplete = async () => {
     try {
+      // Validate required fields before submission
+      if (!onboardingData.jackettApiKey?.trim()) {
+        toast({
+          title: "Validation Error",
+          description: "Jackett API key is required to complete setup.",
+          variant: "destructive"
+        })
+        return
+      }
+
       // Clean up the data - convert empty strings to undefined for optional fields
       const cleanedData = {
-        jackettApiKey: onboardingData.jackettApiKey,
+        jackettApiKey: onboardingData.jackettApiKey.trim(),
         organizationEnabled: onboardingData.organizationEnabled,
         omdbApiKey: onboardingData.omdbApiKey?.trim() || undefined,
         tmdbApiKey: onboardingData.tmdbApiKey?.trim() || undefined,
@@ -74,17 +84,25 @@ export default function OnboardingWizard() {
       })
 
       await completeOnboarding.mutateAsync(cleanedData)
+
       toast({
         title: "Setup Complete!",
         description: "Welcome to Downloadarr! Your setup is now complete.",
       })
-      navigate('/')
+
+      // Add a small delay to ensure query invalidation completes before navigation
+      // This prevents race conditions where the OnboardingGuard checks status before
+      // the onboarding status query is properly invalidated
+      setTimeout(() => {
+        navigate('/')
+      }, 100)
     } catch (error) {
       console.error('Onboarding failed:', error)
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
       toast({
         title: "Setup Failed",
         description: `There was an error completing your setup: ${errorMessage}. Please try again.`,
+        variant: "destructive"
       })
     }
   }

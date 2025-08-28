@@ -127,12 +127,15 @@ export const useCompleteOnboarding = () => {
 
       return response.json()
     },
-    onSuccess: () => {
-      // Invalidate related queries
-      queryClient.invalidateQueries({ queryKey: queryKeys.appConfiguration })
-      queryClient.invalidateQueries({ queryKey: queryKeys.onboardingStatus })
-      queryClient.invalidateQueries({ queryKey: queryKeys.jackettConfig })
-      queryClient.invalidateQueries({ queryKey: queryKeys.organizationSettings })
+    onSuccess: async () => {
+      // Invalidate related queries and wait for them to complete
+      // This ensures the cache is properly updated before any navigation occurs
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.appConfiguration }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.onboardingStatus }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.jackettConfig }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.organizationSettings })
+      ])
     },
   })
 }

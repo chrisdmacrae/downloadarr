@@ -94,7 +94,11 @@ export default function CompletionStep({ data, onComplete, onPrevious, isLoading
         <Button variant="outline" onClick={onPrevious} disabled={isLoading}>
           Previous
         </Button>
-        <Button onClick={onComplete} disabled={isLoading}>
+        <Button
+          onClick={onComplete}
+          disabled={isLoading || !data.jackettApiKey?.trim()}
+          className="min-w-[140px]"
+        >
           {isLoading ? (
             <>
               <Loader2 className="w-4 h-4 mr-2 animate-spin" />
