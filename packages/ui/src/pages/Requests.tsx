@@ -80,7 +80,6 @@ export default function Requests() {
     setStatusFilter,
     statusCounts,
     refreshRequests,
-    loadMore,
     goToPage,
     changePageSize,
     isOngoingTvShow
