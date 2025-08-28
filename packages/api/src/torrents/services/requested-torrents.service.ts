@@ -258,6 +258,87 @@ export class RequestedTorrentsService {
     });
   }
 
+  async getRequestsPaginated(params: {
+    status?: RequestStatus;
+    userId?: string;
+    search?: string;
+    limit: number;
+    offset: number;
+  }): Promise<{ requests: RequestedTorrent[]; total: number }> {
+    const where = {
+      ...(params.status && { status: params.status }),
+      ...(params.userId && { userId: params.userId }),
+      ...(params.search && {
+        title: {
+          contains: params.search,
+          mode: 'insensitive' as const,
+        },
+      }),
+    };
+
+    const [requests, total] = await Promise.all([
+      this.prisma.requestedTorrent.findMany({
+        where,
+        orderBy: [
+          { priority: 'desc' },
+          { createdAt: 'desc' },
+        ],
+        take: params.limit,
+        skip: params.offset,
+        include: {
+          tvShowSeasons: {
+            include: {
+              episodes: true,
+            },
+            orderBy: { seasonNumber: 'asc' },
+          },
+          torrentDownloads: true,
+        },
+      }),
+      this.prisma.requestedTorrent.count({ where }),
+    ]);
+
+    return { requests, total };
+  }
+
+  async getStatusCounts(params: {
+    userId?: string;
+    search?: string;
+  }): Promise<Record<string, number>> {
+    const where = {
+      ...(params.userId && { userId: params.userId }),
+      ...(params.search && {
+        title: {
+          contains: params.search,
+          mode: 'insensitive' as const,
+        },
+      }),
+    };
+
+    // Get counts grouped by status
+    const statusCounts = await this.prisma.requestedTorrent.groupBy({
+      by: ['status'],
+      where,
+      _count: {
+        status: true,
+      },
+    });
+
+    // Get total count
+    const totalCount = await this.prisma.requestedTorrent.count({ where });
+
+    // Convert to a more usable format
+    const counts: Record<string, number> = {
+      all: totalCount,
+    };
+
+    statusCounts.forEach(({ status, _count }) => {
+      counts[status] = _count.status;
+    });
+
+    return counts;
+  }
+
   async getRequestsReadyForSearch(): Promise<RequestedTorrent[]> {
     const now = new Date();
 

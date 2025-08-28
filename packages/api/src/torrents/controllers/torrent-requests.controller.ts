@@ -159,34 +159,109 @@ export class TorrentRequestsController {
     }
   }
 
-  @Get()
+  @Get('counts')
   @ApiOperation({
-    summary: 'Get all torrent requests',
-    description: 'Retrieve all torrent requests with optional filtering',
+    summary: 'Get torrent request counts by status',
+    description: 'Retrieve counts of torrent requests grouped by status',
   })
-  @ApiResponse({ status: 200, description: 'List of torrent requests' })
-  async getAllRequests(@Query() query: TorrentRequestQueryDto): Promise<{ success: boolean; data: RequestedTorrent[] }> {
-    try {
-      let requests: RequestedTorrent[];
-
-      if (query.status) {
-        requests = await this.requestedTorrentsService.getRequestsByStatus(query.status, query.userId);
-      } else {
-        requests = await this.requestedTorrentsService.getAllRequests(query.userId);
+  @ApiResponse({
+    status: 200,
+    description: 'Status counts',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        data: {
+          type: 'object',
+          additionalProperties: { type: 'number' }
+        }
       }
-
-      // Apply pagination
-      const startIndex = query.offset || 0;
-      const endIndex = startIndex + (query.limit || 20);
-      const paginatedRequests = requests.slice(startIndex, endIndex);
+    }
+  })
+  async getStatusCounts(@Query() query: Pick<TorrentRequestQueryDto, 'userId' | 'search'>): Promise<{
+    success: boolean;
+    data: Record<string, number>;
+  }> {
+    try {
+      const counts = await this.requestedTorrentsService.getStatusCounts({
+        userId: query.userId,
+        search: query.search,
+      });
 
       return {
         success: true,
-        data: paginatedRequests,
+        data: counts,
+      };
+    } catch (error) {
+      this.logger.error(`Error retrieving status counts: ${error.message}`, error.stack);
+
+      throw new HttpException(
+        'Failed to retrieve status counts',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Get()
+  @ApiOperation({
+    summary: 'Get all torrent requests',
+    description: 'Retrieve all torrent requests with optional filtering and pagination',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Paginated list of torrent requests',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        data: { type: 'array' },
+        pagination: {
+          type: 'object',
+          properties: {
+            total: { type: 'number' },
+            limit: { type: 'number' },
+            offset: { type: 'number' },
+            hasMore: { type: 'boolean' }
+          }
+        }
+      }
+    }
+  })
+  async getAllRequests(@Query() query: TorrentRequestQueryDto): Promise<{
+    success: boolean;
+    data: RequestedTorrent[];
+    pagination: {
+      total: number;
+      limit: number;
+      offset: number;
+      hasMore: boolean;
+    }
+  }> {
+    try {
+      const limit = query.limit || 20;
+      const offset = query.offset || 0;
+
+      const result = await this.requestedTorrentsService.getRequestsPaginated({
+        status: query.status,
+        userId: query.userId,
+        search: query.search,
+        limit,
+        offset,
+      });
+
+      return {
+        success: true,
+        data: result.requests,
+        pagination: {
+          total: result.total,
+          limit,
+          offset,
+          hasMore: offset + limit < result.total,
+        },
       };
     } catch (error) {
       this.logger.error(`Error retrieving torrent requests: ${error.message}`, error.stack);
-      
+
       throw new HttpException(
         'Failed to retrieve torrent requests',
         HttpStatus.INTERNAL_SERVER_ERROR,

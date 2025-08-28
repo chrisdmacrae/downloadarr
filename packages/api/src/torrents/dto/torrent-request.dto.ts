@@ -368,4 +368,12 @@ export class TorrentRequestQueryDto {
   @IsNumber()
   @Min(0)
   offset?: number = 0;
+
+  @ApiPropertyOptional({
+    description: 'Search query to filter by title',
+    example: 'Matrix',
+  })
+  @IsOptional()
+  @IsString()
+  search?: string;
 }

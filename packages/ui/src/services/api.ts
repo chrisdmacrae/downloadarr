@@ -616,12 +616,47 @@ export const apiService = {
     return response.data;
   },
 
-  getTorrentRequests: async (status?: string, userId?: string): Promise<{ success: boolean; data?: TorrentRequest[]; error?: string }> => {
-    const params = new URLSearchParams();
-    if (status) params.append('status', status);
-    if (userId) params.append('userId', userId);
+  getTorrentRequests: async (params?: {
+    status?: string;
+    userId?: string;
+    search?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<{
+    success: boolean;
+    data?: TorrentRequest[];
+    pagination?: {
+      total: number;
+      limit: number;
+      offset: number;
+      hasMore: boolean;
+    };
+    error?: string;
+  }> => {
+    const searchParams = new URLSearchParams();
+    if (params?.status) searchParams.append('status', params.status);
+    if (params?.userId) searchParams.append('userId', params.userId);
+    if (params?.search) searchParams.append('search', params.search);
+    if (params?.limit) searchParams.append('limit', params.limit.toString());
+    if (params?.offset) searchParams.append('offset', params.offset.toString());
 
-    const response = await api.get(`/torrent-requests?${params}`);
+    const response = await api.get(`/torrent-requests?${searchParams}`);
+    return response.data;
+  },
+
+  getTorrentRequestCounts: async (params?: {
+    userId?: string;
+    search?: string;
+  }): Promise<{
+    success: boolean;
+    data?: Record<string, number>;
+    error?: string;
+  }> => {
+    const searchParams = new URLSearchParams();
+    if (params?.userId) searchParams.append('userId', params.userId);
+    if (params?.search) searchParams.append('search', params.search);
+
+    const response = await api.get(`/torrent-requests/counts?${searchParams}`);
     return response.data;
   },
 

@@ -50,8 +50,6 @@ import { useToast } from '@/hooks/use-toast'
 type StatusFilter = 'all' | TorrentRequest['status']
 
 export default function Requests() {
-  const [searchQuery, setSearchQuery] = useState('')
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [sortBy, setSortBy] = useState<'created' | 'updated' | 'priority'>('created')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
 
@@ -71,33 +69,27 @@ export default function Requests() {
   } | null>(null)
   const [showDetailModal, setShowDetailModal] = useState(false)
 
-  const { requests, isLoading, error, refreshRequests, isOngoingTvShow } = useTorrentRequests()
+  const {
+    requests,
+    isLoading,
+    error,
+    pagination,
+    searchQuery,
+    setSearchQuery,
+    statusFilter,
+    setStatusFilter,
+    statusCounts,
+    refreshRequests,
+    loadMore,
+    goToPage,
+    changePageSize,
+    isOngoingTvShow
+  } = useTorrentRequests()
   const { toast } = useToast()
 
-  // Filter and sort requests
+  // Note: Filtering and sorting is now handled server-side via pagination
+  // Client-side filtering conflicts with server-side pagination
   const filteredRequests = requests
-    .filter(request => {
-      const matchesSearch = request.title.toLowerCase().includes(searchQuery.toLowerCase())
-      const matchesStatus = statusFilter === 'all' || request.status === statusFilter
-      return matchesSearch && matchesStatus
-    })
-    .sort((a, b) => {
-      let comparison = 0
-
-      switch (sortBy) {
-        case 'created':
-          comparison = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-          break
-        case 'updated':
-          comparison = new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime()
-          break
-        case 'priority':
-          comparison = a.priority - b.priority
-          break
-      }
-
-      return sortOrder === 'asc' ? comparison : -comparison
-    })
 
   const handleCancelRequest = async (request: TorrentRequest) => {
     setIsCancelling(request.id)
@@ -301,27 +293,7 @@ export default function Requests() {
     setShowDetailModal(true);
   }
 
-  const getStatusCounts = () => {
-    const counts = {
-      all: requests.length,
-      PENDING: 0,
-      SEARCHING: 0,
-      FOUND: 0,
-      DOWNLOADING: 0,
-      COMPLETED: 0,
-      FAILED: 0,
-      CANCELLED: 0,
-      EXPIRED: 0,
-    }
-
-    requests.forEach(request => {
-      counts[request.status]++
-    })
-
-    return counts
-  }
-
-  const statusCounts = getStatusCounts()
+  // Status counts are now fetched from the server via the hook
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -384,49 +356,49 @@ export default function Requests() {
         <div className="hidden md:grid grid-cols-4 lg:grid-cols-8 gap-4">
           <Card className="cursor-pointer hover:bg-accent" onClick={() => setStatusFilter('all')}>
             <CardContent className="p-2 md:p-4 text-center">
-              <div className="text-lg md:text-2xl font-bold">{statusCounts.all}</div>
+              <div className="text-lg md:text-2xl font-bold">{statusCounts.all || 0}</div>
               <div className="text-xs text-muted-foreground">Total</div>
             </CardContent>
           </Card>
           <Card className="cursor-pointer hover:bg-accent" onClick={() => setStatusFilter('PENDING')}>
             <CardContent className="p-2 md:p-4 text-center">
-              <div className="text-lg md:text-2xl font-bold text-yellow-600">{statusCounts.PENDING}</div>
+              <div className="text-lg md:text-2xl font-bold text-yellow-600">{statusCounts.PENDING || 0}</div>
               <div className="text-xs text-muted-foreground">Pending</div>
             </CardContent>
           </Card>
           <Card className="cursor-pointer hover:bg-accent" onClick={() => setStatusFilter('SEARCHING')}>
             <CardContent className="p-2 md:p-4 text-center">
-              <div className="text-lg md:text-2xl font-bold text-blue-600">{statusCounts.SEARCHING}</div>
+              <div className="text-lg md:text-2xl font-bold text-blue-600">{statusCounts.SEARCHING || 0}</div>
               <div className="text-xs text-muted-foreground">Searching</div>
             </CardContent>
           </Card>
           <Card className="cursor-pointer hover:bg-accent" onClick={() => setStatusFilter('DOWNLOADING')}>
             <CardContent className="p-2 md:p-4 text-center">
-              <div className="text-lg md:text-2xl font-bold text-blue-600">{statusCounts.DOWNLOADING}</div>
+              <div className="text-lg md:text-2xl font-bold text-blue-600">{statusCounts.DOWNLOADING || 0}</div>
               <div className="text-xs text-muted-foreground">Downloading</div>
             </CardContent>
           </Card>
           <Card className="cursor-pointer hover:bg-accent" onClick={() => setStatusFilter('COMPLETED')}>
             <CardContent className="p-2 md:p-4 text-center">
-              <div className="text-lg md:text-2xl font-bold text-green-600">{statusCounts.COMPLETED}</div>
+              <div className="text-lg md:text-2xl font-bold text-green-600">{statusCounts.COMPLETED || 0}</div>
               <div className="text-xs text-muted-foreground">Completed</div>
             </CardContent>
           </Card>
           <Card className="cursor-pointer hover:bg-accent" onClick={() => setStatusFilter('FAILED')}>
             <CardContent className="p-2 md:p-4 text-center">
-              <div className="text-lg md:text-2xl font-bold text-red-600">{statusCounts.FAILED}</div>
+              <div className="text-lg md:text-2xl font-bold text-red-600">{statusCounts.FAILED || 0}</div>
               <div className="text-xs text-muted-foreground">Failed</div>
             </CardContent>
           </Card>
           <Card className="cursor-pointer hover:bg-accent" onClick={() => setStatusFilter('CANCELLED')}>
             <CardContent className="p-2 md:p-4 text-center">
-              <div className="text-lg md:text-2xl font-bold text-gray-600">{statusCounts.CANCELLED}</div>
+              <div className="text-lg md:text-2xl font-bold text-gray-600">{statusCounts.CANCELLED || 0}</div>
               <div className="text-xs text-muted-foreground">Cancelled</div>
             </CardContent>
           </Card>
           <Card className="cursor-pointer hover:bg-accent" onClick={() => setStatusFilter('EXPIRED')}>
             <CardContent className="p-2 md:p-4 text-center">
-              <div className="text-lg md:text-2xl font-bold text-gray-600">{statusCounts.EXPIRED}</div>
+              <div className="text-lg md:text-2xl font-bold text-gray-600">{statusCounts.EXPIRED || 0}</div>
               <div className="text-xs text-muted-foreground">Expired</div>
             </CardContent>
           </Card>
@@ -437,7 +409,7 @@ export default function Requests() {
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search requests..."
+              placeholder="Search requests by title..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-10"
@@ -890,6 +862,53 @@ export default function Requests() {
                 </Card>
               )
             })}
+          </div>
+        )}
+
+        {/* Pagination Controls */}
+        {!isLoading && pagination.total > 0 && (
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6 px-2">
+            <div className="text-sm text-muted-foreground">
+              Showing {pagination.offset + 1} to {Math.min(pagination.offset + pagination.limit, pagination.total)} of {pagination.total} requests
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Select value={pagination.limit.toString()} onValueChange={(value) => changePageSize(Number(value))}>
+                <SelectTrigger className="w-20">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="10">10</SelectItem>
+                  <SelectItem value="20">20</SelectItem>
+                  <SelectItem value="50">50</SelectItem>
+                  <SelectItem value="100">100</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => goToPage(Math.floor(pagination.offset / pagination.limit) - 1)}
+                  disabled={pagination.offset === 0}
+                >
+                  Previous
+                </Button>
+
+                <span className="text-sm px-2">
+                  Page {Math.floor(pagination.offset / pagination.limit) + 1} of {Math.ceil(pagination.total / pagination.limit)}
+                </span>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => goToPage(Math.floor(pagination.offset / pagination.limit) + 1)}
+                  disabled={!pagination.hasMore}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
           </div>
         )}
       </div>
