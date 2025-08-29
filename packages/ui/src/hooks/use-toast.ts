@@ -5,14 +5,15 @@ interface Toast {
   title?: string
   description?: string
   action?: React.ReactNode
+  variant?: 'default' | 'destructive'
 }
 
 export function useToast() {
   const [toasts, setToasts] = useState<Toast[]>([])
 
-  const toast = ({ title, description }: { title?: string; description?: string }) => {
+  const toast = ({ title, description, variant }: { title?: string; description?: string; variant?: 'default' | 'destructive' }) => {
     const id = Math.random().toString(36).substr(2, 9)
-    const newToast = { id, title, description }
+    const newToast = { id, title, description, variant }
     
     setToasts(prev => [...prev, newToast])
     

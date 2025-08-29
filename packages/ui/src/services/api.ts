@@ -297,6 +297,82 @@ export interface TorrentRequest {
   torrentDownloads?: TorrentDownload[];
 }
 
+// HTTP Download Request Types
+export interface HttpDownloadRequest {
+  id: string;
+  url: string;
+  filename?: string;
+  contentType?: 'MOVIE' | 'TV_SHOW' | 'GAME';
+  title?: string;
+  year?: number;
+  imdbId?: string;
+  tmdbId?: number;
+  igdbId?: number;
+  platform?: string;
+  genre?: string;
+  season?: number;
+  episode?: number;
+  status: 'PENDING_METADATA' | 'METADATA_MATCHED' | 'DOWNLOADING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
+  priority: number;
+  destination?: string;
+  downloadJobId?: string;
+  aria2Gid?: string;
+  fileSize?: string;
+  mimeType?: string;
+  createdAt: string;
+  updatedAt: string;
+  metadataMatchedAt?: string;
+  downloadStartedAt?: string;
+  completedAt?: string;
+  userId?: string;
+}
+
+export interface CreateHttpDownloadRequestDto {
+  url: string;
+  filename?: string;
+  destination?: string;
+  priority?: number;
+  userId?: string;
+}
+
+export interface MatchMetadataDto {
+  contentType: 'MOVIE' | 'TV_SHOW' | 'GAME';
+  title: string;
+  year?: number;
+  imdbId?: string;
+  tmdbId?: number;
+  igdbId?: number;
+  platform?: string;
+  genre?: string;
+  season?: number;
+  episode?: number;
+}
+
+export interface AggregatedRequest {
+  id: string;
+  type: 'torrent' | 'http';
+  contentType: 'MOVIE' | 'TV_SHOW' | 'GAME' | null;
+  title: string | null;
+  year: number | null;
+  status: string;
+  priority: number;
+  createdAt: string;
+  updatedAt: string;
+  // Additional fields for display
+  url?: string; // For HTTP requests
+  filename?: string; // For HTTP requests
+  foundTorrentTitle?: string; // For torrent requests
+  downloadJobId?: string;
+  aria2Gid?: string;
+  // Metadata fields
+  imdbId?: string;
+  tmdbId?: number;
+  igdbId?: number;
+  platform?: string;
+  season?: number;
+  episode?: number;
+}
+
 // TV Show Season Management Types
 export interface TvShowSeason {
   id: string;
@@ -1011,6 +1087,108 @@ export const apiService = {
 
   getSystemInfo: async (): Promise<SystemInfo> => {
     const response = await api.get('/system/info');
+    return response.data;
+  },
+
+  // HTTP Download Request Services
+  createHttpDownloadRequest: async (dto: CreateHttpDownloadRequestDto): Promise<{ success: boolean; data: HttpDownloadRequest }> => {
+    const response = await api.post('/http-download-requests', dto);
+    return response.data;
+  },
+
+  getHttpDownloadRequests: async (params?: {
+    status?: string;
+    contentType?: string;
+    userId?: string;
+    search?: string;
+    limit?: number;
+    offset?: number;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
+  }): Promise<{ success: boolean; data: HttpDownloadRequest[]; total: number; limit: number; offset: number }> => {
+    const searchParams = new URLSearchParams();
+    if (params?.status) searchParams.append('status', params.status);
+    if (params?.contentType) searchParams.append('contentType', params.contentType);
+    if (params?.userId) searchParams.append('userId', params.userId);
+    if (params?.search) searchParams.append('search', params.search);
+    if (params?.limit) searchParams.append('limit', params.limit.toString());
+    if (params?.offset) searchParams.append('offset', params.offset.toString());
+    if (params?.sortBy) searchParams.append('sortBy', params.sortBy);
+    if (params?.sortOrder) searchParams.append('sortOrder', params.sortOrder);
+
+    const response = await api.get(`/http-download-requests?${searchParams.toString()}`);
+    return response.data;
+  },
+
+  getHttpDownloadRequest: async (id: string): Promise<{ success: boolean; data: HttpDownloadRequest }> => {
+    const response = await api.get(`/http-download-requests/${id}`);
+    return response.data;
+  },
+
+  updateHttpDownloadRequest: async (id: string, dto: Partial<HttpDownloadRequest>): Promise<{ success: boolean; data: HttpDownloadRequest }> => {
+    const response = await api.put(`/http-download-requests/${id}`, dto);
+    return response.data;
+  },
+
+  matchHttpDownloadMetadata: async (id: string, dto: MatchMetadataDto): Promise<{ success: boolean; data: HttpDownloadRequest }> => {
+    const response = await api.post(`/http-download-requests/${id}/match-metadata`, dto);
+    return response.data;
+  },
+
+  startHttpDownload: async (id: string): Promise<{ success: boolean; message: string }> => {
+    const response = await api.post(`/http-download-requests/${id}/start-download`);
+    return response.data;
+  },
+
+  cancelHttpDownloadRequest: async (id: string): Promise<{ success: boolean; message: string }> => {
+    const response = await api.post(`/http-download-requests/${id}/cancel`);
+    return response.data;
+  },
+
+  deleteHttpDownloadRequest: async (id: string): Promise<{ success: boolean; message: string }> => {
+    const response = await api.delete(`/http-download-requests/${id}`);
+    return response.data;
+  },
+
+  // Aggregated Request Services
+  getAggregatedRequests: async (params?: {
+    status?: string;
+    contentType?: string;
+    userId?: string;
+    search?: string;
+    limit?: number;
+    offset?: number;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
+  }): Promise<{ success: boolean; data: AggregatedRequest[]; total: number; limit: number; offset: number }> => {
+    const searchParams = new URLSearchParams();
+    if (params?.status) searchParams.append('status', params.status);
+    if (params?.contentType) searchParams.append('contentType', params.contentType);
+    if (params?.userId) searchParams.append('userId', params.userId);
+    if (params?.search) searchParams.append('search', params.search);
+    if (params?.limit) searchParams.append('limit', params.limit.toString());
+    if (params?.offset) searchParams.append('offset', params.offset.toString());
+    if (params?.sortBy) searchParams.append('sortBy', params.sortBy);
+    if (params?.sortOrder) searchParams.append('sortOrder', params.sortOrder);
+
+    const response = await api.get(`/requests?${searchParams.toString()}`);
+    return response.data;
+  },
+
+  getAggregatedRequest: async (type: 'torrent' | 'http', id: string): Promise<{ success: boolean; data: AggregatedRequest }> => {
+    const response = await api.get(`/requests/${type}/${id}`);
+    return response.data;
+  },
+
+  getRequestStats: async (): Promise<{
+    success: boolean;
+    data: {
+      torrent: Record<string, number>;
+      http: Record<string, number>;
+      total: Record<string, number>;
+    };
+  }> => {
+    const response = await api.get('/requests/stats');
     return response.data;
   },
 };

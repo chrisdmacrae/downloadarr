@@ -58,6 +58,7 @@ export class DownloadMetadataService {
     mediaYear?: number;
     mediaPoster?: string;
     mediaOverview?: string;
+    httpRequestId?: string; // Link to HTTP download request
   }) {
     const typeMap: Record<string, string> = {
       'magnet': 'MAGNET',
@@ -341,6 +342,20 @@ export class DownloadMetadataService {
         return;
       }
 
+      // Check for HTTP download requests associated with this aria2Gid
+      const httpRequest = await this.prisma.httpDownloadRequest.findFirst({
+        where: {
+          aria2Gid: aria2Gid,
+          status: 'DOWNLOADING'
+        }
+      });
+
+      if (httpRequest) {
+        // Let the HttpDownloadProgressTrackerService handle HTTP download completion
+        this.logger.debug(`HTTP download request found for aria2Gid ${aria2Gid}, letting HttpDownloadProgressTrackerService handle completion`);
+        return;
+      }
+
       // Handle legacy completion for downloads without TorrentDownload records
       const torrentRequest = await this.prisma.requestedTorrent.findFirst({
         where: {
@@ -361,7 +376,7 @@ export class DownloadMetadataService {
 
         this.logger.log(`Marked legacy torrent request ${torrentRequest.id} (${torrentRequest.title}) as complete`);
       } else {
-        this.logger.debug(`No related torrent request found for download metadata ${downloadMetadataId}`);
+        this.logger.debug(`No related request found for download metadata ${downloadMetadataId}`);
       }
     } catch (error) {
       this.logger.error(`Error handling download completion for download ${downloadMetadataId}:`, error);

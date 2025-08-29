@@ -34,7 +34,8 @@ import {
   SearchIcon,
   PlayCircle,
   Edit,
-  ExternalLink
+  ExternalLink,
+  Link
 } from 'lucide-react'
 import { DownloadStatusBadge } from '@/components/DownloadStatusBadge'
 import { TorrentSelectionModal } from '@/components/TorrentSelectionModal'
@@ -43,21 +44,27 @@ import { TvShowSeasonBadges } from '@/components/TvShowSeasonBadges'
 import { TvShowSeasonModal } from '@/components/TvShowSeasonModal'
 import { MovieDetailModal } from '@/components/MovieDetailModal'
 import { GameDetailModal } from '@/components/GameDetailModal'
-import { apiService, TorrentRequest } from '@/services/api'
-import { useTorrentRequests } from '@/hooks/useTorrentRequests'
+import { apiService, TorrentRequest, AggregatedRequest } from '@/services/api'
+import { useAggregatedRequests, useRequestStats } from '@/hooks/useApi'
+import { HttpDownloadRequestModal } from '@/components/HttpDownloadRequestModal'
 import { useToast } from '@/hooks/use-toast'
 
-type StatusFilter = 'all' | TorrentRequest['status']
+type StatusFilter = 'all' | TorrentRequest['status'] | 'PENDING_METADATA' | 'METADATA_MATCHED'
 
 export default function Requests() {
-  const [sortBy, setSortBy] = useState<'created' | 'updated' | 'priority'>('created')
+  const [sortBy, setSortBy] = useState<'createdAt' | 'updatedAt' | 'priority'>('createdAt')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(20)
 
   const [isDeleting, setIsDeleting] = useState<string | null>(null)
   const [isCancelling, setIsCancelling] = useState<string | null>(null)
   const [isSearching, setIsSearching] = useState<string | null>(null)
   const [isReSearching, setIsReSearching] = useState<string | null>(null)
   const [isSearchingAll, setIsSearchingAll] = useState(false)
+  const [isStartingDownload, setIsStartingDownload] = useState<string | null>(null)
   const [torrentSelectionRequest, setTorrentSelectionRequest] = useState<TorrentRequest | null>(null)
   const [editRequest, setEditRequest] = useState<TorrentRequest | null>(null)
   const [seasonModalRequest, setSeasonModalRequest] = useState<TorrentRequest | null>(null)
@@ -68,33 +75,92 @@ export default function Requests() {
     title: string
   } | null>(null)
   const [showDetailModal, setShowDetailModal] = useState(false)
+  const [showHttpRequestModal, setShowHttpRequestModal] = useState(false)
 
-  const {
-    requests,
-    isLoading,
-    error,
-    pagination,
-    searchQuery,
-    setSearchQuery,
-    statusFilter,
-    setStatusFilter,
-    statusCounts,
-    refreshRequests,
-    goToPage,
-    changePageSize,
-    isOngoingTvShow
-  } = useTorrentRequests()
+  // Use aggregated requests API
+  const { data: requestsData, isLoading, error, refetch } = useAggregatedRequests({
+    search: searchQuery || undefined,
+    status: statusFilter !== 'all' ? statusFilter : undefined,
+    limit: pageSize,
+    offset: (currentPage - 1) * pageSize,
+    sortBy,
+    sortOrder,
+  })
+
+  const { data: statsData } = useRequestStats()
+
+  const requests = requestsData?.data || []
+  const totalCount = requestsData?.total || 0
+  const statusCounts = statsData?.data?.total || {}
+
   const { toast } = useToast()
+
+  const refreshRequests = () => {
+    refetch()
+  }
+
+  const goToPage = (page: number) => {
+    setCurrentPage(page)
+  }
+
+  const changePageSize = (size: number) => {
+    setPageSize(size)
+    setCurrentPage(1)
+  }
+
+  const isOngoingTvShow = (request: AggregatedRequest) => {
+    return request.type === 'torrent' && request.contentType === 'TV_SHOW'
+  }
 
   // Note: Filtering and sorting is now handled server-side via pagination
   // Client-side filtering conflicts with server-side pagination
   const filteredRequests = requests
 
-  const handleCancelRequest = async (request: TorrentRequest) => {
+  const handleStartHttpDownload = async (request: AggregatedRequest) => {
+    if (request.type !== 'http' || request.status !== 'METADATA_MATCHED') {
+      return
+    }
+
+    setIsStartingDownload(request.id)
+
+    try {
+      const response = await apiService.startHttpDownload(request.id)
+
+      if (response.success) {
+        toast({
+          title: "Download Started",
+          description: `Started download for "${request.title}"`,
+        })
+        refreshRequests()
+      } else {
+        toast({
+          title: "Start Failed",
+          description: "Failed to start download",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error('Error starting HTTP download:', error)
+      toast({
+        title: "Start Failed",
+        description: "An error occurred while starting the download",
+        variant: "destructive",
+      })
+    } finally {
+      setIsStartingDownload(null)
+    }
+  }
+
+  const handleCancelRequest = async (request: AggregatedRequest) => {
     setIsCancelling(request.id)
 
     try {
-      const response = await apiService.cancelTorrentRequest(request.id)
+      let response
+      if (request.type === 'torrent') {
+        response = await apiService.cancelTorrentRequest(request.id)
+      } else {
+        response = await apiService.cancelHttpDownloadRequest(request.id)
+      }
 
       if (response.success) {
         toast({
@@ -105,7 +171,7 @@ export default function Requests() {
       } else {
         toast({
           title: "Cancel Failed",
-          description: response.error || "Failed to cancel request",
+          description: "Failed to cancel request",
         })
       }
     } catch (error) {
@@ -119,11 +185,16 @@ export default function Requests() {
     }
   }
 
-  const handleDeleteRequest = async (request: TorrentRequest) => {
+  const handleDeleteRequest = async (request: AggregatedRequest) => {
     setIsDeleting(request.id)
 
     try {
-      const response = await apiService.deleteTorrentRequest(request.id)
+      let response
+      if (request.type === 'torrent') {
+        response = await apiService.deleteTorrentRequest(request.id)
+      } else {
+        response = await apiService.deleteHttpDownloadRequest(request.id)
+      }
 
       if (response.success) {
         const isDownloading = request.status === 'DOWNLOADING'
@@ -137,7 +208,7 @@ export default function Requests() {
       } else {
         toast({
           title: "Delete Failed",
-          description: response.error || "Failed to delete request",
+          description: "Failed to delete request",
         })
       }
     } catch (error) {
@@ -151,7 +222,17 @@ export default function Requests() {
     }
   }
 
-  const handleSearchRequest = async (request: TorrentRequest) => {
+  const handleSearchRequest = async (request: AggregatedRequest) => {
+    if (request.type === 'http') {
+      // HTTP requests don't support re-searching after creation
+      toast({
+        title: "Not Available",
+        description: "HTTP requests cannot be re-searched. Please create a new request if needed.",
+        variant: "destructive",
+      })
+      return
+    }
+
     setIsSearching(request.id)
 
     try {
@@ -244,9 +325,30 @@ export default function Requests() {
     refreshRequests()
   }
 
-  const handleEditRequest = (request: TorrentRequest) => {
-    setEditRequest(request)
+  const handleEditRequest = (request: AggregatedRequest) => {
+    if (request.type === 'torrent' && request.contentType && request.title) {
+      // Convert AggregatedRequest to TorrentRequest for editing
+      const torrentRequest: TorrentRequest = {
+        ...request,
+        contentType: request.contentType, // Ensure non-null
+        title: request.title, // Ensure non-null
+        year: request.year || undefined, // Convert null to undefined
+        status: request.status as any, // Cast status to TorrentRequest status type
+        preferredQualities: [],
+        preferredFormats: [],
+        minSeeders: 0,
+        maxSizeGB: 0,
+        isOngoing: false,
+        foundTorrentTitle: request.foundTorrentTitle || undefined,
+        searchAttempts: 0,
+        maxSearchAttempts: 5,
+      }
+      setEditRequest(torrentRequest)
+    }
+    // HTTP requests don't support editing currently
   }
+
+
 
   const handleRequestUpdated = () => {
     refreshRequests()
@@ -262,7 +364,7 @@ export default function Requests() {
     setSeasonModalSeasonNumber(null)
   }
 
-  const handleItemClick = (request: TorrentRequest) => {
+  const handleItemClick = (request: AggregatedRequest) => {
     // Determine the correct ID and type for fetching complete data
     let id: string;
     let type: 'movie' | 'tv' | 'game';
@@ -287,7 +389,7 @@ export default function Requests() {
     setSelectedItem({
       type,
       id,
-      title: request.title
+      title: request.title || 'Unknown'
     });
     setShowDetailModal(true);
   }
@@ -311,7 +413,7 @@ export default function Requests() {
           <div className="text-center">
             <AlertCircle className="h-12 w-12 text-destructive mx-auto mb-4" />
             <h2 className="text-xl font-semibold mb-2">Error Loading Requests</h2>
-            <p className="text-muted-foreground mb-4">{error}</p>
+            <p className="text-muted-foreground mb-4">{error.message || 'An error occurred'}</p>
             <Button onClick={refreshRequests}>
               <RefreshCw className="h-4 w-4 mr-2" />
               Try Again
@@ -330,10 +432,19 @@ export default function Requests() {
           <div>
             <h1 className="text-2xl md:text-3xl font-bold">Download Requests</h1>
             <p className="text-sm md:text-base text-muted-foreground">
-              Manage your torrent download requests
+              Manage your torrent and HTTP download requests
             </p>
           </div>
           <div className="flex gap-2">
+            <Button
+              onClick={() => setShowHttpRequestModal(true)}
+              variant="default"
+              size="sm"
+              className="flex-1 md:flex-none"
+            >
+              <Link className="h-4 w-4 md:mr-2" />
+              <span className="hidden md:inline">Add HTTP Download</span>
+            </Button>
             <Button
               onClick={handleSearchAll}
               disabled={isSearchingAll || isLoading}
@@ -399,6 +510,18 @@ export default function Requests() {
             <CardContent className="p-2 md:p-4 text-center">
               <div className="text-lg md:text-2xl font-bold text-gray-600">{statusCounts.EXPIRED || 0}</div>
               <div className="text-xs text-muted-foreground">Expired</div>
+            </CardContent>
+          </Card>
+          <Card className="cursor-pointer hover:bg-accent" onClick={() => setStatusFilter('PENDING_METADATA')}>
+            <CardContent className="p-2 md:p-4 text-center">
+              <div className="text-lg md:text-2xl font-bold text-orange-600">{statusCounts.PENDING_METADATA || 0}</div>
+              <div className="text-xs text-muted-foreground">Pending Metadata</div>
+            </CardContent>
+          </Card>
+          <Card className="cursor-pointer hover:bg-accent" onClick={() => setStatusFilter('METADATA_MATCHED')}>
+            <CardContent className="p-2 md:p-4 text-center">
+              <div className="text-lg md:text-2xl font-bold text-purple-600">{statusCounts.METADATA_MATCHED || 0}</div>
+              <div className="text-xs text-muted-foreground">Metadata Matched</div>
             </CardContent>
           </Card>
         </div>
@@ -467,11 +590,25 @@ export default function Requests() {
         ) : (
           <div className="space-y-4">
             {filteredRequests.map((request) => {
-              const canCancel = ['PENDING', 'SEARCHING', 'DOWNLOADING'].includes(request.status)
-              const canDelete = ['FAILED', 'CANCELLED', 'EXPIRED', 'COMPLETED'].includes(request.status) // Allow deletion of all requests - backend will handle download cancellation
-              const canSearch = ['PENDING', 'FAILED', 'EXPIRED'].includes(request.status)
+              // Handle both torrent and HTTP request statuses
+              const canCancel = request.type === 'torrent'
+                ? ['PENDING', 'SEARCHING', 'DOWNLOADING'].includes(request.status)
+                : ['PENDING_METADATA', 'METADATA_MATCHED', 'DOWNLOADING'].includes(request.status)
+
+              const canDelete = request.type === 'torrent'
+                ? ['FAILED', 'CANCELLED', 'EXPIRED', 'COMPLETED'].includes(request.status)
+                : ['FAILED', 'CANCELLED', 'COMPLETED'].includes(request.status)
+
+              const canSearch = request.type === 'torrent'
+                ? ['PENDING', 'FAILED', 'EXPIRED'].includes(request.status)
+                : request.status === 'PENDING_METADATA' // For HTTP, "search" means metadata matching
+
               const canReSearch = request.status === 'CANCELLED'
-              const canEdit = ['PENDING', 'SEARCHING', 'FAILED', 'CANCELLED'].includes(request.status)
+              const canEdit = request.type === 'torrent'
+                ? ['PENDING', 'SEARCHING', 'FAILED', 'CANCELLED'].includes(request.status)
+                : false // HTTP requests don't support editing currently
+
+              const canStartDownload = request.type === 'http' && request.status === 'METADATA_MATCHED'
 
               return (
                 <Card key={request.id} className="overflow-hidden">
@@ -537,6 +674,24 @@ export default function Requests() {
                                         <>
                                           <RefreshCw className="h-4 w-4 mr-2" />
                                           Re-search
+                                        </>
+                                      )}
+                                    </DropdownMenuItem>
+                                  )}
+                                  {canStartDownload && (
+                                    <DropdownMenuItem
+                                      onClick={() => handleStartHttpDownload(request)}
+                                      disabled={isStartingDownload === request.id}
+                                    >
+                                      {isStartingDownload === request.id ? (
+                                        <>
+                                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                          Starting...
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Download className="h-4 w-4 mr-2" />
+                                          Start Download
                                         </>
                                       )}
                                     </DropdownMenuItem>
@@ -644,12 +799,23 @@ export default function Requests() {
                             <div className="flex flex-wrap items-center gap-1 md:gap-2">
                               {/* Mobile: Status badge as first badge */}
                               <div className="md:hidden">
-                                <DownloadStatusBadge request={request} />
+                                {request.type === 'torrent' ? (
+                                  <DownloadStatusBadge request={request as any} />
+                                ) : (
+                                  <Badge variant={
+                                    request.status === 'COMPLETED' ? 'default' :
+                                    request.status === 'DOWNLOADING' ? 'secondary' :
+                                    request.status === 'FAILED' ? 'destructive' :
+                                    'outline'
+                                  }>
+                                    {request.status.replace('_', ' ')}
+                                  </Badge>
+                                )}
                               </div>
                               <Badge variant="outline" className="capitalize text-xs">
                                 {isOngoingTvShow(request)
                                   ? 'Ongoing Series'
-                                  : request.contentType.toLowerCase().replace('_', ' ')
+                                  : request.contentType?.toLowerCase().replace('_', ' ') || 'Unknown'
                                 }
                               </Badge>
                               {request.platform && (
@@ -657,35 +823,11 @@ export default function Requests() {
                                   {request.platform}
                                 </Badge>
                               )}
-                              {/* Display qualities for movies/TV shows */}
-                              {(request.contentType === 'MOVIE' || request.contentType === 'TV_SHOW') && request.preferredQualities && request.preferredQualities.length > 0 && (
-                                <>
-                                  {request.preferredQualities.slice(0, 2).map((quality, index) => (
-                                    <Badge key={index} variant="secondary" className="text-xs">
-                                      {quality.replace('HD_', '').replace('UHD_', '')}
-                                    </Badge>
-                                  ))}
-                                  {request.preferredQualities.length > 2 && (
-                                    <Badge variant="secondary" className="text-xs">
-                                      +{request.preferredQualities.length - 2}
-                                    </Badge>
-                                  )}
-                                </>
-                              )}
-                              {/* Display formats for movies/TV shows */}
-                              {(request.contentType === 'MOVIE' || request.contentType === 'TV_SHOW') && request.preferredFormats && request.preferredFormats.length > 0 && (
-                                <>
-                                  {request.preferredFormats.slice(0, 2).map((format, index) => (
-                                    <Badge key={index} variant="outline" className="text-xs">
-                                      {format}
-                                    </Badge>
-                                  ))}
-                                  {request.preferredFormats.length > 2 && (
-                                    <Badge variant="outline" className="text-xs">
-                                      +{request.preferredFormats.length - 2}
-                                    </Badge>
-                                  )}
-                                </>
+                              {/* Quality and format preferences only available for torrent requests */}
+                              {request.type === 'torrent' && (request.contentType === 'MOVIE' || request.contentType === 'TV_SHOW') && (
+                                <div className="text-xs text-muted-foreground">
+                                  Torrent preferences configured
+                                </div>
                               )}
                             </div>
                           </CardDescription>
@@ -693,7 +835,18 @@ export default function Requests() {
                       </div>
                       {/* Desktop: Status badge and menu on the right */}
                       <div className="hidden md:flex items-center gap-2">
-                        <DownloadStatusBadge request={request} />
+                        {request.type === 'torrent' ? (
+                          <DownloadStatusBadge request={request as any} />
+                        ) : (
+                          <Badge variant={
+                            request.status === 'COMPLETED' ? 'default' :
+                            request.status === 'DOWNLOADING' ? 'secondary' :
+                            request.status === 'FAILED' ? 'destructive' :
+                            'outline'
+                          }>
+                            {request.status.replace('_', ' ')}
+                          </Badge>
+                        )}
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="ghost" size="sm">
@@ -733,6 +886,24 @@ export default function Requests() {
                                   <>
                                     <RefreshCw className="h-4 w-4 mr-2" />
                                     Re-search
+                                  </>
+                                )}
+                              </DropdownMenuItem>
+                            )}
+                            {canStartDownload && (
+                              <DropdownMenuItem
+                                onClick={() => handleStartHttpDownload(request)}
+                                disabled={isStartingDownload === request.id}
+                              >
+                                {isStartingDownload === request.id ? (
+                                  <>
+                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                    Starting...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Download className="h-4 w-4 mr-2" />
+                                    Start Download
                                   </>
                                 )}
                               </DropdownMenuItem>
@@ -830,11 +1001,11 @@ export default function Requests() {
 
                   </CardHeader>
 
-                  {request.contentType === 'TV_SHOW' && isOngoingTvShow(request) ? (
+                  {request.contentType === 'TV_SHOW' && request.type === 'torrent' && isOngoingTvShow(request) ? (
                     <CardContent className="pt-0 px-3 md:px-6">
                       <TvShowSeasonBadges
-                        request={request}
-                        onSeasonClick={(seasonNumber) => handleSeasonClick(request, seasonNumber)}
+                        request={request as any}
+                        onSeasonClick={(seasonNumber) => handleSeasonClick(request as any, seasonNumber)}
                         className="flex-wrap"
                       />
                     </CardContent>
@@ -849,7 +1020,7 @@ export default function Requests() {
                     </CardContent>
                   )}
 
-                  {!request.isOngoing && request.foundTorrentTitle && (
+                  {request.type === 'torrent' && request.foundTorrentTitle && (
                     <CardContent className="pt-0 px-3 md:px-6">
                       {request.foundTorrentTitle && (
                         <div className="text-xs md:text-sm text-muted-foreground mb-2">
@@ -865,14 +1036,14 @@ export default function Requests() {
         )}
 
         {/* Pagination Controls */}
-        {!isLoading && pagination.total > 0 && (
+        {!isLoading && totalCount > 0 && (
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6 px-2">
             <div className="text-sm text-muted-foreground">
-              Showing {pagination.offset + 1} to {Math.min(pagination.offset + pagination.limit, pagination.total)} of {pagination.total} requests
+              Showing {(currentPage - 1) * pageSize + 1} to {Math.min(currentPage * pageSize, totalCount)} of {totalCount} requests
             </div>
 
             <div className="flex items-center gap-2">
-              <Select value={pagination.limit.toString()} onValueChange={(value) => changePageSize(Number(value))}>
+              <Select value={pageSize.toString()} onValueChange={(value) => changePageSize(Number(value))}>
                 <SelectTrigger className="w-20">
                   <SelectValue />
                 </SelectTrigger>
@@ -888,21 +1059,21 @@ export default function Requests() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => goToPage(Math.floor(pagination.offset / pagination.limit) - 1)}
-                  disabled={pagination.offset === 0}
+                  onClick={() => goToPage(currentPage - 1)}
+                  disabled={currentPage === 1}
                 >
                   Previous
                 </Button>
 
                 <span className="text-sm px-2">
-                  Page {Math.floor(pagination.offset / pagination.limit) + 1} of {Math.ceil(pagination.total / pagination.limit)}
+                  Page {currentPage} of {Math.ceil(totalCount / pageSize)}
                 </span>
 
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => goToPage(Math.floor(pagination.offset / pagination.limit) + 1)}
-                  disabled={!pagination.hasMore}
+                  onClick={() => goToPage(currentPage + 1)}
+                  disabled={currentPage >= Math.ceil(totalCount / pageSize)}
                 >
                   Next
                 </Button>
@@ -955,6 +1126,15 @@ export default function Requests() {
           onOpenChange={setShowDetailModal}
         />
       )}
+
+      {/* HTTP Download Request Modals */}
+      <HttpDownloadRequestModal
+        open={showHttpRequestModal}
+        onOpenChange={setShowHttpRequestModal}
+        onRequestCreated={() => {
+          refreshRequests()
+        }}
+      />
     </div>
   )
 }

@@ -144,6 +144,84 @@ export const useCancelDownload = () => {
   });
 };
 
+// HTTP Download Request hooks
+export const useCreateHttpDownloadRequest = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: apiService.createHttpDownloadRequest,
+    onSuccess: () => {
+      queryClient.refetchQueries({ queryKey: ['aggregatedRequests'] });
+      queryClient.refetchQueries({ queryKey: ['httpDownloadRequests'] });
+    },
+  });
+};
+
+export const useHttpDownloadRequests = (params?: any) => {
+  return useQuery({
+    queryKey: ['httpDownloadRequests', params],
+    queryFn: () => apiService.getHttpDownloadRequests(params),
+    staleTime: 30000, // 30 seconds
+  });
+};
+
+export const useMatchHttpDownloadMetadata = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, metadata }: { id: string; metadata: any }) =>
+      apiService.matchHttpDownloadMetadata(id, metadata),
+    onSuccess: () => {
+      queryClient.refetchQueries({ queryKey: ['aggregatedRequests'] });
+      queryClient.refetchQueries({ queryKey: ['httpDownloadRequests'] });
+    },
+  });
+};
+
+export const useStartHttpDownload = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: apiService.startHttpDownload,
+    onSuccess: () => {
+      queryClient.refetchQueries({ queryKey: ['aggregatedRequests'] });
+      queryClient.refetchQueries({ queryKey: ['httpDownloadRequests'] });
+      queryClient.refetchQueries({ queryKey: queryKeys.downloads });
+    },
+  });
+};
+
+export const useCancelHttpDownloadRequest = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: apiService.cancelHttpDownloadRequest,
+    onSuccess: () => {
+      queryClient.refetchQueries({ queryKey: ['aggregatedRequests'] });
+      queryClient.refetchQueries({ queryKey: ['httpDownloadRequests'] });
+    },
+  });
+};
+
+// Aggregated Request hooks
+export const useAggregatedRequests = (params?: any) => {
+  return useQuery({
+    queryKey: ['aggregatedRequests', params],
+    queryFn: () => apiService.getAggregatedRequests(params),
+    refetchInterval: 30000, // Refetch every 30 seconds for status updates
+    staleTime: 10000, // Consider data stale after 10 seconds
+  });
+};
+
+export const useRequestStats = () => {
+  return useQuery({
+    queryKey: ['requestStats'],
+    queryFn: apiService.getRequestStats,
+    refetchInterval: 60000, // Refetch every minute
+    staleTime: 30000, // Consider data stale after 30 seconds
+  });
+};
+
 // Organization hooks
 export const useOrganizationSettings = () => {
   return useQuery({

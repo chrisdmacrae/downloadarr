@@ -1,5 +1,6 @@
-import { IsString, IsEnum, IsOptional, IsUrl } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import { IsString, IsEnum, IsOptional, IsUrl, IsNumber } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
 
 export enum DownloadType {
   MAGNET = 'magnet',
@@ -50,4 +51,44 @@ export class CreateDownloadDto {
   @IsOptional()
   @IsString()
   category?: string;
+
+  @ApiPropertyOptional({
+    description: 'Media type for metadata',
+    enum: ['movie', 'tv', 'game'],
+    example: 'movie',
+  })
+  @IsOptional()
+  @IsString()
+  mediaType?: 'movie' | 'tv' | 'game';
+
+  @ApiPropertyOptional({
+    description: 'Media title for metadata',
+    example: 'The Matrix',
+  })
+  @IsOptional()
+  @IsString()
+  mediaTitle?: string;
+
+  @ApiPropertyOptional({
+    description: 'Media release year for metadata',
+    example: 1999,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  mediaYear?: number;
+
+  @ApiPropertyOptional({
+    description: 'Media poster URL for metadata',
+  })
+  @IsOptional()
+  @IsString()
+  mediaPoster?: string;
+
+  @ApiPropertyOptional({
+    description: 'Media overview/description for metadata',
+  })
+  @IsOptional()
+  @IsString()
+  mediaOverview?: string;
 }

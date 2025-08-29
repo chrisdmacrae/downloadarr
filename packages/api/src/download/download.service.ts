@@ -20,7 +20,7 @@ export class DownloadService {
   ) {}
 
   async createDownload(createDownloadDto: CreateDownloadDto) {
-    const { url, type, destination, name } = createDownloadDto;
+    const { url, type, destination, name, mediaType, mediaTitle, mediaYear, mediaPoster, mediaOverview } = createDownloadDto;
 
     const options = {
       dir: this.translatePathForAria2(destination || '/downloads'),
@@ -45,13 +45,18 @@ export class DownloadService {
         throw new Error(`Unsupported download type: ${type}`);
     }
 
-    // Create metadata entry
+    // Create metadata entry with media information
     const metadata = await this.downloadMetadataService.createDownloadMetadata({
       name: name || 'Unknown',
       originalUrl: url,
       type,
       aria2Gid: gid,
       destination,
+      mediaType,
+      mediaTitle,
+      mediaYear,
+      mediaPoster,
+      mediaOverview,
     });
 
     // Check if this download matches any existing torrent requests

@@ -12,6 +12,8 @@ import { JackettModule } from './jackett/jackett.module';
 import { OrganizationModule } from './organization/organization.module';
 import { InitializationModule } from './initialization/initialization.module';
 import { SystemModule } from './system/system.module';
+import { HttpDownloadsModule } from './http-downloads/http-downloads.module';
+import { RequestsModule } from './requests/requests.module';
 
 @Module({
   imports: [
@@ -29,6 +31,8 @@ import { SystemModule } from './system/system.module';
     JackettModule,
     OrganizationModule,
     SystemModule,
+    HttpDownloadsModule,
+    RequestsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
