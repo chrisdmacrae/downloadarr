@@ -134,11 +134,41 @@ export const useCancelDownload = () => {
 
   return useMutation({
     mutationFn: apiService.cancelDownload,
-    onSuccess: (_, downloadId) => {
-      // Immediately refetch downloads and stats
-      queryClient.refetchQueries({ queryKey: queryKeys.downloads });
-      queryClient.refetchQueries({ queryKey: queryKeys.queueStats });
-      queryClient.refetchQueries({ queryKey: queryKeys.activeDownloads });
+    onMutate: async (downloadId) => {
+      // Cancel any outgoing refetches (so they don't overwrite our optimistic update)
+      await queryClient.cancelQueries({ queryKey: queryKeys.downloads });
+      await queryClient.cancelQueries({ queryKey: queryKeys.activeDownloads });
+
+      // Snapshot the previous value
+      const previousDownloads = queryClient.getQueryData(queryKeys.downloads);
+      const previousActiveDownloads = queryClient.getQueryData(queryKeys.activeDownloads);
+
+      // Optimistically remove the download from the cache
+      queryClient.setQueryData(queryKeys.downloads, (old: any[]) => {
+        return old ? old.filter(download => download.id !== downloadId) : [];
+      });
+
+      queryClient.setQueryData(queryKeys.activeDownloads, (old: any[]) => {
+        return old ? old.filter(download => download.id !== downloadId) : [];
+      });
+
+      // Return a context object with the snapshotted value
+      return { previousDownloads, previousActiveDownloads };
+    },
+    onError: (err, downloadId, context) => {
+      // If the mutation fails, use the context returned from onMutate to roll back
+      if (context?.previousDownloads) {
+        queryClient.setQueryData(queryKeys.downloads, context.previousDownloads);
+      }
+      if (context?.previousActiveDownloads) {
+        queryClient.setQueryData(queryKeys.activeDownloads, context.previousActiveDownloads);
+      }
+    },
+    onSettled: (_, __, downloadId) => {
+      // Always refetch after error or success to ensure we have the latest data
+      queryClient.invalidateQueries({ queryKey: queryKeys.downloads });
+      queryClient.invalidateQueries({ queryKey: queryKeys.queueStats });
+      queryClient.invalidateQueries({ queryKey: queryKeys.activeDownloads });
       queryClient.invalidateQueries({ queryKey: queryKeys.downloadStatus(downloadId) });
     },
   });
