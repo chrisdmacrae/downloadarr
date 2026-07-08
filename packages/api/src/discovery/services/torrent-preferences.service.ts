@@ -1,10 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { TorrentQuality, TorrentFormat, TorrentCategory } from '../dto/torrent-search.dto';
+import { TorrentQuality, TorrentFormat, TorrentLanguage, TorrentCategory } from '../dto/torrent-search.dto';
 
 export interface TorrentPreferences {
   defaultQualities: TorrentQuality[];
   defaultFormats: TorrentFormat[];
+  defaultLanguages: TorrentLanguage[];
   defaultCategory: TorrentCategory;
   minSeeders: number;
   maxSizeGB: number;
@@ -48,6 +49,7 @@ export class TorrentPreferencesService {
       maxSize: `${this.preferences.maxSizeGB}GB`,
       preferredQualities: this.preferences.defaultQualities,
       preferredFormats: this.preferences.defaultFormats,
+      preferredLanguages: this.preferences.defaultLanguages,
       trustedIndexers: this.preferences.trustedIndexers,
       blacklistedWords: this.preferences.blacklistedWords,
     };
@@ -163,6 +165,9 @@ export class TorrentPreferencesService {
         TorrentFormat.HEVC,
         TorrentFormat.X264,
       ],
+      defaultLanguages: this.configService
+        .get('TORRENT_DEFAULT_LANGUAGES', TorrentLanguage.ENGLISH)
+        .split(',') as TorrentLanguage[],
       defaultCategory: TorrentCategory.MOVIES_HD,
       minSeeders: parseInt(this.configService.get('TORRENT_MIN_SEEDERS', '5')),
       maxSizeGB: parseInt(this.configService.get('TORRENT_MAX_SIZE_GB', '20')),

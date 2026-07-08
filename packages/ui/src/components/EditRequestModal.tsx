@@ -30,11 +30,28 @@ const FORMAT_OPTIONS = [
   { value: 'XVID', label: 'XviD' },
 ]
 
+// MULTI is intentionally absent - multi-language releases match any selection
+const LANGUAGE_OPTIONS = [
+  { value: 'ENGLISH', label: 'English' },
+  { value: 'FRENCH', label: 'French' },
+  { value: 'GERMAN', label: 'German' },
+  { value: 'SPANISH', label: 'Spanish' },
+  { value: 'ITALIAN', label: 'Italian' },
+  { value: 'JAPANESE', label: 'Japanese' },
+  { value: 'KOREAN', label: 'Korean' },
+  { value: 'CHINESE', label: 'Chinese' },
+  { value: 'HINDI', label: 'Hindi' },
+  { value: 'PORTUGUESE', label: 'Portuguese' },
+  { value: 'RUSSIAN', label: 'Russian' },
+  { value: 'DUTCH', label: 'Dutch' },
+]
+
 export function EditRequestModal({ request, open, onOpenChange, onRequestUpdated }: EditRequestModalProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [formData, setFormData] = useState({
     preferredQualities: [] as string[],
     preferredFormats: [] as string[],
+    preferredLanguages: [] as string[],
     minSeeders: 5,
     maxSizeGB: 20,
     priority: 5,
@@ -53,6 +70,8 @@ export function EditRequestModal({ request, open, onOpenChange, onRequestUpdated
       setFormData({
         preferredQualities: request.preferredQualities || [],
         preferredFormats: request.preferredFormats || [],
+        // Pre-migration requests have no languages - default to English
+        preferredLanguages: request.preferredLanguages?.length ? request.preferredLanguages : ['ENGLISH'],
         minSeeders: request.minSeeders || 5,
         maxSizeGB: request.maxSizeGB || 20,
         priority: request.priority || 5,
@@ -82,6 +101,15 @@ export function EditRequestModal({ request, open, onOpenChange, onRequestUpdated
     }))
   }
 
+  const handleLanguageChange = (language: string, checked: boolean) => {
+    setFormData(prev => ({
+      ...prev,
+      preferredLanguages: checked
+        ? [...prev.preferredLanguages, language]
+        : prev.preferredLanguages.filter(l => l !== language)
+    }))
+  }
+
   const handleSubmit = async () => {
     if (!request) return
 
@@ -103,6 +131,15 @@ export function EditRequestModal({ request, open, onOpenChange, onRequestUpdated
       return
     }
 
+    // Language applies to all content types, including games
+    if (formData.preferredLanguages.length === 0) {
+      toast({
+        title: "Validation Error",
+        description: "Please select at least one language preference",
+      })
+      return
+    }
+
     setIsLoading(true)
 
     try {
@@ -114,6 +151,8 @@ export function EditRequestModal({ request, open, onOpenChange, onRequestUpdated
         maxSearchAttempts: formData.maxSearchAttempts,
         blacklistedWords: formData.blacklistedWords,
         trustedIndexers: formData.trustedIndexers,
+        // Language applies to all content types, including games
+        preferredLanguages: formData.preferredLanguages,
         // Only include quality/format preferences for movies and TV shows
         ...(isGame ? {} : {
           preferredQualities: formData.preferredQualities,
@@ -202,6 +241,28 @@ export function EditRequestModal({ request, open, onOpenChange, onRequestUpdated
               </div>
             </div>
           )}
+
+          {/* Language Preferences - applies to all content types */}
+          <div className="space-y-3">
+            <Label className="text-base font-medium">Language Preferences</Label>
+            <div className="grid grid-cols-2 gap-3">
+              {LANGUAGE_OPTIONS.map((language) => (
+                <div key={language.value} className="flex items-center space-x-2">
+                  <Checkbox
+                    id={`language-${language.value}`}
+                    checked={formData.preferredLanguages.includes(language.value)}
+                    onCheckedChange={(checked) => handleLanguageChange(language.value, checked as boolean)}
+                  />
+                  <Label htmlFor={`language-${language.value}`} className="text-sm">
+                    {language.label}
+                  </Label>
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Releases without a language tag are treated as English. Multi-language releases always match.
+            </p>
+          </div>
 
           <Separator />
 

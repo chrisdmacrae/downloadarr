@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { TorrentFilterService, FilterCriteria } from './torrent-filter.service';
 import { TorrentResult } from '../interfaces/external-api.interface';
-import { TorrentQuality, TorrentFormat } from '../dto/torrent-search.dto';
+import { TorrentQuality, TorrentFormat, TorrentLanguage } from '../dto/torrent-search.dto';
 
 describe('TorrentFilterService', () => {
   let service: TorrentFilterService;
@@ -139,10 +139,125 @@ describe('TorrentFilterService', () => {
 
       // Should include both 1080p x265 and 4K x265 torrents
       expect(result).toHaveLength(2);
-      
+
       // 4K should be ranked higher due to higher quality score and more seeders
       expect(result[0].title).toContain('4K');
       expect(result[1].title).toContain('1080p');
+    });
+  });
+
+  describe('detectLanguage', () => {
+    it.each([
+      ['Movie.2023.FRENCH.1080p.x265-GRP', 'FRENCH'],
+      ['Movie.2023.TRUEFRENCH.1080p.x265-GRP', 'FRENCH'],
+      ['Movie.2023.VOSTFR.1080p.x265-GRP', 'FRENCH'],
+      ['Show.S01.VFF.1080p.x265-GRP', 'FRENCH'],
+      ['Movie 2023 VF 1080p', 'FRENCH'],
+      ['Movie.2023.MULTi.1080p.x265-GRP', 'MULTI'],
+      ['Game.Title.MULTI12.RePack', 'MULTI'],
+      ['Movie.2023.Dual.Audio.1080p', 'MULTI'],
+      ['Movie.2023.GERMAN.1080p.x265-GRP', 'GERMAN'],
+      ['Movie.2023.ITA.1080p.x265-GRP', 'ITALIAN'],
+      ['Movie.2023.SPANISH.1080p.x265-GRP', 'SPANISH'],
+      ['Movie.2023.LATINO.1080p.x265-GRP', 'SPANISH'],
+      ['Movie.2023.JAPANESE.1080p.x265-GRP', 'JAPANESE'],
+      ['Movie.2023.KOREAN.1080p.x265-GRP', 'KOREAN'],
+      ['Movie.2023.HINDI.1080p.x265-GRP', 'HINDI'],
+      ['Movie.2023.DUBLADO.1080p.x265-GRP', 'PORTUGUESE'],
+      ['Movie.2023.RUS.1080p.x265-GRP', 'RUSSIAN'],
+      ['Movie.2023.DUTCH.1080p.x265-GRP', 'DUTCH'],
+      ['Movie.2023.ENGLISH.1080p.x265-GRP', 'ENGLISH'],
+      ['Movie.2023.ENG.1080p.x265-GRP', 'ENGLISH'],
+    ])('should detect language in "%s" as %s', (title, expected) => {
+      expect(service.detectLanguage(title)).toBe(expected);
+    });
+
+    it.each([
+      // Tokens must not match inside words or common release tags
+      ['Movie.2023.Digital.Remaster.1080p'],
+      ['Movie.2023.1080p.WEB-DL.x265-GRP'],
+      ['Movie.2023.1080p.HDTV.x264-GRP'],
+      ['Movie.2023.1080p.x265-GROUP'],
+    ])('should not detect a language in untagged title "%s"', (title) => {
+      expect(service.detectLanguage(title)).toBeUndefined();
+    });
+  });
+
+  describe('language filtering', () => {
+    const languageTorrents: TorrentResult[] = [
+      {
+        title: 'Movie.2023.1080p.x265-GROUP', // untagged - counts as English
+        size: '2.5GB',
+        seeders: 100,
+        leechers: 10,
+        link: 'magnet:untagged',
+        indexer: '1337x',
+        publishDate: '2023-01-01T00:00:00Z',
+        category: 'Movies/HD',
+      },
+      {
+        title: 'Movie.2023.FRENCH.1080p.x265-GROUP',
+        size: '2.5GB',
+        seeders: 100,
+        leechers: 10,
+        link: 'magnet:french',
+        indexer: '1337x',
+        publishDate: '2023-01-01T00:00:00Z',
+        category: 'Movies/HD',
+      },
+      {
+        title: 'Movie.2023.MULTi.1080p.x265-GROUP',
+        size: '2.5GB',
+        seeders: 100,
+        leechers: 10,
+        link: 'magnet:multi',
+        indexer: '1337x',
+        publishDate: '2023-01-01T00:00:00Z',
+        category: 'Movies/HD',
+      },
+    ];
+
+    it('should keep untagged and MULTI but reject foreign tags for English requests', () => {
+      const criteria: FilterCriteria = {
+        preferredLanguages: [TorrentLanguage.ENGLISH],
+      };
+
+      const result = service.filterAndRankTorrents(languageTorrents, criteria);
+
+      expect(result).toHaveLength(2);
+      expect(result.some(t => t.link === 'magnet:untagged')).toBe(true);
+      expect(result.some(t => t.link === 'magnet:multi')).toBe(true);
+      expect(result.some(t => t.link === 'magnet:french')).toBe(false);
+    });
+
+    it('should reject untagged (English-by-default) torrents for non-English requests', () => {
+      const criteria: FilterCriteria = {
+        preferredLanguages: [TorrentLanguage.FRENCH],
+      };
+
+      const result = service.filterAndRankTorrents(languageTorrents, criteria);
+
+      expect(result).toHaveLength(2);
+      expect(result.some(t => t.link === 'magnet:french')).toBe(true);
+      expect(result.some(t => t.link === 'magnet:multi')).toBe(true);
+      expect(result.some(t => t.link === 'magnet:untagged')).toBe(false);
+    });
+
+    it('should not filter by language when no languages are specified', () => {
+      const result = service.filterAndRankTorrents(languageTorrents, {});
+
+      expect(result).toHaveLength(3);
+    });
+
+    it('should rank an exact language tag above an equivalent MULTI release', () => {
+      const criteria: FilterCriteria = {
+        preferredLanguages: [TorrentLanguage.FRENCH],
+      };
+
+      const result = service.filterAndRankTorrents(languageTorrents, criteria);
+
+      expect(result[0].link).toBe('magnet:french');
+      expect(result[1].link).toBe('magnet:multi');
     });
   });
 });

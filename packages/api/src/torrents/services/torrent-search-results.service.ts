@@ -21,6 +21,7 @@ export interface CreateSearchResultDto {
   publishDate: string;
   quality?: string;
   format?: string;
+  language?: string;
   rankingScore?: number;
   isAutoSelected?: boolean;
 }
@@ -54,6 +55,7 @@ export class TorrentSearchResultsService {
         publishDate: torrent.publishDate,
         quality: torrent.quality,
         format: torrent.format,
+        language: torrent.language,
         rankingScore: rankingScores[index] || 0,
         isAutoSelected: false,
         requestedTorrent: {

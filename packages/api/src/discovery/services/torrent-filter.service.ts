@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { TorrentResult } from '../interfaces/external-api.interface';
-import { TorrentQuality, TorrentFormat } from '../dto/torrent-search.dto';
+import { TorrentQuality, TorrentFormat, TorrentLanguage } from '../dto/torrent-search.dto';
 
 export interface TorrentScore {
   torrent: TorrentResult;
@@ -13,6 +13,7 @@ export interface FilterCriteria {
   maxSize?: string;
   preferredQualities?: (TorrentQuality | string)[];
   preferredFormats?: (TorrentFormat | string)[];
+  preferredLanguages?: (TorrentLanguage | string)[];
   blacklistedWords?: string[];
   trustedIndexers?: string[];
 }
@@ -41,6 +42,27 @@ export class TorrentFilterService {
     'XviD': 40,
     'DivX': 30,
   };
+
+  // Language detection tokens (scene naming conventions). Order matters:
+  // MULTI is checked first, ENGLISH last. Tokens are regex fragments matched
+  // only between title delimiters so short tags like "ita" or "vf" don't
+  // match inside words (e.g. "Digital"). Bare "fr", "nl", "es", "vo", "dl"
+  // are deliberately excluded ("dl" collides with WEB-DL).
+  private readonly languageTokens: Array<{ language: string; tokens: string[] }> = [
+    { language: 'MULTI', tokens: ['multi\\d*', 'dual[\\s._-]?audio'] },
+    { language: 'FRENCH', tokens: ['french', 'truefrench', 'vf', 'vff', 'vfq', 'vfi', 'vostfr'] },
+    { language: 'GERMAN', tokens: ['german', 'deutsch', 'ger'] },
+    { language: 'SPANISH', tokens: ['spanish', 'castellano', 'latino', 'esp'] },
+    { language: 'ITALIAN', tokens: ['italian', 'ita'] },
+    { language: 'JAPANESE', tokens: ['japanese', 'jpn', 'jap'] },
+    { language: 'KOREAN', tokens: ['korean', 'kor'] },
+    { language: 'CHINESE', tokens: ['chinese', 'mandarin', 'cantonese', 'chs', 'cht'] },
+    { language: 'HINDI', tokens: ['hindi', 'hin'] },
+    { language: 'PORTUGUESE', tokens: ['portuguese', 'dublado', 'pt-br', 'ptbr'] },
+    { language: 'RUSSIAN', tokens: ['russian', 'rus'] },
+    { language: 'DUTCH', tokens: ['dutch', 'flemish'] },
+    { language: 'ENGLISH', tokens: ['english', 'eng'] },
+  ];
 
   // Trusted indexers (higher score)
   private readonly trustedIndexers: string[] = [
@@ -148,6 +170,24 @@ export class TorrentFilterService {
         }
       }
 
+      // Preferred languages filter (hard filter - untagged titles count as English,
+      // MULTI releases pass for any language)
+      if (criteria.preferredLanguages && criteria.preferredLanguages.length > 0) {
+        const detectedLanguage = this.detectLanguage(torrent.title) ?? 'ENGLISH';
+
+        if (detectedLanguage !== 'MULTI') {
+          const hasAcceptedLanguage = criteria.preferredLanguages.some(pl =>
+            String(pl).toUpperCase() === detectedLanguage
+          );
+
+          if (!hasAcceptedLanguage) {
+            rejectionReasons['unacceptedLanguage'] = (rejectionReasons['unacceptedLanguage'] || 0) + 1;
+            this.logger.debug(`Rejected torrent "${torrent.title}" - detected language "${detectedLanguage}" not in accepted list: [${criteria.preferredLanguages.join(', ')}]`);
+            return false;
+          }
+        }
+      }
+
       return true;
     });
 
@@ -183,6 +223,13 @@ export class TorrentFilterService {
       score += formatScore;
       if (formatScore > 0) {
         reasons.push(`Format: +${formatScore}`);
+      }
+
+      // Language scoring
+      const languageScore = this.getLanguageScore(torrent, criteria.preferredLanguages);
+      score += languageScore;
+      if (languageScore > 0) {
+        reasons.push(`Language: +${languageScore}`);
       }
 
       // Indexer trust scoring
@@ -258,6 +305,24 @@ export class TorrentFilterService {
     return Math.round(baseScore);
   }
 
+  private getLanguageScore(torrent: TorrentResult, preferredLanguages?: (TorrentLanguage | string)[]): number {
+    if (!preferredLanguages || preferredLanguages.length === 0) return 0;
+
+    const detectedLanguage = this.detectLanguage(torrent.title);
+
+    // MULTI releases pass any language filter but rank below exact tags
+    if (detectedLanguage === 'MULTI') return 10;
+
+    const isPreferred = preferredLanguages.some(pl =>
+      String(pl).toUpperCase() === (detectedLanguage ?? 'ENGLISH')
+    );
+    // Note: No penalty for non-preferred since hard filtering already rejected those
+    if (!isPreferred) return 0;
+
+    // Explicit tag match beats the untagged-counts-as-English default
+    return detectedLanguage ? 25 : 15;
+  }
+
   private getIndexerScore(torrent: TorrentResult, trustedIndexers?: string[]): number {
     const indexersToCheck = trustedIndexers || this.trustedIndexers;
     
@@ -326,6 +391,21 @@ export class TorrentFilterService {
     if (titleLower.includes('x264') || titleLower.includes('h264') || titleLower.includes('h.264')) return 'x264';
     if (titleLower.includes('xvid')) return 'XviD';
     if (titleLower.includes('divx')) return 'DivX';
+
+    return undefined;
+  }
+
+  detectLanguage(title: string): string | undefined {
+    for (const { language, tokens } of this.languageTokens) {
+      for (const token of tokens) {
+        // Tokens must be bounded by title delimiters (dot/space/dash/brackets)
+        // or the start/end of the title
+        const pattern = new RegExp(`(?:^|[\\s._\\-\\[\\(])(?:${token})(?:$|[\\s._\\-\\]\\)])`, 'i');
+        if (pattern.test(title)) {
+          return language;
+        }
+      }
+    }
 
     return undefined;
   }

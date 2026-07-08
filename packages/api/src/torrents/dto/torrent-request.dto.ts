@@ -1,7 +1,7 @@
 import { IsString, IsOptional, IsArray, IsNumber, IsEnum, Min, Max, IsInt, IsBoolean } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
-import { TorrentQuality, TorrentFormat, RequestStatus } from '../../../generated/prisma';
+import { TorrentQuality, TorrentFormat, TorrentLanguage, RequestStatus } from '../../../generated/prisma';
 
 export class CreateTorrentRequestDto {
   @ApiProperty({
@@ -137,6 +137,17 @@ export class CreateTorrentRequestDto {
   preferredFormats?: TorrentFormat[];
 
   @ApiPropertyOptional({
+    description: 'Preferred languages',
+    enum: TorrentLanguage,
+    isArray: true,
+    example: [TorrentLanguage.ENGLISH],
+  })
+  @IsOptional()
+  @IsArray()
+  @IsEnum(TorrentLanguage, { each: true })
+  preferredLanguages?: TorrentLanguage[];
+
+  @ApiPropertyOptional({
     description: 'Minimum number of seeders required',
     minimum: 0,
     default: 5,
@@ -253,6 +264,16 @@ export class UpdateTorrentRequestDto {
   @IsArray()
   @IsEnum(TorrentFormat, { each: true })
   preferredFormats?: TorrentFormat[];
+
+  @ApiPropertyOptional({
+    description: 'Update preferred languages',
+    enum: TorrentLanguage,
+    isArray: true,
+  })
+  @IsOptional()
+  @IsArray()
+  @IsEnum(TorrentLanguage, { each: true })
+  preferredLanguages?: TorrentLanguage[];
 
   @ApiPropertyOptional({
     description: 'Update minimum number of seeders required',

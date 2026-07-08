@@ -1,6 +1,6 @@
 import { Injectable, Logger, NotFoundException, Inject, forwardRef } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
-import { ContentType, RequestStatus, TorrentQuality, TorrentFormat, RequestedTorrent } from '../../../generated/prisma';
+import { ContentType, RequestStatus, TorrentQuality, TorrentFormat, TorrentLanguage, RequestedTorrent } from '../../../generated/prisma';
 import { CreateTorrentRequestDto, UpdateTorrentRequestDto } from '../dto/torrent-request.dto';
 import { TvShowSeasonQueryDto, TvShowEpisodeQueryDto } from '../dto/tv-show-season.dto';
 import { TvShowMetadataService } from './tv-show-metadata.service';
@@ -44,6 +44,7 @@ export class RequestedTorrentsService {
         tmdbId: dto.tmdbId,
         preferredQualities: dto.preferredQualities || [TorrentQuality.HD_1080P],
         preferredFormats: dto.preferredFormats || [TorrentFormat.X265],
+        preferredLanguages: dto.preferredLanguages || [TorrentLanguage.ENGLISH],
         minSeeders: dto.minSeeders || 5,
         maxSizeGB: dto.maxSizeGB || 20,
         blacklistedWords: dto.blacklistedWords || [],
@@ -103,6 +104,7 @@ export class RequestedTorrentsService {
         tmdbId: dto.tmdbId,
         preferredQualities: dto.preferredQualities || [TorrentQuality.HD_1080P],
         preferredFormats: dto.preferredFormats || [TorrentFormat.X265],
+        preferredLanguages: dto.preferredLanguages || [TorrentLanguage.ENGLISH],
         minSeeders: dto.minSeeders || 5,
         maxSizeGB: dto.maxSizeGB || 15, // Smaller default for TV shows
         blacklistedWords: dto.blacklistedWords || [],
@@ -156,6 +158,7 @@ export class RequestedTorrentsService {
         genre: dto.genre,
         preferredQualities: dto.preferredQualities || [TorrentQuality.HD_1080P],
         preferredFormats: dto.preferredFormats || [TorrentFormat.X265],
+        preferredLanguages: dto.preferredLanguages || [TorrentLanguage.ENGLISH],
         minSeeders: dto.minSeeders || 5,
         maxSizeGB: dto.maxSizeGB || 50, // Larger default for games
         blacklistedWords: dto.blacklistedWords || [],

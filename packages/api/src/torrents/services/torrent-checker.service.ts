@@ -242,6 +242,7 @@ export class TorrentCheckerService {
           maxSize: `${request.maxSizeGB}GB`,
           quality: request.preferredQualities as any,
           format: request.preferredFormats as any,
+          language: request.preferredLanguages as any,
           limit: 50,
         });
       } else if (request.contentType === ContentType.TV_SHOW) {
@@ -255,6 +256,7 @@ export class TorrentCheckerService {
           maxSize: `${request.maxSizeGB}GB`,
           quality: request.preferredQualities as any,
           format: request.preferredFormats as any,
+          language: request.preferredLanguages as any,
           limit: 50,
         });
       } else if (request.contentType === ContentType.GAME) {
@@ -268,6 +270,7 @@ export class TorrentCheckerService {
           indexers: request.trustedIndexers.length > 0 ? request.trustedIndexers : undefined,
           minSeeders: request.minSeeders,
           maxSize: `${request.maxSizeGB}GB`,
+          language: request.preferredLanguages as any,
           limit: 50,
         });
       }
@@ -285,6 +288,7 @@ export class TorrentCheckerService {
         maxSize: `${request.maxSizeGB}GB`,
         preferredQualities: request.preferredQualities as any,
         preferredFormats: request.preferredFormats as any,
+        preferredLanguages: request.preferredLanguages as any,
         blacklistedWords: request.blacklistedWords,
         trustedIndexers: request.trustedIndexers,
       };

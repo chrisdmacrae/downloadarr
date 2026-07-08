@@ -231,8 +231,8 @@ export function TorrentSelectionModal({
                         </div>
                       </div>
 
-                      {/* Quality and Format Badges */}
-                      {(result.quality || result.format) && (
+                      {/* Quality, Format and Language Badges */}
+                      {(result.quality || result.format || result.language) && (
                         <div className="flex gap-2">
                           {result.quality && (
                             <Badge variant={getQualityColor(result.quality)} className="text-xs">
@@ -242,6 +242,11 @@ export function TorrentSelectionModal({
                           {result.format && (
                             <Badge variant="outline" className="text-xs">
                               {result.format}
+                            </Badge>
+                          )}
+                          {result.language && (
+                            <Badge variant="outline" className="text-xs">
+                              {result.language}
                             </Badge>
                           )}
                         </div>

@@ -59,6 +59,7 @@ export class TorrentsController {
         maxSize: searchDto.maxSize,
         quality: searchDto.quality,
         format: searchDto.format,
+        language: searchDto.language,
       };
 
       const result = await this.jackettService.searchTorrents(searchParams);

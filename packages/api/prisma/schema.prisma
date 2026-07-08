@@ -30,6 +30,7 @@ model RequestedTorrent {
   priority           Int                @default(5)
   preferredQualities TorrentQuality[]
   preferredFormats   TorrentFormat[]
+  preferredLanguages TorrentLanguage[]
   minSeeders         Int                @default(5)
   maxSizeGB          Int                @default(20)
   blacklistedWords   String[]           @default([])
@@ -92,6 +93,7 @@ model TorrentSearchResult {
   publishDate        String
   quality            String?
   format             String?
+  language           String?
   rankingScore       Float            @default(0)
   isSelected         Boolean          @default(false)
   isAutoSelected     Boolean          @default(false)
@@ -259,6 +261,22 @@ enum TorrentFormat {
   DIVX
   AV1
   HEVC
+}
+
+enum TorrentLanguage {
+  ENGLISH
+  FRENCH
+  GERMAN
+  SPANISH
+  ITALIAN
+  JAPANESE
+  KOREAN
+  CHINESE
+  HINDI
+  PORTUGUESE
+  RUSSIAN
+  DUTCH
+  MULTI
 }
 
 enum SeasonStatus {

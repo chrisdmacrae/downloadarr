@@ -336,6 +336,7 @@ export default function Requests() {
         status: request.status as any, // Cast status to TorrentRequest status type
         preferredQualities: [],
         preferredFormats: [],
+        preferredLanguages: [],
         minSeeders: 0,
         maxSizeGB: 0,
         isOngoing: false,

@@ -84,6 +84,7 @@ export interface TorrentResult {
   publishDate: string;
   quality?: string;
   format?: string;
+  language?: string;
 }
 
 export interface TorrentSearchParams {
@@ -95,6 +96,7 @@ export interface TorrentSearchParams {
   maxSize?: string;
   quality?: string[];
   format?: string[];
+  language?: string[];
 }
 
 export interface JackettSearchResponse {

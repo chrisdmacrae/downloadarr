@@ -284,6 +284,7 @@ export interface TorrentRequest {
   priority: number;
   preferredQualities: string[];
   preferredFormats: string[];
+  preferredLanguages: string[];
   minSeeders: number;
   maxSizeGB: number;
   searchAttempts: number;
@@ -432,6 +433,7 @@ export interface TorrentSearchResult {
   publishDate: string;
   quality?: string;
   format?: string;
+  language?: string;
   rankingScore: number;
   isSelected: boolean;
   isAutoSelected: boolean;
@@ -452,6 +454,7 @@ export interface TorrentResult {
   publishDate: string;
   quality?: string;
   format?: string;
+  language?: string;
   rankingScore: number;
 }
 
@@ -472,6 +475,7 @@ export interface CreateTorrentRequestDto {
   genre?: string;
   preferredQualities?: string[];
   preferredFormats?: string[];
+  preferredLanguages?: string[];
   minSeeders?: number;
   maxSizeGB?: number;
   priority?: number;
@@ -484,6 +488,7 @@ export interface CreateTorrentRequestDto {
 export interface UpdateTorrentRequestDto {
   preferredQualities?: string[];
   preferredFormats?: string[];
+  preferredLanguages?: string[];
   minSeeders?: number;
   maxSizeGB?: number;
   priority?: number;

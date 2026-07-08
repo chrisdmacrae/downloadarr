@@ -19,6 +19,22 @@ export enum TorrentFormat {
   HEVC = 'HEVC',
 }
 
+export enum TorrentLanguage {
+  ENGLISH = 'ENGLISH',
+  FRENCH = 'FRENCH',
+  GERMAN = 'GERMAN',
+  SPANISH = 'SPANISH',
+  ITALIAN = 'ITALIAN',
+  JAPANESE = 'JAPANESE',
+  KOREAN = 'KOREAN',
+  CHINESE = 'CHINESE',
+  HINDI = 'HINDI',
+  PORTUGUESE = 'PORTUGUESE',
+  RUSSIAN = 'RUSSIAN',
+  DUTCH = 'DUTCH',
+  MULTI = 'MULTI',
+}
+
 export enum TorrentCategory {
   MOVIES = 'Movies',
   TV = 'TV',
@@ -98,6 +114,17 @@ export class TorrentSearchDto {
   @IsArray()
   @IsEnum(TorrentFormat, { each: true })
   format?: TorrentFormat[];
+
+  @ApiPropertyOptional({
+    description: 'Preferred languages',
+    enum: TorrentLanguage,
+    isArray: true,
+    example: [TorrentLanguage.ENGLISH],
+  })
+  @IsOptional()
+  @IsArray()
+  @IsEnum(TorrentLanguage, { each: true })
+  language?: TorrentLanguage[];
 
   @ApiPropertyOptional({
     description: 'Number of results to return',

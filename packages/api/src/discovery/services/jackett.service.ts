@@ -97,6 +97,7 @@ export class JackettService extends BaseExternalApiService {
         maxSize: searchParams.maxSize,
         preferredQualities: searchParams.quality,
         preferredFormats: searchParams.format,
+        preferredLanguages: searchParams.language,
       };
 
       const filteredTorrents = this.torrentFilterService.filterAndRankTorrents(rawTorrents, filterCriteria);
@@ -123,6 +124,7 @@ export class JackettService extends BaseExternalApiService {
       maxSize: searchDto.maxSize,
       quality: searchDto.quality,
       format: searchDto.format,
+      language: searchDto.language,
     };
 
     return this.searchTorrents(searchParams);
@@ -137,6 +139,7 @@ export class JackettService extends BaseExternalApiService {
       maxSize: searchDto.maxSize,
       quality: searchDto.quality,
       format: searchDto.format,
+      language: searchDto.language,
     };
 
     return this.searchTorrents(searchParams);
@@ -166,6 +169,7 @@ export class JackettService extends BaseExternalApiService {
       indexers: searchDto.indexers,
       minSeeders: searchDto.minSeeders,
       maxSize: searchDto.maxSize,
+      language: searchDto.language,
     };
 
     return this.searchTorrents(searchParams);
@@ -284,6 +288,7 @@ export class JackettService extends BaseExternalApiService {
       publishDate: jackettTorrent.PublishDate,
       quality: this.extractQuality(jackettTorrent.Title),
       format: this.extractFormat(jackettTorrent.Title),
+      language: this.torrentFilterService.detectLanguage(jackettTorrent.Title),
     };
   }
 

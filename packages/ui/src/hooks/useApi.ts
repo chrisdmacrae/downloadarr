@@ -155,7 +155,7 @@ export const useCancelDownload = () => {
       // Return a context object with the snapshotted value
       return { previousDownloads, previousActiveDownloads };
     },
-    onError: (err, downloadId, context) => {
+    onError: (_err, _downloadId, context) => {
       // If the mutation fails, use the context returned from onMutate to roll back
       if (context?.previousDownloads) {
         queryClient.setQueryData(queryKeys.downloads, context.previousDownloads);
