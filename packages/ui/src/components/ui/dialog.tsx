@@ -44,7 +44,8 @@ const DialogContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        "fixed left-1/2 top-1/2 z-50 flex max-h-[88vh] w-[calc(100vw-48px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-overlay border border-subtle bg-surface-overlay text-fg-body shadow-4",
+        "fixed left-1/2 top-1/2 z-50 flex max-h-[88vh] w-[calc(100vw-48px)] -translate-x-1/2 -translate-y-1/2 flex-col gap-4 overflow-y-auto rounded-overlay border border-subtle bg-surface-overlay px-8 py-7 text-fg-body shadow-4",
+        "max-sm:px-5 max-sm:py-5",
         "duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
         size === "sm" && "max-w-[420px]",
         size === "md" && "max-w-[620px]",
@@ -69,7 +70,7 @@ const DialogHeader = ({
   ...props
 }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
-    className={cn("flex shrink-0 flex-col gap-1.5 px-8 pb-1 pt-7 pr-14", className)}
+    className={cn("flex shrink-0 flex-col gap-1.5 pr-10", className)}
     {...props}
   />
 )
@@ -80,7 +81,7 @@ const DialogBody = ({
   className,
   ...props
 }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn("min-h-0 flex-1 overflow-y-auto px-8 pb-8 pt-5", className)} {...props} />
+  <div className={cn("-mx-8 min-h-0 flex-1 overflow-y-auto px-8 max-sm:-mx-5 max-sm:px-5", className)} {...props} />
 )
 DialogBody.displayName = "DialogBody"
 
@@ -90,7 +91,8 @@ const DialogFooter = ({
 }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
     className={cn(
-      "flex shrink-0 flex-col-reverse gap-2.5 border-t border-hairline bg-surface-1 px-8 py-[18px] sm:flex-row sm:items-center sm:justify-end",
+      "-mx-8 -mb-7 mt-auto flex shrink-0 flex-col-reverse gap-2.5 border-t border-hairline bg-surface-1 px-8 py-[18px] sm:flex-row sm:items-center sm:justify-end",
+      "max-sm:-mx-5 max-sm:-mb-5 max-sm:px-5",
       className
     )}
     {...props}

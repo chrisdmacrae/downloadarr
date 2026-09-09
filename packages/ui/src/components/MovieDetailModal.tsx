@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -26,6 +26,13 @@ export function MovieDetailModal({ contentType, contentId, title, open, onOpenCh
   const [showDownloadModal, setShowDownloadModal] = useState(false)
   const [showTorrentSearchModal, setShowTorrentSearchModal] = useState(false)
   const { toast } = useToast()
+
+  // Memoized so its identity is stable across renders; TorrentSearchModal keys
+  // its one-shot auto-search off this prop.
+  const torrentSearchItem = useMemo(
+    () => (movieDetails ? { ...movieDetails, type: contentType } : null),
+    [movieDetails, contentType]
+  )
   const createDownloadMutation = useCreateDownload()
   const { getRequestForItem, getRequestForShow, refreshRequests, requests } = useTorrentRequests()
 
@@ -306,7 +313,7 @@ export function MovieDetailModal({ contentType, contentId, title, open, onOpenCh
 
       {/* Torrent Search Modal */}
       <TorrentSearchModal
-        searchItem={movieDetails ? { ...movieDetails, type: contentType } : null}
+        searchItem={torrentSearchItem}
         isOpen={showTorrentSearchModal}
         onClose={() => setShowTorrentSearchModal(false)}
         onTorrentDownload={async (torrent) => {

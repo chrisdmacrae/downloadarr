@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -91,32 +91,49 @@ export function TorrentSearchModal({
     }
   }, [isOpen, isGame, platformOptions.length, toast])
 
+  // Which item we have already auto-searched for, so opening the modal runs
+  // exactly one search and everything after that is user-driven. Callers pass
+  // `searchItem` as a fresh object literal on every render, so this must key
+  // off stable identity rather than the object itself.
+  const autoSearchedFor = useRef<string | null>(null)
+
   useEffect(() => {
-    if (isOpen && searchItem) {
-      // Initialize search query - for games, don't include year as it makes searches too specific
-      const initialQuery = isGame
-        ? searchItem.title
-        : searchItem.year
-        ? `${searchItem.title} ${searchItem.year}`
-        : searchItem.title
-      setSearchQuery(initialQuery)
-
-      // Reset filters
-      setMinSeeders(isGame ? 1 : 5)
-      setMaxSize('')
-      setQuality('')
-      setFormat('')
-      setPlatform('any')
-      setGenre('any')
-
-      // Auto-search when modal opens
-      performSearch(initialQuery)
-    } else if (!isOpen) {
-      // Reset state when modal closes
+    if (!isOpen) {
+      // Reset state when the modal closes.
+      autoSearchedFor.current = null
       setSearchResults([])
       setError(null)
+      return
     }
-  }, [isOpen, searchItem])
+
+    if (!searchItem) return
+
+    const itemKey = `${searchItem.type}:${searchItem.id}`
+    if (autoSearchedFor.current === itemKey) return
+    autoSearchedFor.current = itemKey
+
+    // Initialize search query - for games, don't include year as it makes searches too specific
+    const initialQuery = isGame
+      ? searchItem.title
+      : searchItem.year
+      ? `${searchItem.title} ${searchItem.year}`
+      : searchItem.title
+    setSearchQuery(initialQuery)
+
+    // Reset filters
+    setMinSeeders(isGame ? 1 : 5)
+    setMaxSize('')
+    setQuality('')
+    setFormat('')
+    setPlatform('any')
+    setGenre('any')
+
+    // One search on open; the user drives every search after this.
+    performSearch(initialQuery)
+    // performSearch is intentionally omitted: it is redefined every render and
+    // would retrigger this effect on each one.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, searchItem?.id, searchItem?.type, isGame])
 
   const performSearch = async (query?: string) => {
     const searchTerm = query || searchQuery

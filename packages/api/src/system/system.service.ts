@@ -49,8 +49,11 @@ export class SystemService {
       const latestVersion = release.tag_name.replace(/^v/, ''); // Remove 'v' prefix if present
       const currentVersion = this.CURRENT_VERSION;
 
-      // If current version is "latest", always show update available
-      const updateAvailable = currentVersion === 'latest' || this.isNewerVersion(latestVersion, currentVersion);
+      // `latest` is a rolling tag: the image already tracks the newest release,
+      // and there is no version to compare against, so there is nothing to
+      // prompt for. Only a pinned version can be behind.
+      const isRollingTag = currentVersion === 'latest' || currentVersion === 'edge';
+      const updateAvailable = !isRollingTag && this.isNewerVersion(latestVersion, currentVersion);
       const vpnEnabled = this.configService.get<string>('VPN_ENABLED', 'false') === 'true';
 
       const updateCommand = this.getUpdateCommand(vpnEnabled);
