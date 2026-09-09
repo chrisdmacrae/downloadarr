@@ -15,6 +15,7 @@ import { TorrentPreferencesService } from './services/torrent-preferences.servic
 // Controllers
 import { MoviesController } from './controllers/movies.controller';
 import { TvShowsController } from './controllers/tv-shows.controller';
+import { AnimeController } from './controllers/anime.controller';
 import { GamesController } from './controllers/games.controller';
 import { TorrentsController } from './controllers/torrents.controller';
 import { TorrentPreferencesController } from './controllers/torrent-preferences.controller';
@@ -40,6 +41,7 @@ import { TorrentPreferencesController } from './controllers/torrent-preferences.
   controllers: [
     MoviesController,
     TvShowsController,
+    AnimeController,
     GamesController,
     TorrentsController,
     TorrentPreferencesController,

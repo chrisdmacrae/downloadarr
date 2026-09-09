@@ -28,7 +28,7 @@ interface DiscoveryScreenProps {
   description: string
   searchPlaceholder: string
   /** Tab id used when handing a query to /search. */
-  searchTab: 'movies' | 'tv' | 'games'
+  searchTab: 'movies' | 'tv' | 'anime' | 'games'
   featured: SearchResult[]
   popular: SearchResult[]
   popularTitle: string

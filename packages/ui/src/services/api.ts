@@ -678,7 +678,34 @@ export const apiService = {
     return response.data;
   },
 
-  // Games
+  // Games  // Anime discovery. Anime are TV series that TMDB does not model as their own
+  // genre, so these mirror the TV endpoints with the anime filter applied.
+  searchAnime: async (query: string, year?: number, page?: number): Promise<{ success: boolean; data?: SearchResult[]; error?: string }> => {
+    const params = new URLSearchParams({ query });
+    if (year) params.append('year', year.toString());
+    if (page) params.append('page', page.toString());
+    const response = await api.get(`/anime/search?${params}`);
+    return response.data;
+  },
+
+  getPopularAnime: async (page?: number): Promise<{ success: boolean; data?: SearchResult[]; error?: string }> => {
+    const params = page ? `?page=${page}` : '';
+    const response = await api.get(`/anime/popular${params}`);
+    return response.data;
+  },
+
+  getAnimeGenres: async (): Promise<{ success: boolean; data?: Array<{ id: number; name: string }>; error?: string }> => {
+    const response = await api.get('/anime/genres/list');
+    return response.data;
+  },
+
+  getAnimeByGenre: async (genreId: number, page?: number): Promise<{ success: boolean; data?: SearchResult[]; error?: string }> => {
+    const params = page ? `?page=${page}` : '';
+    const response = await api.get(`/anime/genres/${genreId}${params}`);
+    return response.data;
+  },
+
+
   searchGames: async (query: string, limit?: number): Promise<{ success: boolean; data?: SearchResult[]; error?: string }> => {
     const params = new URLSearchParams({ query });
     if (limit) params.append('limit', limit.toString());

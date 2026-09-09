@@ -9,6 +9,7 @@ import {
   List,
   Search,
   Settings as SettingsIcon,
+  Sparkles,
   ShieldCheck,
   ShieldOff,
   Tv,
@@ -33,6 +34,7 @@ const DISCOVERY: NavItem[] = [
   { name: 'Search', href: '/search', icon: Search },
   { name: 'Movies', href: '/movies', icon: Film },
   { name: 'TV shows', href: '/tv-shows', icon: Tv },
+  { name: 'Anime', href: '/anime', icon: Sparkles },
   { name: 'Games', href: '/games', icon: Gamepad2 },
 ]
 
@@ -86,9 +88,11 @@ interface TopNavProps {
 }
 
 /**
- * A 64px sticky glass bar; artwork runs full width beneath it. Below 1240px
+ * A 64px sticky glass bar; artwork runs full width beneath it. Below 1600px
  * the bar wraps so nav links get their own full-width row and the speed pill
- * hides; below 1040px both status pills hide.
+ * hides; below 1040px both status pills hide. (The spec set the wrap at
+ * 1240px for five destinations; a sixth no longer fits beside the right
+ * cluster, and wrapping beats scrolling links out of reach.)
  */
 export function TopNav({ subnav, onAddUrl }: TopNavProps) {
   const navigate = useNavigate()
@@ -111,14 +115,14 @@ export function TopNav({ subnav, onAddUrl }: TopNavProps) {
 
   return (
     <header className="sticky top-0 z-30 flex flex-col border-b border-hairline glass">
-      <div className="flex h-topbar items-center gap-[22px] px-gutter max-[1240px]:h-auto max-[1240px]:flex-wrap max-[1240px]:gap-3 max-[1240px]:py-2.5">
+      <div className="flex h-topbar items-center gap-[22px] px-gutter max-[1600px]:h-auto max-[1600px]:flex-wrap max-[1600px]:gap-3 max-[1600px]:py-2.5">
         <Link to="/" className="rounded-sm focus-visible:outline-none focus-visible:shadow-focus">
           <Wordmark />
         </Link>
 
         <nav
           aria-label="Primary"
-          className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto scrollbar-hide max-[1240px]:order-3 max-[1240px]:w-full max-[1240px]:flex-[1_0_100%]"
+          className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto scrollbar-hide max-[1600px]:order-3 max-[1600px]:w-full max-[1600px]:flex-[1_0_100%]"
         >
           {DISCOVERY.map((item) => (
             <NavLink key={item.href} item={item} />
@@ -158,7 +162,7 @@ export function TopNav({ subnav, onAddUrl }: TopNavProps) {
             {vpnStatus?.enabled ? (vpnStatus.connected ? 'VPN on' : 'VPN off') : 'No VPN'}
           </span>
 
-          <span className="inline-flex h-[30px] shrink-0 items-center gap-[7px] rounded-pill bg-white/[.05] px-2.5 font-mono text-xs font-medium text-fg-body max-[1240px]:hidden">
+          <span className="inline-flex h-[30px] shrink-0 items-center gap-[7px] rounded-pill bg-white/[.05] px-2.5 font-mono text-xs font-medium text-fg-body max-[1600px]:hidden">
             <Download className="h-3.5 w-3.5 text-fg-muted" />
             {speed ?? '—'}
           </span>

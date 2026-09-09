@@ -285,9 +285,11 @@ export class TmdbService extends BaseExternalApiService {
       }
 
       const genreNames = await this.getGenreNameMap('tv');
-      const searchResults: SearchResult[] = response.data.results.map(item =>
-        this.mapTvItem(item, genreNames),
-      );
+      // Anime has its own destination, so it is excluded here. Pages come back
+      // slightly shorter as a result; TMDB has no "exclude by origin" filter.
+      const searchResults: SearchResult[] = response.data.results
+        .filter(item => !this.isAnime(item))
+        .map(item => this.mapTvItem(item, genreNames));
 
       return {
         success: true,
@@ -377,9 +379,11 @@ export class TmdbService extends BaseExternalApiService {
       }
 
       const genreNames = await this.getGenreNameMap('tv');
-      const searchResults: SearchResult[] = response.data.results.map(item =>
-        this.mapTvItem(item, genreNames),
-      );
+      // Anime has its own destination, so it is excluded here. Pages come back
+      // slightly shorter as a result; TMDB has no "exclude by origin" filter.
+      const searchResults: SearchResult[] = response.data.results
+        .filter(item => !this.isAnime(item))
+        .map(item => this.mapTvItem(item, genreNames));
 
       return {
         success: true,
@@ -450,6 +454,26 @@ export class TmdbService extends BaseExternalApiService {
   private resolveGenreNames(ids: number[] | undefined, names: Map<number, string>): string[] | undefined {
     const resolved = (ids || []).map(id => names.get(id)).filter((name): name is string => !!name);
     return resolved.length ? resolved : undefined;
+  }
+
+  /**
+   * TMDB has no "anime" genre, so anime is identified the way the wider
+   * ecosystem does: animation produced in Japan. Discover queries can express
+   * that server-side; results from endpoints that cannot (search, /tv/popular)
+   * are classified with the same rule client-side so the two agree.
+   */
+  private static readonly ANIMATION_GENRE_ID = 16;
+  private static readonly ANIME_LANGUAGE = 'ja';
+
+  private isAnime(item: TmdbTvShowItem): boolean {
+    const isAnimated = (item.genre_ids || []).includes(TmdbService.ANIMATION_GENRE_ID);
+    if (!isAnimated) {
+      return false;
+    }
+    return (
+      item.original_language === TmdbService.ANIME_LANGUAGE ||
+      (item.origin_country || []).includes('JP')
+    );
   }
 
   private mapMovieItem(item: TmdbMovieItem, genreNames: Map<number, string>): SearchResult {
@@ -540,6 +564,107 @@ export class TmdbService extends BaseExternalApiService {
     }
   }
 
+  /**
+   * Anime discovery. `/discover/tv` can express "animation, made in Japan"
+   * server-side, so these results need no further filtering.
+   */
+  private animeDiscoverParams(page: number): Record<string, string> {
+    return {
+      with_genres: TmdbService.ANIMATION_GENRE_ID.toString(),
+      with_original_language: TmdbService.ANIME_LANGUAGE,
+      page: page.toString(),
+      sort_by: 'popularity.desc',
+      include_adult: 'false',
+    };
+  }
+
+  async getPopularAnime(page: number = 1): Promise<ExternalApiResponse<SearchResult[]>> {
+    try {
+      const response = await this.makeRequest<TmdbSearchResponse>(
+        '/discover/tv',
+        this.animeDiscoverParams(page),
+      );
+
+      if (!response.success || !response.data) {
+        return { success: false, error: response.error };
+      }
+
+      const genreNames = await this.getGenreNameMap('tv');
+      const searchResults: SearchResult[] = response.data.results.map(item =>
+        this.mapTvItem(item, genreNames),
+      );
+
+      return { success: true, data: searchResults };
+    } catch (error) {
+      this.logger.error(`Error getting popular anime: ${error.message}`, error.stack);
+      return { success: false, error: error.message };
+    }
+  }
+
+  async getAnimeByGenre(genreId: number, page: number = 1): Promise<ExternalApiResponse<SearchResult[]>> {
+    try {
+      const params = this.animeDiscoverParams(page);
+      // Combined with a comma TMDB treats genres as AND, which is what we want:
+      // animation *and* the requested genre.
+      params.with_genres = `${TmdbService.ANIMATION_GENRE_ID},${genreId}`;
+
+      const response = await this.makeRequest<TmdbSearchResponse>('/discover/tv', params);
+
+      if (!response.success || !response.data) {
+        return { success: false, error: response.error };
+      }
+
+      const genreNames = await this.getGenreNameMap('tv');
+      const searchResults: SearchResult[] = response.data.results.map(item =>
+        this.mapTvItem(item, genreNames),
+      );
+
+      return { success: true, data: searchResults };
+    } catch (error) {
+      this.logger.error(`Error getting anime by genre: ${error.message}`, error.stack);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Search has no genre or language filter that composes with a text query, so
+   * results are classified with the same rule the discover queries encode.
+   */
+  async searchAnime(query: string, year?: number, page: number = 1): Promise<ExternalApiResponse<SearchResult[]>> {
+    try {
+      const sanitizedQuery = this.sanitizeSearchQuery(query);
+      if (!sanitizedQuery) {
+        return { success: false, error: 'Invalid search query' };
+      }
+
+      const params: Record<string, any> = {
+        query: sanitizedQuery,
+        page: page.toString(),
+        include_adult: 'false',
+      };
+
+      if (year) {
+        params.first_air_date_year = year.toString();
+      }
+
+      const response = await this.makeRequest<TmdbSearchResponse>('/search/tv', params);
+
+      if (!response.success || !response.data) {
+        return { success: false, error: response.error };
+      }
+
+      const genreNames = await this.getGenreNameMap('tv');
+      const searchResults: SearchResult[] = response.data.results
+        .filter(item => this.isAnime(item))
+        .map(item => this.mapTvItem(item, genreNames));
+
+      return { success: true, data: searchResults };
+    } catch (error) {
+      this.logger.error(`Error searching anime: ${error.message}`, error.stack);
+      return { success: false, error: error.message };
+    }
+  }
+
   async getTvGenres(): Promise<ExternalApiResponse<Array<{ id: number; name: string }>>> {
     try {
       const response = await this.makeRequest<TmdbGenresResponse>('/genre/tv/list');
@@ -583,9 +708,11 @@ export class TmdbService extends BaseExternalApiService {
       }
 
       const genreNames = await this.getGenreNameMap('tv');
-      const searchResults: SearchResult[] = response.data.results.map(item =>
-        this.mapTvItem(item, genreNames),
-      );
+      // Anime has its own destination, so it is excluded here. Pages come back
+      // slightly shorter as a result; TMDB has no "exclude by origin" filter.
+      const searchResults: SearchResult[] = response.data.results
+        .filter(item => !this.isAnime(item))
+        .map(item => this.mapTvItem(item, genreNames));
 
       return {
         success: true,

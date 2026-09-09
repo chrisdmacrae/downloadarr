@@ -17,11 +17,14 @@ import { apiService, SearchResult } from '@/services/api'
 import { useTorrentRequests } from '@/hooks/useTorrentRequests'
 import { useToast } from '@/hooks/use-toast'
 
-type SearchTab = 'movies' | 'tv' | 'games'
+type SearchTab = 'movies' | 'tv' | 'anime' | 'games'
 
 const TABS: Array<{ id: SearchTab; label: string; noun: string; kind: 'movie' | 'tv' | 'game' }> = [
   { id: 'movies', label: 'Movies', noun: 'movies', kind: 'movie' },
+  // TV excludes anime and anime excludes everything else, so the two tabs
+  // never return the same title.
   { id: 'tv', label: 'TV shows', noun: 'TV shows', kind: 'tv' },
+  { id: 'anime', label: 'Anime', noun: 'anime', kind: 'tv' },
   { id: 'games', label: 'Games', noun: 'games', kind: 'game' },
 ]
 
@@ -65,14 +68,18 @@ export default function Search() {
               ? await apiService.searchMovies(activeQuery)
               : activeTab === 'tv'
                 ? await apiService.searchTvShows(activeQuery)
-                : await apiService.searchGames(activeQuery)
+                : activeTab === 'anime'
+                  ? await apiService.searchAnime(activeQuery)
+                  : await apiService.searchGames(activeQuery)
         } else {
           response =
             activeTab === 'movies'
               ? await apiService.getPopularMovies(1)
               : activeTab === 'tv'
                 ? await apiService.getPopularTvShows(1)
-                : await apiService.getPopularGames(20)
+                : activeTab === 'anime'
+                  ? await apiService.getPopularAnime(1)
+                  : await apiService.getPopularGames(20)
         }
 
         if (cancelled) return
