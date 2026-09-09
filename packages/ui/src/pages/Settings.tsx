@@ -26,6 +26,7 @@ import ApiKeysSettings from '@/components/settings/ApiKeysSettings'
 import JackettSettings from '@/components/settings/JackettSettings'
 import { OrganizationSection } from '@/components/settings/OrganizationSection'
 import { QualityRulesSettings } from '@/components/settings/QualityRulesSettings'
+import { ServiceLinks } from '@/components/settings/ServiceLinks'
 import { useToast } from '@/hooks/use-toast'
 import {
   useOrganizationSettings,
@@ -324,6 +325,11 @@ export default function Settings() {
                       </CardContent>
                     </Card>
 
+                    <ServiceLinks
+                      configuredJackettUrl={appConfigData.jackettUrl}
+                      configuredFlaresolverrUrl={appConfigData.flaresolverrUrl}
+                    />
+
                     <Card>
                       <CardHeader>
                         <CardTitle>Organization</CardTitle>
@@ -343,6 +349,11 @@ export default function Settings() {
 
                 {activeSection === 'indexing' && (
                   <div className="flex flex-col gap-6">
+                    <ServiceLinks
+                      variant="self-hosted"
+                      configuredJackettUrl={appConfigData.jackettUrl}
+                      configuredFlaresolverrUrl={appConfigData.flaresolverrUrl}
+                    />
                     <JackettSettings
                       data={{
                         jackettApiKey: appConfigData.jackettApiKey,
@@ -357,17 +368,20 @@ export default function Settings() {
                 )}
 
                 {activeSection === 'discovery' && (
-                  <ApiKeysSettings
-                    data={{
-                      omdbApiKey: appConfigData.omdbApiKey,
-                      tmdbApiKey: appConfigData.tmdbApiKey,
-                      igdbClientId: appConfigData.igdbClientId,
-                      igdbClientSecret: appConfigData.igdbClientSecret,
-                    }}
-                    onUpdate={handleAppConfigChange}
-                    onSave={handleSaveApiKeys}
-                    isLoading={updateAppConfig.isPending}
-                  />
+                  <div className="flex flex-col gap-6">
+                    <ApiKeysSettings
+                      data={{
+                        omdbApiKey: appConfigData.omdbApiKey,
+                        tmdbApiKey: appConfigData.tmdbApiKey,
+                        igdbClientId: appConfigData.igdbClientId,
+                        igdbClientSecret: appConfigData.igdbClientSecret,
+                      }}
+                      onUpdate={handleAppConfigChange}
+                      onSave={handleSaveApiKeys}
+                      isLoading={updateAppConfig.isPending}
+                    />
+                    <ServiceLinks variant="providers" />
+                  </div>
                 )}
 
                 {activeSection === 'quality' && <QualityRulesSettings />}

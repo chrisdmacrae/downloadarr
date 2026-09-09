@@ -3,6 +3,13 @@ import { HttpException, HttpStatus } from '@nestjs/common';
 import { TorrentRequestsController } from './torrent-requests.controller';
 import { RequestedTorrentsService } from '../services/requested-torrents.service';
 import { TorrentCheckerService } from '../services/torrent-checker.service';
+import { TorrentSearchLogService } from '../services/torrent-search-log.service';
+import { TorrentSearchResultsService } from '../services/torrent-search-results.service';
+import { DownloadProgressTrackerService } from '../services/download-progress-tracker.service';
+import { TvShowMetadataService } from '../services/tv-show-metadata.service';
+import { RequestLifecycleOrchestrator } from '../services/request-lifecycle-orchestrator.service';
+import { DownloadService } from '../../download/download.service';
+import { PrismaService } from '../../database/prisma.service';
 import { RequestStatus } from '../../../generated/prisma';
 
 describe('TorrentRequestsController - Re-search Functionality', () => {
@@ -20,6 +27,10 @@ describe('TorrentRequestsController - Re-search Functionality', () => {
       searchForSpecificRequest: jest.fn(),
     };
 
+    // The controller takes nine collaborators; this suite only drives two of
+    // them, so the rest are stubbed to satisfy the injector.
+    const stub = () => ({});
+
     const module: TestingModule = await Test.createTestingModule({
       controllers: [TorrentRequestsController],
       providers: [
@@ -31,6 +42,13 @@ describe('TorrentRequestsController - Re-search Functionality', () => {
           provide: TorrentCheckerService,
           useValue: mockTorrentCheckerService,
         },
+        { provide: TorrentSearchLogService, useValue: stub() },
+        { provide: TorrentSearchResultsService, useValue: stub() },
+        { provide: DownloadProgressTrackerService, useValue: stub() },
+        { provide: TvShowMetadataService, useValue: stub() },
+        { provide: RequestLifecycleOrchestrator, useValue: stub() },
+        { provide: DownloadService, useValue: stub() },
+        { provide: PrismaService, useValue: stub() },
       ],
     }).compile();
 

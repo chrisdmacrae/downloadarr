@@ -1,42 +1,50 @@
-# Build stage
-FROM node:20-alpine AS builder
+# syntax=docker/dockerfile:1
 
-# Accept version as build argument
-ARG APP_VERSION=latest
-
+# ---------------------------------------------------------------------------
+# Dependency stages
+#
+# Both installs are keyed only on the manifests, so they stay cached across
+# source changes. The lock file is deliberately not copied: it is generated on
+# macOS and records only darwin optional binaries, so `npm ci` fails on Alpine.
+# See docs — regenerating it on Linux would let these become `npm ci`.
+# ---------------------------------------------------------------------------
+FROM node:20-alpine AS deps
 WORKDIR /app
-
-# Copy package files (excluding lock files to avoid platform issues)
 COPY package.json ./
 COPY packages/api/package.json ./packages/api/
+RUN npm install --no-audit --no-fund && npm cache clean --force
 
-# Install all dependencies (including dev dependencies for build)
-RUN npm install && npm cache clean --force
+# Production dependencies only, resolved once and reused by the final stage.
+FROM node:20-alpine AS prod-deps
+WORKDIR /app
+COPY package.json ./
+COPY packages/api/package.json ./packages/api/
+RUN npm install --omit=dev --no-audit --no-fund && npm cache clean --force
 
-# Copy source code
+# ---------------------------------------------------------------------------
+# Build stage
+# ---------------------------------------------------------------------------
+FROM node:20-alpine AS builder
+ARG APP_VERSION=latest
+WORKDIR /app
+
+COPY --from=deps /app/node_modules ./node_modules
+COPY package.json ./
 COPY packages/api ./packages/api
 
-# Build the application
 WORKDIR /app/packages/api
-
-# Generate Prisma client
 RUN npx prisma generate
-
-# Build the application
 RUN npm run build
 
-# Install production dependencies in a separate location
-WORKDIR /app
-RUN npm install --only=production && npm cache clean --force
-
+# ---------------------------------------------------------------------------
 # Production stage
+# ---------------------------------------------------------------------------
 FROM node:20-alpine AS production
 
-# Accept version as build argument and set as environment variable
 ARG APP_VERSION=latest
 ENV APP_VERSION=${APP_VERSION}
 
-# Install system dependencies for VPN, downloading, and Docker
+# System dependencies for VPN, downloading and Docker control.
 RUN apk add --no-cache \
     openvpn \
     curl \
@@ -44,41 +52,48 @@ RUN apk add --no-cache \
     aria2 \
     docker-cli \
     shadow \
-    postgresql-client
+    postgresql-client \
+    su-exec
 
 WORKDIR /app
 
-# Copy package files
 COPY package.json ./
 COPY packages/api/package.json ./packages/api/
 
-# Copy built application and dependencies from builder
+COPY --from=prod-deps /app/node_modules ./node_modules
 COPY --from=builder /app/packages/api/dist ./packages/api/dist
-COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/packages/api/generated ./packages/api/generated
 COPY --from=builder /app/packages/api/prisma ./packages/api/prisma
 
-# Copy startup script
 COPY packages/api/scripts/start.sh /start.sh
 RUN chmod +x /start.sh
 
-# Create directories
-RUN mkdir -p /downloads /app/vpn
+RUN mkdir -p /downloads /library /app/vpn
 
-# Create entrypoint script to handle PUID/PGID
-RUN echo '#!/bin/sh' > /entrypoint.sh && \
-    echo 'PUID=${PUID:-1000}' >> /entrypoint.sh && \
-    echo 'PGID=${PGID:-1000}' >> /entrypoint.sh && \
-    echo 'groupmod -o -g "$PGID" node' >> /entrypoint.sh && \
-    echo 'usermod -o -u "$PUID" node' >> /entrypoint.sh && \
-    echo 'chown -R node:node /app /downloads' >> /entrypoint.sh && \
-    echo 'exec su-exec node /start.sh "$@"' >> /entrypoint.sh && \
-    chmod +x /entrypoint.sh
+# Entrypoint maps the container user onto the host's PUID/PGID, then hands over
+# to start.sh, which waits for the database and applies migrations before the
+# app boots.
+#
+# The download and library roots are created and chowned here, as root, using
+# the paths the app will actually read from its env — the app itself runs as
+# `node` and cannot create directories at the filesystem root. Only those roots
+# are chowned: recursing into a large mounted library would add seconds to
+# every start.
+RUN printf '%s\n' \
+    '#!/bin/sh' \
+    'set -e' \
+    'PUID=${PUID:-1000}' \
+    'PGID=${PGID:-1000}' \
+    'groupmod -o -g "$PGID" node' \
+    'usermod -o -u "$PUID" node' \
+    'for dir in "${DOWNLOAD_PATH:-/downloads}" "${LIBRARY_PATH:-/library}" /app/vpn; do' \
+    '  mkdir -p "$dir" 2>/dev/null || true' \
+    '  chown node:node "$dir" 2>/dev/null || true' \
+    'done' \
+    'exec su-exec node /start.sh "$@"' \
+    > /entrypoint.sh && chmod +x /entrypoint.sh
 
-# Install su-exec for user switching
-RUN apk add --no-cache su-exec
-
-# Add node user to docker group for Docker socket access
+# Docker socket access for container control.
 RUN addgroup -g 999 docker || true
 RUN adduser node docker || true
 
@@ -86,9 +101,10 @@ WORKDIR /app/packages/api
 
 EXPOSE 3001
 
-# Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-CMD curl -f http://localhost:3001/ || exit 1
+    CMD curl -f http://localhost:3001/ || exit 1
 
+# ENTRYPOINT was previously missing, so start.sh never ran and migrations were
+# never applied on boot.
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["node", "dist/main.js"]
-

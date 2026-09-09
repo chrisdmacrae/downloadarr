@@ -7,16 +7,27 @@ echo "🚀 Starting Downloadarr API..."
 # Wait for database to be ready
 echo "⏳ Waiting for database connection..."
 
-# Function to wait for database
-wait_for_db() {
-  until nc -z postgres 5432 2>/dev/null; do
-    echo "Database not ready, waiting 5 seconds..."
-    sleep 5
-  done
-}
+# Derive host and port from DATABASE_URL so an external database works too;
+# fall back to the bundled compose service.
+DB_HOST=$(echo "$DATABASE_URL" | sed -n 's|.*://[^@]*@\([^:/?]*\).*|\1|p')
+DB_PORT=$(echo "$DATABASE_URL" | sed -n 's|.*://[^@]*@[^:]*:\([0-9]*\).*|\1|p')
+DB_HOST=${DB_HOST:-postgres}
+DB_PORT=${DB_PORT:-5432}
 
-wait_for_db
-echo "✅ Database connection established"
+# Give up rather than hang forever if the database never appears.
+attempt=0
+max_attempts=60
+until nc -z "$DB_HOST" "$DB_PORT" 2>/dev/null; do
+  attempt=$((attempt + 1))
+  if [ "$attempt" -ge "$max_attempts" ]; then
+    echo "❌ Database at $DB_HOST:$DB_PORT unreachable after $((max_attempts * 5))s"
+    exit 1
+  fi
+  echo "Database not ready at $DB_HOST:$DB_PORT, waiting 5 seconds..."
+  sleep 5
+done
+
+echo "✅ Database connection established ($DB_HOST:$DB_PORT)"
 
 # Handle database migrations with proper error handling
 echo "🔄 Running database migrations..."
@@ -72,9 +83,8 @@ fi
 
 echo "✅ Database setup completed"
 
-# Generate Prisma client (in case it's not up to date)
-echo "🔧 Generating Prisma client..."
-npx prisma generate
+# The Prisma client is generated at image build time, so there is nothing to
+# regenerate here.
 
 echo "🎯 Starting application..."
 # Start the application

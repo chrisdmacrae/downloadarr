@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
+import { Radar } from 'lucide-react'
 import JackettSettings from '@/components/settings/JackettSettings'
+import { jackettUrl } from '@/lib/services'
 
 interface JackettStepProps {
   data: {
@@ -35,7 +37,7 @@ export default function JackettStep({ data, onUpdate, onNext }: JackettStepProps
       <div className="space-y-4">
         <div className="text-center">
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-pill bg-[color:var(--accent-quiet)]">
-            <span className="text-2xl">🔍</span>
+            <Radar className="h-7 w-7 text-brand-500" />
           </div>
           <h3 className="text-lg font-semibold mb-2">Configure Jackett</h3>
           <p className="text-sm text-fg-secondary">
@@ -47,7 +49,7 @@ export default function JackettStep({ data, onUpdate, onNext }: JackettStepProps
         <JackettSettings
           data={{
             jackettApiKey: data.jackettApiKey,
-            jackettUrl: data.jackettUrl || 'http://localhost:9117',
+            jackettUrl: data.jackettUrl || jackettUrl(),
           }}
           onUpdate={onUpdate}
           showSaveButton={false}

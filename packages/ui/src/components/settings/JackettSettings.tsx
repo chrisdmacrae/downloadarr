@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ExternalLink, Eye, EyeOff, Save, TestTube } from 'lucide-react'
+import { jackettUrl } from '@/lib/services'
 
 interface JackettData {
   jackettApiKey?: string
@@ -40,8 +41,7 @@ export default function JackettSettings({
   }
 
   const openJackett = () => {
-    const url = data.jackettUrl || 'http://localhost:9117'
-    window.open(url, '_blank')
+    window.open(jackettUrl(data.jackettUrl), '_blank', 'noopener,noreferrer')
   }
 
   const isValidUrl = (url: string) => {

@@ -1,6 +1,7 @@
 import { Button } from '@/components/ui/button'
 import { AlertCircle } from 'lucide-react'
 import ApiKeysSettings from '@/components/settings/ApiKeysSettings'
+import { ServiceLinks } from '@/components/settings/ServiceLinks'
 
 interface ApiKeysStepProps {
   data: {
@@ -48,6 +49,8 @@ export default function ApiKeysStep({ data, onUpdate, onNext, onPrevious }: ApiK
             </div>
           </div>
         </div>
+
+        <ServiceLinks variant="providers" />
 
         <ApiKeysSettings
           data={{

@@ -1,6 +1,7 @@
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { CheckCircle, Key, FolderOpen, Loader2 } from 'lucide-react'
+import { ServiceLinks } from '@/components/settings/ServiceLinks'
 
 interface CompletionStepProps {
   data: {
@@ -77,6 +78,9 @@ export default function CompletionStep({ data, onComplete, onPrevious, isLoading
             </CardContent>
           </Card>
         </div>
+
+        {/* The services now reachable from this host. */}
+        <ServiceLinks variant="self-hosted" />
 
         <div className="rounded-card border border-hairline bg-white/[.08] p-4">
           <div className="text-center">
