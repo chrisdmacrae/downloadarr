@@ -46,7 +46,7 @@ export class AppConfigurationService {
    */
   async completeOnboarding(dto: OnboardingStepDto): Promise<AppConfiguration> {
     this.logger.log('Completing onboarding with data:', {
-      jackettApiKey: dto.jackettApiKey ? '[REDACTED]' : null,
+      prowlarrApiKey: dto.prowlarrApiKey ? '[REDACTED]' : null,
       organizationEnabled: dto.organizationEnabled,
       omdbApiKey: dto.omdbApiKey ? '[REDACTED]' : null,
       tmdbApiKey: dto.tmdbApiKey ? '[REDACTED]' : null,
@@ -63,7 +63,7 @@ export class AppConfigurationService {
         data: {
           onboardingCompleted: true,
           onboardingCompletedAt: new Date(),
-          jackettApiKey: dto.jackettApiKey,
+          prowlarrApiKey: dto.prowlarrApiKey,
           organizationEnabled: dto.organizationEnabled,
           omdbApiKey: dto.omdbApiKey,
           tmdbApiKey: dto.tmdbApiKey,
@@ -89,17 +89,17 @@ export class AppConfigurationService {
   }
 
   /**
-   * Get Jackett configuration
+   * Get Prowlarr configuration
    */
-  async getJackettConfig(): Promise<{
+  async getProwlarrConfig(): Promise<{
     apiKey: string | null;
     url: string;
     flaresolverrUrl: string | null;
   }> {
     const config = await this.getConfiguration();
     return {
-      apiKey: config.jackettApiKey,
-      url: config.jackettUrl,
+      apiKey: config.prowlarrApiKey,
+      url: config.prowlarrUrl,
       // Env stays the fallback for installs that never set it in the UI.
       flaresolverrUrl: config.flaresolverrUrl || process.env.FLARESOLVERR_URL || null,
     };
@@ -154,7 +154,7 @@ export class AppConfigurationService {
     return this.prisma.appConfiguration.create({
       data: {
         onboardingCompleted: false,
-        jackettUrl: 'http://jackett:9117',
+        prowlarrUrl: 'http://prowlarr:9696',
         organizationEnabled: true,
       },
     });

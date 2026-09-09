@@ -39,9 +39,28 @@ The setup script will:
 - 🚀 Start all services with Docker Compose
 
 After setup, visit http://localhost:3000 to complete the onboarding wizard where you'll:
-- Configure your Jackett API key
+- Configure your Prowlarr API key
 - Set up file organization preferences
 - Complete your Downloadarr setup
+
+### Upgrading from a Jackett install
+
+Downloadarr now indexes through [Prowlarr](https://prowlarr.com) instead of Jackett. Pulling this
+version replaces the `jackett` container with `prowlarr` on port 9696, and a database migration
+clears the stored indexer API key — a Jackett key does not authenticate against Prowlarr.
+
+After upgrading:
+
+1. Open Prowlarr at http://localhost:9696 and finish its first-run setup
+2. Add your indexers there (Prowlarr ships the same indexer definitions Jackett did)
+3. Copy the API key from Prowlarr's **Settings → General**
+4. Paste it into Downloadarr under **Settings → Indexing**, and use **Test connection**
+
+For indexers behind Cloudflare, see [docs/FLARESOLVERR_SETUP.md](docs/FLARESOLVERR_SETUP.md) — in
+Prowlarr, FlareSolverr is applied per indexer via a tag rather than globally.
+
+The old `jackett_config` Docker volume is left untouched, so nothing is deleted; remove it with
+`docker volume rm downloadarr_jackett_config` once you are happy with the switch.
 
 ### Development
 
@@ -65,7 +84,7 @@ npm run dev:vpn
 
 - **API Server**: http://localhost:3001
 - **Frontend**: http://localhost:3000
-- **Jackett**: http://localhost:9117
+- **Prowlarr**: http://localhost:9696
 - **FlareSolverr**: http://localhost:8191 (Cloudflare bypass)
 - **AriaNG**: http://localhost:6880 (Download manager UI)
 

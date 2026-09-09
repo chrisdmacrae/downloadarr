@@ -65,7 +65,7 @@ export class TorrentSearchDto {
   category?: TorrentCategory;
 
   @ApiPropertyOptional({
-    description: 'Specific indexers to search (Jackett tracker names)',
+    description: 'Specific indexers to search (Prowlarr indexer names or ids)',
     type: [String],
     example: ['1337x', 'rarbg'],
   })

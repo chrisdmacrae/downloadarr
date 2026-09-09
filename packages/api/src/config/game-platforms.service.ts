@@ -182,10 +182,11 @@ export class GamePlatformsService {
   }
 
   /**
-   * Get Jackett category code for a platform
+   * Get the Newznab category code for a platform, as used by Prowlarr's
+   * indexers.
    */
-  getJackettCategoryForPlatform(platformId: string): string {
-    // Map platform IDs to Jackett category codes
+  getIndexerCategoryForPlatform(platformId: string): string {
+    // Map platform IDs to Newznab category codes
     const platformCategoryMap: Record<string, string> = {
       // PC Platforms
       'pc': '4050',           // PC/Games

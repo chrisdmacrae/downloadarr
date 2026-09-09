@@ -455,9 +455,9 @@ model AppConfiguration {
   onboardingCompleted   Boolean  @default(false)
   onboardingCompletedAt DateTime?
 
-  // Jackett configuration
-  jackettApiKey         String?
-  jackettUrl            String   @default("http://jackett:9117")
+  // Prowlarr configuration
+  prowlarrApiKey        String?
+  prowlarrUrl           String   @default("http://prowlarr:9696")
   // FlareSolverr, for indexers behind Cloudflare. Falls back to
   // FLARESOLVERR_URL when unset.
   flaresolverrUrl       String?

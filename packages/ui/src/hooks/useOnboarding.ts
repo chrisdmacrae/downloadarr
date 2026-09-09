@@ -33,8 +33,8 @@ interface AppConfiguration {
   id: string
   onboardingCompleted: boolean
   onboardingCompletedAt: string | null
-  jackettApiKey: string | null
-  jackettUrl: string
+  prowlarrApiKey: string | null
+  prowlarrUrl: string
   flaresolverrUrl: string | null
   organizationEnabled: boolean
   omdbApiKey: string | null
@@ -46,7 +46,7 @@ interface AppConfiguration {
 }
 
 interface OnboardingData {
-  jackettApiKey: string
+  prowlarrApiKey: string
   organizationEnabled: boolean
   omdbApiKey?: string
   tmdbApiKey?: string
@@ -54,10 +54,17 @@ interface OnboardingData {
   igdbClientSecret?: string
 }
 
-interface JackettConfig {
+interface ProwlarrConfig {
   apiKey: string | null
   url: string
   flaresolverrUrl: string | null
+}
+
+interface ProwlarrConnectionTest {
+  success: boolean
+  message: string
+  version?: string
+  indexerCount?: number
 }
 
 // Get app configuration
@@ -88,14 +95,14 @@ export const useOnboardingStatus = () => {
   })
 }
 
-// Get Jackett configuration
-export const useJackettConfig = () => {
+// Get Prowlarr configuration
+export const useProwlarrConfig = () => {
   return useQuery({
-    queryKey: queryKeys.jackettConfig,
-    queryFn: async (): Promise<JackettConfig> => {
-      const response = await fetch(`${API_BASE_URL}/configuration/jackett`)
+    queryKey: queryKeys.prowlarrConfig,
+    queryFn: async (): Promise<ProwlarrConfig> => {
+      const response = await fetch(`${API_BASE_URL}/configuration/prowlarr`)
       if (!response.ok) {
-        throw new Error('Failed to fetch Jackett configuration')
+        throw new Error('Failed to fetch Prowlarr configuration')
       }
       return response.json()
     },
@@ -135,9 +142,30 @@ export const useCompleteOnboarding = () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.appConfiguration }),
         queryClient.invalidateQueries({ queryKey: queryKeys.onboardingStatus }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.jackettConfig }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.prowlarrConfig }),
         queryClient.invalidateQueries({ queryKey: queryKeys.organizationSettings })
       ])
+    },
+  })
+}
+
+// Verify a Prowlarr URL and API key without saving them
+export const useTestProwlarrConnection = () => {
+  return useMutation({
+    mutationFn: async (data: { url?: string; apiKey?: string }): Promise<ProwlarrConnectionTest> => {
+      const response = await fetch(`${API_BASE_URL}/prowlarr/test`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to test the Prowlarr connection')
+      }
+
+      return response.json()
     },
   })
 }
@@ -165,7 +193,7 @@ export const useUpdateAppConfiguration = () => {
     onSuccess: () => {
       // Invalidate related queries
       queryClient.invalidateQueries({ queryKey: queryKeys.appConfiguration })
-      queryClient.invalidateQueries({ queryKey: queryKeys.jackettConfig })
+      queryClient.invalidateQueries({ queryKey: queryKeys.prowlarrConfig })
     },
   })
 }

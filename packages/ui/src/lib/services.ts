@@ -1,17 +1,17 @@
 /**
  * Links to the services Downloadarr sits on top of.
  *
- * The self-hosted ones (Jackett, AriaNg, FlareSolverr) are published on the
+ * The self-hosted ones (Prowlarr, AriaNg, FlareSolverr) are published on the
  * same host as the frontend, so their URLs are derived from whatever hostname
- * the browser is already using — `localhost:9117` when you are on localhost,
- * `nas.local:9117` when you reached the app at `nas.local:3000`. The values
- * configured for the API (`http://jackett:9117`) are Docker-internal service
+ * the browser is already using — `localhost:9696` when you are on localhost,
+ * `nas.local:9696` when you reached the app at `nas.local:3000`. The values
+ * configured for the API (`http://prowlarr:9696`) are Docker-internal service
  * names that resolve inside the compose network but never in a browser.
  */
 
 /** Compose service names — never resolvable from a browser. */
 const DOCKER_INTERNAL_HOSTS = new Set([
-  'jackett',
+  'prowlarr',
   'aria2',
   'ariang',
   'flaresolverr',
@@ -24,7 +24,7 @@ const DOCKER_INTERNAL_HOSTS = new Set([
 
 /** Ports each service is published on by docker-compose. */
 export const SERVICE_PORTS = {
-  jackett: 9117,
+  prowlarr: 9696,
   ariaNg: 6880,
   flaresolverr: 8191,
 } as const
@@ -33,7 +33,7 @@ export const SERVICE_PORTS = {
  * Builds a browser-reachable URL for a service published on this host.
  *
  * A configured URL wins when it points somewhere a browser can actually
- * reach — someone running Jackett on another machine — otherwise the current
+ * reach — someone running Prowlarr on another machine — otherwise the current
  * hostname plus the service port is used.
  */
 export function browserServiceUrl(port: number, configuredUrl?: string | null): string {
@@ -56,8 +56,8 @@ export function browserServiceUrl(port: number, configuredUrl?: string | null): 
   return `${protocol}//${hostname}:${port}`
 }
 
-export const jackettUrl = (configured?: string | null) =>
-  browserServiceUrl(SERVICE_PORTS.jackett, configured)
+export const prowlarrUrl = (configured?: string | null) =>
+  browserServiceUrl(SERVICE_PORTS.prowlarr, configured)
 
 export const ariaNgUrl = () => browserServiceUrl(SERVICE_PORTS.ariaNg)
 

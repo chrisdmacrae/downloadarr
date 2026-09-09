@@ -1,24 +1,24 @@
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Radar } from 'lucide-react'
-import JackettSettings from '@/components/settings/JackettSettings'
-import { jackettUrl } from '@/lib/services'
+import ProwlarrSettings from '@/components/settings/ProwlarrSettings'
+import { prowlarrUrl } from '@/lib/services'
 
-interface JackettStepProps {
+interface ProwlarrStepProps {
   data: {
-    jackettApiKey: string
+    prowlarrApiKey: string
     organizationEnabled: boolean
-    jackettUrl?: string
+    prowlarrUrl?: string
   }
-  onUpdate: (updates: Partial<{ jackettApiKey: string; organizationEnabled: boolean; jackettUrl?: string }>) => void
+  onUpdate: (updates: Partial<{ prowlarrApiKey: string; organizationEnabled: boolean; prowlarrUrl?: string }>) => void
   onNext: () => void
 }
 
-export default function JackettStep({ data, onUpdate, onNext }: JackettStepProps) {
+export default function ProwlarrStep({ data, onUpdate, onNext }: ProwlarrStepProps) {
   const [isValidating, setIsValidating] = useState(false)
 
   const handleNext = async () => {
-    if (!data.jackettApiKey.trim()) {
+    if (!data.prowlarrApiKey.trim()) {
       return
     }
 
@@ -30,7 +30,7 @@ export default function JackettStep({ data, onUpdate, onNext }: JackettStepProps
     }, 500)
   }
 
-  const isValid = data.jackettApiKey.trim().length > 0
+  const isValid = data.prowlarrApiKey.trim().length > 0
 
   return (
     <div className="space-y-6">
@@ -39,17 +39,17 @@ export default function JackettStep({ data, onUpdate, onNext }: JackettStepProps
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-pill bg-[color:var(--accent-quiet)]">
             <Radar className="h-7 w-7 text-brand-500" />
           </div>
-          <h3 className="text-lg font-semibold mb-2">Configure Jackett</h3>
+          <h3 className="text-lg font-semibold mb-2">Configure Prowlarr</h3>
           <p className="text-sm text-fg-secondary">
-            Jackett is required to search for torrents across multiple indexers.
-            You'll need to get your API key from the Jackett web interface.
+            Prowlarr is required to search for torrents across multiple indexers.
+            You'll need to get your API key from the Prowlarr web interface.
           </p>
         </div>
 
-        <JackettSettings
+        <ProwlarrSettings
           data={{
-            jackettApiKey: data.jackettApiKey,
-            jackettUrl: data.jackettUrl || jackettUrl(),
+            prowlarrApiKey: data.prowlarrApiKey,
+            prowlarrUrl: data.prowlarrUrl || prowlarrUrl(),
           }}
           onUpdate={onUpdate}
           showSaveButton={false}

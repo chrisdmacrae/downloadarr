@@ -18,7 +18,7 @@ export const queryKeys = {
   gamePlatformOptions: ['game-platforms', 'options'] as const,
   appConfiguration: ['configuration'] as const,
   onboardingStatus: ['configuration', 'onboarding', 'status'] as const,
-  jackettConfig: ['configuration', 'jackett'] as const,
+  prowlarrConfig: ['configuration', 'prowlarr'] as const,
   updateCheck: ['system', 'updates'] as const,
   systemInfo: ['system', 'info'] as const,
   systemStorage: ['system', 'storage'] as const,

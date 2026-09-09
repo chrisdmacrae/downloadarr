@@ -103,8 +103,8 @@ export interface TorrentResult {
 export interface TorrentSearchParams {
   query: string;
   category?: string;
-  categoryCode?: string; // Direct Jackett category code
-  indexers?: string[];
+  categoryCode?: string; // Direct Newznab category code
+  indexers?: string[]; // Prowlarr indexer names or numeric ids
   minSeeders?: number;
   maxSize?: string;
   quality?: string[];
@@ -112,19 +112,37 @@ export interface TorrentSearchParams {
   language?: string[];
 }
 
-export interface JackettSearchResponse {
-  Results: JackettTorrent[];
+/** A Newznab category as Prowlarr reports it on a release. */
+export interface ProwlarrCategory {
+  id: number;
+  name: string;
+  subCategories?: ProwlarrCategory[];
 }
 
-export interface JackettTorrent {
-  Title: string;
-  Link: string;
-  MagnetUri?: string;
-  Size: number;
-  Seeders: number;
-  Peers: number;
-  CategoryDesc: string;
-  Tracker: string;
-  PublishDate: string;
-  Details?: string;
+/**
+ * One release from Prowlarr's `/api/v1/search`, which returns a bare array
+ * rather than an envelope.
+ *
+ * Both `downloadUrl` and `magnetUrl` are rewritten by Prowlarr into signed
+ * links back through itself (`{prowlarr}/{indexerId}/download?apikey=...`);
+ * neither is the indexer's own URL, and `magnetUrl` is therefore *not* a
+ * `magnet:` URI. Fetching a proxy link either returns the .torrent bytes or
+ * redirects to the real magnet.
+ */
+export interface ProwlarrRelease {
+  guid: string;
+  title: string;
+  size: number;
+  indexerId: number;
+  indexer: string;
+  publishDate: string;
+  downloadUrl?: string;
+  magnetUrl?: string;
+  infoUrl?: string;
+  infoHash?: string;
+  seeders?: number;
+  leechers?: number;
+  protocol: 'torrent' | 'usenet';
+  categories?: ProwlarrCategory[];
+  indexerFlags?: string[];
 }

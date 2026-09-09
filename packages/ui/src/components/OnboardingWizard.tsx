@@ -4,13 +4,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Progress } from '@/components/ui/progress'
 import { useToast } from '@/hooks/use-toast'
 import { useCompleteOnboarding } from '@/hooks/useOnboarding'
-import JackettStep from './onboarding/JackettStep'
+import ProwlarrStep from './onboarding/ProwlarrStep'
 import OrganizationStep from './onboarding/OrganizationStep'
 import ApiKeysStep from './onboarding/ApiKeysStep'
 import CompletionStep from './onboarding/CompletionStep'
 
 interface OnboardingData {
-  jackettApiKey: string
+  prowlarrApiKey: string
   organizationEnabled: boolean
   omdbApiKey?: string
   tmdbApiKey?: string
@@ -19,7 +19,7 @@ interface OnboardingData {
 }
 
 const STEPS = [
-  { id: 'jackett', title: 'Jackett Configuration', description: 'Configure your Jackett API key' },
+  { id: 'prowlarr', title: 'Prowlarr Configuration', description: 'Configure your Prowlarr API key' },
   { id: 'organization', title: 'File Organization', description: 'Set up file organization preferences' },
   { id: 'apikeys', title: 'External API Keys', description: 'Configure optional API keys for enhanced discovery' },
   { id: 'complete', title: 'Complete Setup', description: 'Finish your setup' },
@@ -28,7 +28,7 @@ const STEPS = [
 export default function OnboardingWizard() {
   const [currentStep, setCurrentStep] = useState(0)
   const [onboardingData, setOnboardingData] = useState<OnboardingData>({
-    jackettApiKey: '',
+    prowlarrApiKey: '',
     organizationEnabled: true,
     omdbApiKey: undefined,
     tmdbApiKey: undefined,
@@ -55,10 +55,10 @@ export default function OnboardingWizard() {
   const handleComplete = async () => {
     try {
       // Validate required fields before submission
-      if (!onboardingData.jackettApiKey?.trim()) {
+      if (!onboardingData.prowlarrApiKey?.trim()) {
         toast({
           title: "Validation Error",
-          description: "Jackett API key is required to complete setup.",
+          description: "Prowlarr API key is required to complete setup.",
           variant: "destructive"
         })
         return
@@ -66,7 +66,7 @@ export default function OnboardingWizard() {
 
       // Clean up the data - convert empty strings to undefined for optional fields
       const cleanedData = {
-        jackettApiKey: onboardingData.jackettApiKey.trim(),
+        prowlarrApiKey: onboardingData.prowlarrApiKey.trim(),
         organizationEnabled: onboardingData.organizationEnabled,
         omdbApiKey: onboardingData.omdbApiKey?.trim() || undefined,
         tmdbApiKey: onboardingData.tmdbApiKey?.trim() || undefined,
@@ -76,7 +76,7 @@ export default function OnboardingWizard() {
 
       console.log('Completing onboarding with data:', {
         ...cleanedData,
-        jackettApiKey: cleanedData.jackettApiKey ? '[REDACTED]' : '',
+        prowlarrApiKey: cleanedData.prowlarrApiKey ? '[REDACTED]' : '',
         omdbApiKey: cleanedData.omdbApiKey ? '[REDACTED]' : undefined,
         tmdbApiKey: cleanedData.tmdbApiKey ? '[REDACTED]' : undefined,
         igdbClientId: cleanedData.igdbClientId ? '[REDACTED]' : undefined,
@@ -115,9 +115,9 @@ export default function OnboardingWizard() {
 
   const renderStep = () => {
     switch (STEPS[currentStep].id) {
-      case 'jackett':
+      case 'prowlarr':
         return (
-          <JackettStep
+          <ProwlarrStep
             data={onboardingData}
             onUpdate={updateOnboardingData}
             onNext={handleNext}

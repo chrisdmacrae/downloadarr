@@ -288,7 +288,7 @@ show_final_info() {
         echo "  • Frontend (LAN): http://${lan_ip}:3000"
     fi
     echo "  • API Server:   http://localhost:3001"
-    echo "  • Jackett:      http://localhost:9117"
+    echo "  • Prowlarr:     http://localhost:9696"
     echo "  • AriaNG:       http://localhost:6880"
     echo "  • FlareSolverr:  http://localhost:8191"
     echo

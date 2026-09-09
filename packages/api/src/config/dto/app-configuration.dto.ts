@@ -11,21 +11,21 @@ export class UpdateAppConfigurationDto {
   onboardingCompleted?: boolean;
 
   @ApiPropertyOptional({
-    description: 'Jackett API key for torrent search',
-    example: 'your_jackett_api_key_here',
+    description: 'Prowlarr API key for torrent search',
+    example: 'your_prowlarr_api_key_here',
   })
   @IsOptional()
   @IsString()
-  jackettApiKey?: string;
+  prowlarrApiKey?: string;
 
   @ApiPropertyOptional({
-    description: 'Jackett server URL',
-    example: 'http://jackett:9117',
+    description: 'Prowlarr server URL',
+    example: 'http://prowlarr:9696',
   })
   @IsOptional()
-  // Container hostnames like http://jackett:9117 have no TLD.
+  // Container hostnames like http://prowlarr:9696 have no TLD.
   @IsUrl({ require_tld: false })
-  jackettUrl?: string;
+  prowlarrUrl?: string;
 
   @ApiPropertyOptional({
     description: 'FlareSolverr URL, for indexers behind Cloudflare',
@@ -78,11 +78,11 @@ export class UpdateAppConfigurationDto {
 
 export class OnboardingStepDto {
   @ApiProperty({
-    description: 'Jackett API key',
-    example: 'your_jackett_api_key_here',
+    description: 'Prowlarr API key',
+    example: 'your_prowlarr_api_key_here',
   })
   @IsString()
-  jackettApiKey: string;
+  prowlarrApiKey: string;
 
   @ApiProperty({
     description: 'Whether to enable organization rules',

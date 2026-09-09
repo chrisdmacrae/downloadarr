@@ -3,7 +3,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { RequestedTorrentsService } from './requested-torrents.service';
 import { TorrentSearchLogService } from './torrent-search-log.service';
 import { TorrentSearchResultsService } from './torrent-search-results.service';
-import { JackettService } from '../../discovery/services/jackett.service';
+import { ProwlarrService } from '../../discovery/services/prowlarr.service';
 import { TorrentFilterService, FilterCriteria } from '../../discovery/services/torrent-filter.service';
 import { RequestLifecycleOrchestrator } from './request-lifecycle-orchestrator.service';
 import { DownloadService } from '../../download/download.service';
@@ -23,7 +23,7 @@ export class TorrentCheckerService {
     private readonly requestedTorrentsService: RequestedTorrentsService,
     private readonly searchLogService: TorrentSearchLogService,
     private readonly searchResultsService: TorrentSearchResultsService,
-    private readonly jackettService: JackettService,
+    private readonly prowlarrService: ProwlarrService,
     private readonly torrentFilterService: TorrentFilterService,
     private readonly orchestrator: RequestLifecycleOrchestrator,
     @Inject(forwardRef(() => DownloadService))
@@ -54,7 +54,7 @@ export class TorrentCheckerService {
 
       this.logger.log(`Found ${requests.length} torrent requests ready for search`);
 
-      // Process requests in batches to avoid overwhelming Jackett
+      // Process requests in batches to avoid overwhelming Prowlarr
       const batchSize = 3;
       for (let i = 0; i < requests.length; i += batchSize) {
         const batch = requests.slice(i, i + batchSize);
@@ -233,7 +233,7 @@ export class TorrentCheckerService {
       let searchResult: any;
       
       if (request.contentType === ContentType.MOVIE) {
-        searchResult = await this.jackettService.searchMovieTorrents({
+        searchResult = await this.prowlarrService.searchMovieTorrents({
           query: searchQuery,
           year: request.year,
           imdbId: request.imdbId,
@@ -246,7 +246,7 @@ export class TorrentCheckerService {
           limit: 50,
         });
       } else if (request.contentType === ContentType.TV_SHOW) {
-        searchResult = await this.jackettService.searchTvTorrents({
+        searchResult = await this.prowlarrService.searchTvTorrents({
           query: searchQuery,
           season: request.season,
           episode: request.episode,
@@ -262,7 +262,7 @@ export class TorrentCheckerService {
       } else if (request.contentType === ContentType.GAME) {
         this.logger.debug(`Searching for game: ${searchQuery}, platform: ${request.platform}`);
 
-        searchResult = await this.jackettService.searchGameTorrents({
+        searchResult = await this.prowlarrService.searchGameTorrents({
           query: searchQuery,
           year: request.year,
           platform: request.platform,
@@ -544,7 +544,7 @@ export class TorrentCheckerService {
 
       this.logger.log(`Found ${requests.length} searchable requests`);
 
-      // Process requests in batches to avoid overwhelming Jackett
+      // Process requests in batches to avoid overwhelming Prowlarr
       const batchSize = 3;
       for (let i = 0; i < requests.length; i += batchSize) {
         const batch = requests.slice(i, i + batchSize);

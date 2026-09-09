@@ -4,18 +4,18 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ExternalLink, Eye, EyeOff, Save, TestTube } from 'lucide-react'
-import { jackettUrl } from '@/lib/services'
+import { prowlarrUrl } from '@/lib/services'
 
-interface JackettData {
-  jackettApiKey?: string
-  jackettUrl?: string
+interface ProwlarrData {
+  prowlarrApiKey?: string
+  prowlarrUrl?: string
   /** FlareSolverr, for indexers behind Cloudflare. */
   flaresolverrUrl?: string
 }
 
-interface JackettSettingsProps {
-  data: JackettData
-  onUpdate: (updates: Partial<JackettData>) => void
+interface ProwlarrSettingsProps {
+  data: ProwlarrData
+  onUpdate: (updates: Partial<ProwlarrData>) => void
   onSave?: () => void
   onTest?: () => void
   isLoading?: boolean
@@ -24,24 +24,24 @@ interface JackettSettingsProps {
   showTestButton?: boolean
 }
 
-export default function JackettSettings({ 
-  data, 
-  onUpdate, 
-  onSave, 
+export default function ProwlarrSettings({
+  data,
+  onUpdate,
+  onSave,
   onTest,
   isLoading = false,
   isTesting = false,
   showSaveButton = true,
   showTestButton = true
-}: JackettSettingsProps) {
+}: ProwlarrSettingsProps) {
   const [showApiKey, setShowApiKey] = useState(false)
 
-  const handleInputChange = (field: keyof JackettData, value: string) => {
+  const handleInputChange = (field: keyof ProwlarrData, value: string) => {
     onUpdate({ [field]: value || undefined })
   }
 
-  const openJackett = () => {
-    window.open(jackettUrl(data.jackettUrl), '_blank', 'noopener,noreferrer')
+  const openProwlarr = () => {
+    window.open(prowlarrUrl(data.prowlarrUrl), '_blank', 'noopener,noreferrer')
   }
 
   const isValidUrl = (url: string) => {
@@ -53,24 +53,24 @@ export default function JackettSettings({
     }
   }
 
-  const isValidApiKey = data.jackettApiKey && data.jackettApiKey.trim().length > 0
-  const isValidJackettUrl = data.jackettUrl && isValidUrl(data.jackettUrl)
+  const isValidApiKey = data.prowlarrApiKey && data.prowlarrApiKey.trim().length > 0
+  const isValidProwlarrUrl = data.prowlarrUrl && isValidUrl(data.prowlarrUrl)
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Jackett</CardTitle>
+        <CardTitle>Prowlarr</CardTitle>
         <CardDescription>
-          Configure Jackett for torrent search across multiple indexers
+          Configure Prowlarr for torrent search across multiple indexers
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="rounded-card border border-hairline bg-white/[.05] p-4">
           <div className="space-y-2">
-            <h4 className="text-sm font-bold text-fg-primary">How to get your Jackett API key</h4>
+            <h4 className="text-sm font-bold text-fg-primary">How to get your Prowlarr API key</h4>
             <ol className="list-inside list-decimal space-y-1 text-sm text-fg-secondary">
-              <li>Click "Open Jackett" below to reach its web interface</li>
-              <li>Find the "API Key" section on the dashboard</li>
+              <li>Click "Open Prowlarr" below to reach its web interface</li>
+              <li>Go to Settings → General and find the "API Key" field</li>
               <li>Copy the key and paste it into the field below</li>
             </ol>
           </div>
@@ -78,40 +78,40 @@ export default function JackettSettings({
 
         <div className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="jackettUrl">Jackett URL</Label>
+            <Label htmlFor="prowlarrUrl">Prowlarr URL</Label>
             <div className="flex space-x-2">
               <Input
-                id="jackettUrl"
+                id="prowlarrUrl"
                 type="url"
-                placeholder="http://localhost:9117"
+                placeholder="http://localhost:9696"
                 className="flex-1 font-mono"
-                value={data.jackettUrl || ''}
-                onChange={(e) => handleInputChange('jackettUrl', e.target.value)}
+                value={data.prowlarrUrl || ''}
+                onChange={(e) => handleInputChange('prowlarrUrl', e.target.value)}
               />
               <Button
                 type="button"
                 variant="outline"
-                onClick={openJackett}
+                onClick={openProwlarr}
                 className="flex items-center space-x-2"
               >
                 <ExternalLink className="w-4 h-4" />
-                <span>Open Jackett</span>
+                <span>Open Prowlarr</span>
               </Button>
             </div>
-            {data.jackettUrl && !isValidJackettUrl && (
+            {data.prowlarrUrl && !isValidProwlarrUrl && (
               <p className="text-sm text-status-failed">Please enter a valid URL</p>
             )}
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="jackettApiKey">API key</Label>
+            <Label htmlFor="prowlarrApiKey">API key</Label>
             <div className="relative">
               <Input
-                id="jackettApiKey"
+                id="prowlarrApiKey"
                 type={showApiKey ? 'text' : 'password'}
-                placeholder="Enter your Jackett API key"
-                value={data.jackettApiKey || ''}
-                onChange={(e) => handleInputChange('jackettApiKey', e.target.value)}
+                placeholder="Enter your Prowlarr API key"
+                value={data.prowlarrApiKey || ''}
+                onChange={(e) => handleInputChange('prowlarrApiKey', e.target.value)}
                 className="pr-10"
               />
               <Button
@@ -128,7 +128,7 @@ export default function JackettSettings({
                 )}
               </Button>
             </div>
-            {data.jackettApiKey && !isValidApiKey && (
+            {data.prowlarrApiKey && !isValidApiKey && (
               <p className="text-sm text-status-failed">Please enter a valid API key</p>
             )}
           </div>
@@ -144,8 +144,9 @@ export default function JackettSettings({
               onChange={(e) => handleInputChange('flaresolverrUrl', e.target.value)}
             />
             <p className="text-xs text-fg-muted">
-              Optional. Indexers behind Cloudflare need FlareSolverr; leave empty to fall back to
-              the FLARESOLVERR_URL environment variable.
+              Optional. Downloadarr registers this as a FlareSolverr proxy in Prowlarr and creates a{' '}
+              <code className="font-mono">flaresolverr</code> tag — add that tag to any indexer behind
+              Cloudflare. Leave empty to fall back to the FLARESOLVERR_URL environment variable.
             </p>
             {data.flaresolverrUrl && !isValidUrl(data.flaresolverrUrl) && (
               <p className="text-sm text-status-failed">Please enter a valid URL</p>
@@ -153,29 +154,30 @@ export default function JackettSettings({
           </div>
         </div>
 
-        {isValidApiKey && isValidJackettUrl && (
+        {isValidApiKey && isValidProwlarrUrl && (
           <div className="rounded-card border border-hairline bg-white/[.08] p-4">
             <div className="flex items-center gap-2.5">
               <span className="h-1.5 w-1.5 rounded-pill bg-[color:var(--status-completed)]" />
-              <p className="text-sm font-medium text-fg-primary">Jackett configuration looks good</p>
+              <p className="text-sm font-medium text-fg-primary">Prowlarr configuration looks good</p>
             </div>
           </div>
         )}
 
         <div className="rounded-card border border-hairline bg-white/[.05] p-4">
           <p className="text-sm text-fg-secondary">
-            <strong className="text-fg-primary">Note:</strong> Jackett is required for torrent
-            search. Make sure it is running and reachable at the configured URL.
+            <strong className="text-fg-primary">Note:</strong> Prowlarr is required for torrent
+            search. Make sure it is running, reachable at the configured URL, and has at least one
+            indexer added.
           </p>
         </div>
 
         {(showSaveButton || showTestButton) && (
           <div className="flex justify-end space-x-2">
             {showTestButton && onTest && (
-              <Button 
-                variant="outline" 
-                onClick={onTest} 
-                disabled={!isValidApiKey || !isValidJackettUrl || isTesting}
+              <Button
+                variant="outline"
+                onClick={onTest}
+                disabled={!isValidApiKey || !isValidProwlarrUrl || isTesting}
               >
                 {isTesting ? (
                   <>

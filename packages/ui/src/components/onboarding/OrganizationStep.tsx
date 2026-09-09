@@ -6,10 +6,10 @@ import { FolderOpen, FileText, Settings } from 'lucide-react'
 
 interface OrganizationStepProps {
   data: {
-    jackettApiKey: string
+    prowlarrApiKey: string
     organizationEnabled: boolean
   }
-  onUpdate: (updates: Partial<{ jackettApiKey: string; organizationEnabled: boolean }>) => void
+  onUpdate: (updates: Partial<{ prowlarrApiKey: string; organizationEnabled: boolean }>) => void
   onNext: () => void
   onPrevious: () => void
 }
