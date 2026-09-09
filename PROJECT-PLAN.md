@@ -9,7 +9,7 @@ All-in-one media and ROM downloading tool with VPN integration, NestJS API with 
   - [ ] `@app/api` - NestJS REST API server
   - [ ] `@app/ui` - React frontend with shadcn/ui
 - [ ] NestJS project setup with BullMQ integration
-- [ ] Docker Compose configuration (API, Frontend, Jackett)
+- [ ] Docker Compose configuration (API, Frontend, Prowlarr)
 - [ ] VPN integration with node-openvpn
 
 ## Phase 2: Download Engine & Queue System
@@ -32,7 +32,7 @@ All-in-one media and ROM downloading tool with VPN integration, NestJS API with 
 - [ ] Basic search UI with images
 
 ## Phase 4: Torrent Integration ✅
-- [x] Jackett API service integration
+- [x] Prowlarr API service integration
 - [x] Torrent search and filtering logic
 - [x] Movie/TV torrent discovery endpoints
 - [x] Quality and format filtering

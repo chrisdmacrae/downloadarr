@@ -5,7 +5,7 @@ import { ServiceLinks } from '@/components/settings/ServiceLinks'
 
 interface CompletionStepProps {
   data: {
-    jackettApiKey: string
+    prowlarrApiKey: string
     organizationEnabled: boolean
   }
   onComplete: () => void
@@ -30,7 +30,7 @@ export default function CompletionStep({ data, onComplete, onPrevious, isLoading
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center">
                 <Key className="w-4 h-4 mr-2" />
-                Jackett Configuration
+                Prowlarr Configuration
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-0">
@@ -38,7 +38,7 @@ export default function CompletionStep({ data, onComplete, onPrevious, isLoading
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-fg-secondary">API Key:</span>
                   <span className="text-sm font-mono">
-                    {data.jackettApiKey ? '••••••••••••••••' : 'Not configured'}
+                    {data.prowlarrApiKey ? '••••••••••••••••' : 'Not configured'}
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
@@ -100,7 +100,7 @@ export default function CompletionStep({ data, onComplete, onPrevious, isLoading
         </Button>
         <Button
           onClick={onComplete}
-          disabled={isLoading || !data.jackettApiKey?.trim()}
+          disabled={isLoading || !data.prowlarrApiKey?.trim()}
           className="min-w-[140px]"
         >
           {isLoading ? (

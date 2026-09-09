@@ -8,7 +8,7 @@ import { VpnModule } from './vpn/vpn.module';
 import { DiscoveryModule } from './discovery/discovery.module';
 import { TorrentsModule } from './torrents/torrents.module';
 import { GameConfigModule } from './config/config.module';
-import { JackettModule } from './jackett/jackett.module';
+import { ProwlarrModule } from './prowlarr/prowlarr.module';
 import { OrganizationModule } from './organization/organization.module';
 import { InitializationModule } from './initialization/initialization.module';
 import { SystemModule } from './system/system.module';
@@ -28,7 +28,7 @@ import { RequestsModule } from './requests/requests.module';
     DiscoveryModule,
     TorrentsModule,
     GameConfigModule,
-    JackettModule,
+    ProwlarrModule,
     OrganizationModule,
     SystemModule,
     HttpDownloadsModule,

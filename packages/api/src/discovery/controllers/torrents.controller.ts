@@ -1,6 +1,6 @@
 import { Controller, Get, Query, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
-import { JackettService } from '../services/jackett.service';
+import { ProwlarrService } from '../services/prowlarr.service';
 import { TorrentSearchDto, MovieTorrentSearchDto, TvTorrentSearchDto, GameTorrentSearchDto } from '../dto/torrent-search.dto';
 import { TorrentResult } from '../interfaces/external-api.interface';
 
@@ -9,12 +9,12 @@ import { TorrentResult } from '../interfaces/external-api.interface';
 export class TorrentsController {
   private readonly logger = new Logger(TorrentsController.name);
 
-  constructor(private readonly jackettService: JackettService) {}
+  constructor(private readonly prowlarrService: ProwlarrService) {}
 
   @Get('search')
   @ApiOperation({
     summary: 'Search for torrents',
-    description: 'Search for torrents across all configured Jackett indexers with filtering options',
+    description: 'Search for torrents across all configured Prowlarr indexers with filtering options',
   })
   @ApiResponse({
     status: 200,
@@ -46,7 +46,7 @@ export class TorrentsController {
     },
   })
   @ApiResponse({ status: 400, description: 'Invalid search parameters' })
-  @ApiResponse({ status: 503, description: 'Jackett service unavailable' })
+  @ApiResponse({ status: 503, description: 'Prowlarr service unavailable' })
   async searchTorrents(@Query() searchDto: TorrentSearchDto): Promise<{ success: boolean; data?: TorrentResult[]; error?: string }> {
     try {
       this.logger.log(`Searching torrents with query: "${searchDto.query}"`);
@@ -62,7 +62,7 @@ export class TorrentsController {
         language: searchDto.language,
       };
 
-      const result = await this.jackettService.searchTorrents(searchParams);
+      const result = await this.prowlarrService.searchTorrents(searchParams);
 
       if (!result.success) {
         throw new HttpException(
@@ -127,12 +127,12 @@ export class TorrentsController {
     },
   })
   @ApiResponse({ status: 400, description: 'Invalid search parameters' })
-  @ApiResponse({ status: 503, description: 'Jackett service unavailable' })
+  @ApiResponse({ status: 503, description: 'Prowlarr service unavailable' })
   async searchMovieTorrents(@Query() searchDto: MovieTorrentSearchDto): Promise<{ success: boolean; data?: TorrentResult[]; error?: string }> {
     try {
       this.logger.log(`Searching movie torrents with query: "${searchDto.query}", year: ${searchDto.year}`);
       
-      const result = await this.jackettService.searchMovieTorrents(searchDto);
+      const result = await this.prowlarrService.searchMovieTorrents(searchDto);
 
       if (!result.success) {
         throw new HttpException(
@@ -197,12 +197,12 @@ export class TorrentsController {
     },
   })
   @ApiResponse({ status: 400, description: 'Invalid search parameters' })
-  @ApiResponse({ status: 503, description: 'Jackett service unavailable' })
+  @ApiResponse({ status: 503, description: 'Prowlarr service unavailable' })
   async searchTvTorrents(@Query() searchDto: TvTorrentSearchDto): Promise<{ success: boolean; data?: TorrentResult[]; error?: string }> {
     try {
       this.logger.log(`Searching TV torrents with query: "${searchDto.query}", season: ${searchDto.season}, episode: ${searchDto.episode}`);
       
-      const result = await this.jackettService.searchTvTorrents(searchDto);
+      const result = await this.prowlarrService.searchTvTorrents(searchDto);
 
       if (!result.success) {
         throw new HttpException(
@@ -235,7 +235,7 @@ export class TorrentsController {
   @Get('games')
   @ApiOperation({
     summary: 'Search game torrents',
-    description: 'Search for game torrents using Jackett indexers with game-specific parameters',
+    description: 'Search for game torrents using Prowlarr indexers with game-specific parameters',
   })
   @ApiResponse({
     status: 200,
@@ -267,12 +267,12 @@ export class TorrentsController {
     },
   })
   @ApiResponse({ status: 400, description: 'Invalid search parameters' })
-  @ApiResponse({ status: 503, description: 'Jackett service unavailable' })
+  @ApiResponse({ status: 503, description: 'Prowlarr service unavailable' })
   async searchGameTorrents(@Query() searchDto: GameTorrentSearchDto): Promise<{ success: boolean; data?: TorrentResult[]; error?: string }> {
     try {
       this.logger.log(`Searching game torrents with query: "${searchDto.query}", platform: ${searchDto.platform}, year: ${searchDto.year}`);
 
-      const result = await this.jackettService.searchGameTorrents(searchDto);
+      const result = await this.prowlarrService.searchGameTorrents(searchDto);
 
       if (!result.success) {
         throw new HttpException(

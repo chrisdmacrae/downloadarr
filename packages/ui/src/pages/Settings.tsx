@@ -23,7 +23,7 @@ import { Page, PageHeader, PageSection } from '@/components/ds/Page'
 import { SidebarNav, type SidebarGroup } from '@/components/ds/SidebarNav'
 import { StatusBadge } from '@/components/ds/StatusBadge'
 import ApiKeysSettings from '@/components/settings/ApiKeysSettings'
-import JackettSettings from '@/components/settings/JackettSettings'
+import ProwlarrSettings from '@/components/settings/ProwlarrSettings'
 import { OrganizationSection } from '@/components/settings/OrganizationSection'
 import { QualityRulesSettings } from '@/components/settings/QualityRulesSettings'
 import { ServiceLinks } from '@/components/settings/ServiceLinks'
@@ -37,7 +37,11 @@ import {
   useUpdateOrganizationSettings,
   useVpnStatus,
 } from '@/hooks/useApi'
-import { useAppConfiguration, useUpdateAppConfiguration } from '@/hooks/useOnboarding'
+import {
+  useAppConfiguration,
+  useTestProwlarrConnection,
+  useUpdateAppConfiguration,
+} from '@/hooks/useOnboarding'
 import type { OrganizationSettings } from '@/services/api'
 
 type SectionId =
@@ -52,7 +56,7 @@ type SectionId =
 
 const SECTION_TITLES: Record<SectionId, { title: string; description: string }> = {
   general: { title: 'General', description: 'How this instance is configured and what version it runs' },
-  indexing: { title: 'Indexing', description: 'Jackett and the Cloudflare bypass your indexers need' },
+  indexing: { title: 'Indexing', description: 'Prowlarr and the Cloudflare bypass your indexers need' },
   discovery: { title: 'Discovery keys', description: 'API keys for movie, TV and game metadata' },
   quality: { title: 'Quality rules', description: 'Defaults applied to every new request' },
   organization: {
@@ -82,12 +86,13 @@ export default function Settings() {
   const { data: vpnStatus } = useVpnStatus()
   const updateSettings = useUpdateOrganizationSettings()
   const updateAppConfig = useUpdateAppConfiguration()
+  const testProwlarrConnection = useTestProwlarrConnection()
   const triggerReverseIndexing = useTriggerReverseIndexing()
 
   const [formData, setFormData] = useState<Partial<OrganizationSettings>>({})
   const [appConfigData, setAppConfigData] = useState({
-    jackettApiKey: '',
-    jackettUrl: '',
+    prowlarrApiKey: '',
+    prowlarrUrl: '',
     flaresolverrUrl: '',
     omdbApiKey: '',
     tmdbApiKey: '',
@@ -102,8 +107,8 @@ export default function Settings() {
   useEffect(() => {
     if (appConfig) {
       setAppConfigData({
-        jackettApiKey: appConfig.jackettApiKey || '',
-        jackettUrl: appConfig.jackettUrl || '',
+        prowlarrApiKey: appConfig.prowlarrApiKey || '',
+        prowlarrUrl: appConfig.prowlarrUrl || '',
         flaresolverrUrl: appConfig.flaresolverrUrl || '',
         omdbApiKey: appConfig.omdbApiKey || '',
         tmdbApiKey: appConfig.tmdbApiKey || '',
@@ -156,16 +161,36 @@ export default function Settings() {
   const handleSwitchChange = (field: keyof OrganizationSettings, checked: boolean) =>
     setFormData((prev) => ({ ...prev, [field]: checked }))
 
-  const handleSaveJackettConfig = async () => {
+  const handleTestProwlarrConnection = async () => {
+    try {
+      const result = await testProwlarrConnection.mutateAsync({
+        url: appConfigData.prowlarrUrl || undefined,
+        apiKey: appConfigData.prowlarrApiKey || undefined,
+      })
+      toast({
+        title: result.success ? 'Prowlarr reachable' : 'Prowlarr unreachable',
+        description: result.message,
+        variant: result.success ? undefined : 'destructive',
+      })
+    } catch {
+      toast({
+        title: 'Test failed',
+        description: 'Could not reach the Downloadarr API to run the test.',
+        variant: 'destructive',
+      })
+    }
+  }
+
+  const handleSaveProwlarrConfig = async () => {
     try {
       await updateAppConfig.mutateAsync({
-        jackettApiKey: appConfigData.jackettApiKey || undefined,
-        jackettUrl: appConfigData.jackettUrl || undefined,
+        prowlarrApiKey: appConfigData.prowlarrApiKey || undefined,
+        prowlarrUrl: appConfigData.prowlarrUrl || undefined,
         flaresolverrUrl: appConfigData.flaresolverrUrl || undefined,
       })
       toast({
         title: 'Indexing settings saved',
-        description: 'Jackett configuration has been updated successfully.',
+        description: 'Prowlarr configuration has been updated successfully.',
       })
     } catch {
       toast({
@@ -326,7 +351,7 @@ export default function Settings() {
                     </Card>
 
                     <ServiceLinks
-                      configuredJackettUrl={appConfigData.jackettUrl}
+                      configuredProwlarrUrl={appConfigData.prowlarrUrl}
                       configuredFlaresolverrUrl={appConfigData.flaresolverrUrl}
                     />
 
@@ -351,18 +376,20 @@ export default function Settings() {
                   <div className="flex flex-col gap-6">
                     <ServiceLinks
                       variant="self-hosted"
-                      configuredJackettUrl={appConfigData.jackettUrl}
+                      configuredProwlarrUrl={appConfigData.prowlarrUrl}
                       configuredFlaresolverrUrl={appConfigData.flaresolverrUrl}
                     />
-                    <JackettSettings
+                    <ProwlarrSettings
                       data={{
-                        jackettApiKey: appConfigData.jackettApiKey,
-                        jackettUrl: appConfigData.jackettUrl,
+                        prowlarrApiKey: appConfigData.prowlarrApiKey,
+                        prowlarrUrl: appConfigData.prowlarrUrl,
                         flaresolverrUrl: appConfigData.flaresolverrUrl,
                       }}
                       onUpdate={handleAppConfigChange}
-                      onSave={handleSaveJackettConfig}
+                      onSave={handleSaveProwlarrConfig}
+                      onTest={handleTestProwlarrConnection}
                       isLoading={updateAppConfig.isPending}
+                      isTesting={testProwlarrConnection.isPending}
                     />
                   </div>
                 )}
@@ -542,7 +569,7 @@ export default function Settings() {
                       <CardTitle>VPN</CardTitle>
                       <CardDescription>
                         With the VPN overlay only aria2 routes through the tunnel; the API, frontend
-                        and Jackett keep normal networking.
+                        and Prowlarr keep normal networking.
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="flex flex-col gap-4">
@@ -595,7 +622,7 @@ export default function Settings() {
                     <CardHeader>
                       <CardTitle>Setup wizard</CardTitle>
                       <CardDescription>
-                        Walk through Jackett, organization and discovery keys again
+                        Walk through Prowlarr, organization and discovery keys again
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="flex flex-col gap-4">

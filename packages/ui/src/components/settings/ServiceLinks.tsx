@@ -3,7 +3,7 @@ import type { LucideIcon } from 'lucide-react'
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
-import { EXTERNAL_LINKS, ariaNgUrl, flaresolverrUrl, jackettUrl } from '@/lib/services'
+import { EXTERNAL_LINKS, ariaNgUrl, flaresolverrUrl, prowlarrUrl } from '@/lib/services'
 
 interface LinkRowProps {
   icon: LucideIcon
@@ -45,8 +45,8 @@ function hostOf(url: string): string {
 }
 
 interface ServiceLinksProps {
-  /** The configured Jackett URL, used only when it is browser-reachable. */
-  configuredJackettUrl?: string
+  /** The configured Prowlarr URL, used only when it is browser-reachable. */
+  configuredProwlarrUrl?: string
   configuredFlaresolverrUrl?: string
   /** Hides the metadata-provider card, e.g. in the indexing pane. */
   variant?: 'all' | 'self-hosted' | 'providers'
@@ -59,12 +59,12 @@ interface ServiceLinksProps {
  * app at localhost or at a machine name on your network.
  */
 export function ServiceLinks({
-  configuredJackettUrl,
+  configuredProwlarrUrl,
   configuredFlaresolverrUrl,
   variant = 'all',
   className,
 }: ServiceLinksProps) {
-  const jackett = jackettUrl(configuredJackettUrl)
+  const prowlarr = prowlarrUrl(configuredProwlarrUrl)
   const ariaNg = ariaNgUrl()
   const flare = flaresolverrUrl(configuredFlaresolverrUrl)
 
@@ -81,10 +81,10 @@ export function ServiceLinks({
           <CardContent className="flex flex-col gap-1 p-2">
             <LinkRow
               icon={Radar}
-              label="Jackett"
+              label="Prowlarr"
               description="Indexer configuration and torrent search"
-              href={jackett}
-              hint={hostOf(jackett)}
+              href={prowlarr}
+              hint={hostOf(prowlarr)}
             />
             <LinkRow
               icon={HardDriveDownload}

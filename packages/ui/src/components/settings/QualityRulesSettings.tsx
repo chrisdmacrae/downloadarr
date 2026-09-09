@@ -155,7 +155,7 @@ export function QualityRulesSettings() {
         <CardHeader>
           <CardTitle>Preferred quality</CardTitle>
           <CardDescription>
-            Applied to every new request, and used to rank the torrents Jackett returns
+            Applied to every new request, and used to rank the torrents Prowlarr returns
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-6">

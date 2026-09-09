@@ -47,14 +47,12 @@ services:
       # Mount source code for hot reloading
       - ./packages/ui/src:/app/packages/ui/src:ro
 
-  # Development-specific overrides for Jackett
-  jackett:
-    container_name: downloadarr-jackett-dev
+  # Development-specific overrides for Prowlarr
+  prowlarr:
+    container_name: downloadarr-prowlarr-dev
     volumes:
       # Inherit base volumes from docker-compose.yml
-      - jackett_config_dev:/config
-      - jackett_config_dev:/jackett-config
-      - ${DOWNLOAD_PATH}:/downloads
+      - prowlarr_config_dev:/config
 
   # Development-specific overrides for Aria2
   aria2:
@@ -72,5 +70,5 @@ services:
 volumes:
   redis_data_dev:
   postgres_data_dev:
-  jackett_config_dev:
+  prowlarr_config_dev:
   aria2_config_dev:

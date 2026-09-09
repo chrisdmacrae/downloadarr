@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Downloadarr is a self-hosted, all-in-one media and ROM downloading tool (for content the user owns) — a NestJS API plus React frontend orchestrating a fleet of Docker services: Jackett (torrent indexing), aria2 (downloading), FlareSolverr (Cloudflare bypass), Redis, and PostgreSQL. Optional OpenVPN integration routes download traffic through a VPN.
+Downloadarr is a self-hosted, all-in-one media and ROM downloading tool (for content the user owns) — a NestJS API plus React frontend orchestrating a fleet of Docker services: Prowlarr (torrent indexing), aria2 (downloading), FlareSolverr (Cloudflare bypass), Redis, and PostgreSQL. Optional OpenVPN integration routes download traffic through a VPN.
 
 ## Commands
 
@@ -54,19 +54,19 @@ TV shows have a second, parallel state machine (`tv-show-state-machine.ts`) trac
 
 Background work is **cron-driven via @nestjs/schedule**, not BullMQ (despite README/PROJECT-PLAN mentions; Redis is in the stack but queues aren't wired up):
 
-- `torrent-checker.service.ts` — every 30s, searches Jackett for pending requests
+- `torrent-checker.service.ts` — every 30s, searches Prowlarr for pending requests
 - `tv-show-search-loop.service.ts` — every 5min, TV-show season/episode search loop
 - `download-progress-tracker.service.ts` — every 30s, polls aria2 and updates request status
 - `organization/services/reverse-indexing.service.ts` — hourly, indexes existing library files
 
 ### Module map (packages/api/src)
 
-- `discovery/` — external metadata APIs (OMDb movies, TMDB TV, IGDB games) + Jackett torrent search, quality/format filtering (`torrent-filter.service.ts`) and ranking
+- `discovery/` — external metadata APIs (OMDb movies, TMDB TV, IGDB games) + Prowlarr torrent search, quality/format filtering (`torrent-filter.service.ts`) and ranking
 - `torrents/` — request lifecycle, state machines, TV-show gap analysis/selection (see above)
 - `download/` — aria2 JSON-RPC client (`aria2.service.ts`), Socket.IO gateway on namespace `/downloads` (room per download: `download-${id}`) pushing progress to the UI
 - `http-downloads/` — direct HTTP/HTTPS downloads (separate `HttpDownloadRequest` model, own progress tracker)
 - `organization/` — moves completed downloads from `DOWNLOAD_PATH` into `LIBRARY_PATH` per naming rules; `OrganizeQueue` for manual approval; reverse indexing of pre-existing files
-- `config/` — `AppConfiguration` singleton row in Postgres: onboarding state + API keys (Jackett, OMDb, TMDB, IGDB). **Runtime config lives in the DB, set via the onboarding wizard/settings UI — not only env vars.**
+- `config/` — `AppConfiguration` singleton row in Postgres: onboarding state + API keys (Prowlarr, OMDb, TMDB, IGDB). **Runtime config lives in the DB, set via the onboarding wizard/settings UI — not only env vars.**
 - `initialization/` — creates `movies/`, `tv-shows/`, `games/`, `other/` subdirs under downloads and library paths on boot
 - `vpn/`, `docker/`, `system/` — VPN connectivity checks, Docker container control, health/version endpoints
 - `requests/` — aggregated request views for the UI
@@ -79,7 +79,7 @@ Single axios client in `src/services/api.ts` (base URL from `VITE_API_URL`, defa
 
 ## Product constraints
 
-- **VPN posture**: with the VPN overlay (`docker-compose.vpn.yml`), only **aria2** (and the vpn-ip-monitor) run with `network_mode: service:vpn` — download traffic goes through the VPN; the API, frontend, Jackett, etc. keep normal networking.
+- **VPN posture**: with the VPN overlay (`docker-compose.vpn.yml`), only **aria2** (and the vpn-ip-monitor) run with `network_mode: service:vpn` — download traffic goes through the VPN; the API, frontend, Prowlarr, etc. keep normal networking.
 - **Onboarding is mandatory**: features assume `AppConfiguration.onboardingCompleted`; API keys for discovery services come from the DB config, with env vars as fallback.
 - **File organization naming** is specified in `docs/prompts/ORGANIZATION-RULES.md`: movies `{title} ({year})/`, TV `{title} ({year})/Season {n}/{title} - SxxExx - ...`, games `{title} ({platform})/`. Organization rules per content type are user-editable (`OrganizationRule` model); games platforms come from `config/game-platforms.yml`.
 - **CORS**: allowed origins come from `FRONTEND_URL` (comma-separated) in both `main.ts` and the WebSocket gateway — keep them in sync when touching CORS (see `docs/CORS_CONFIGURATION.md`).

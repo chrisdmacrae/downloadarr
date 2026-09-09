@@ -61,11 +61,11 @@ export class AppConfigurationController {
     }
   }
 
-  @Get('jackett')
-  @ApiOperation({ summary: 'Get Jackett configuration' })
-  @ApiResponse({ status: 200, description: 'Jackett configuration' })
-  async getJackettConfig() {
-    return this.appConfigService.getJackettConfig();
+  @Get('prowlarr')
+  @ApiOperation({ summary: 'Get Prowlarr configuration' })
+  @ApiResponse({ status: 200, description: 'Prowlarr configuration' })
+  async getProwlarrConfig() {
+    return this.appConfigService.getProwlarrConfig();
   }
 
   /**

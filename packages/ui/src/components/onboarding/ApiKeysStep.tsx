@@ -5,7 +5,7 @@ import { ServiceLinks } from '@/components/settings/ServiceLinks'
 
 interface ApiKeysStepProps {
   data: {
-    jackettApiKey: string
+    prowlarrApiKey: string
     organizationEnabled: boolean
     omdbApiKey?: string
     tmdbApiKey?: string

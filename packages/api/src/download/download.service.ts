@@ -2,6 +2,7 @@ import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { CreateDownloadDto } from './dto/create-download.dto';
 import { Aria2Service } from './aria2.service';
 import { DownloadMetadataService } from './download-metadata.service';
+import { TorrentLinkResolverService } from './torrent-link-resolver.service';
 import { RequestedTorrentsService } from '../torrents/services/requested-torrents.service';
 
 import { PrismaService } from '../database/prisma.service';
@@ -14,6 +15,7 @@ export class DownloadService {
   constructor(
     private aria2Service: Aria2Service,
     private downloadMetadataService: DownloadMetadataService,
+    private torrentLinkResolver: TorrentLinkResolverService,
     @Inject(forwardRef(() => RequestedTorrentsService))
     private requestedTorrentsService: RequestedTorrentsService,
     private prisma: PrismaService,
@@ -32,10 +34,8 @@ export class DownloadService {
     // Start download directly with Aria2 based on type
     switch (type) {
       case 'magnet':
-        gid = await this.aria2Service.addMagnet(url, options);
-        break;
       case 'torrent':
-        gid = await this.aria2Service.addUri([url], options);
+        gid = await this.startTorrentDownload(url, options);
         break;
       case 'http':
       case 'https':
@@ -68,6 +68,30 @@ export class DownloadService {
       aria2Gid: gid,
       ...createDownloadDto,
     };
+  }
+
+  /**
+   * Hand a torrent to aria2, whatever shape its link arrives in.
+   *
+   * Indexer links are not necessarily what they look like: Prowlarr wraps both
+   * .torrent and magnet links in signed URLs back through itself, so the link
+   * is resolved first and the result decides which aria2 call to make.
+   */
+  private async startTorrentDownload(url: string, options: Record<string, any>): Promise<string> {
+    const resolved = await this.torrentLinkResolver.resolve(url);
+
+    switch (resolved.kind) {
+      case 'magnet':
+        return this.aria2Service.addMagnet(resolved.magnetUri, options);
+      case 'torrent': {
+        // `out` renames the payload of a plain download; on a torrent it would
+        // fight with the names inside the metainfo file.
+        const { out, ...torrentOptions } = options;
+        return this.aria2Service.addTorrent(resolved.torrent, [], torrentOptions);
+      }
+      case 'url':
+        return this.aria2Service.addUri([resolved.url], options);
+    }
   }
 
   async getDownloads() {

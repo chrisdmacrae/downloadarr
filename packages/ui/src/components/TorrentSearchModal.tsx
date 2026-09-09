@@ -440,14 +440,17 @@ export function TorrentSearchModal({
                           </div>
                         </div>
                         <div className="flex gap-2">
-                          {result.magnetUri && (
+                          {/* Prowlarr signs its links, and following one either
+                              downloads the .torrent or hands the magnet to the
+                              browser's torrent client. */}
+                          {(result.magnetUri || result.link) && (
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => window.open(result.magnetUri, '_blank')}
+                              onClick={() => window.open(result.magnetUri || result.link, '_blank')}
                             >
                               <Magnet className="h-3 w-3 mr-1" />
-                              Magnet
+                              Open
                             </Button>
                           )}
                           <Button

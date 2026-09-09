@@ -45,7 +45,7 @@ services:
       ARIA2_HOST: aria2
       ARIA2_PORT: 6800
       ARIA2_SECRET: ${ARIA2_RPC_SECRET:-downloadarr}
-      JACKETT_URL: http://jackett:9117
+      PROWLARR_URL: http://prowlarr:9696
       FLARESOLVERR_URL: http://flaresolverr:8191
       DOWNLOAD_PATH: /app/downloads
       LIBRARY_PATH: /app/library
@@ -95,22 +95,19 @@ services:
     networks:
       - downloadarr
 
-  # Jackett for torrent indexing
-  jackett:
-    image: lscr.io/linuxserver/jackett:latest
-    container_name: downloadarr-jackett
+  # Prowlarr for torrent indexing
+  prowlarr:
+    image: lscr.io/linuxserver/prowlarr:latest
+    container_name: downloadarr-prowlarr
     restart: unless-stopped
     environment:
       PUID: ${PUID:-1000}
       PGID: ${PGID:-1000}
       TZ: ${TZ:-UTC}
-      AUTO_UPDATE: true
     ports:
-      - "9117:9117"
+      - "9696:9696"
     volumes:
-      - jackett_config:/config
-      - jackett_config:/jackett-config
-      - ${DOWNLOAD_PATH}:/downloads
+      - prowlarr_config:/config
     depends_on:
       - flaresolverr
     networks:
@@ -157,7 +154,7 @@ services:
 volumes:
   redis_data:
   postgres_data:
-  jackett_config:
+  prowlarr_config:
   aria2_config:
 
 networks:

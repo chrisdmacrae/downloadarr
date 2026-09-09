@@ -8,7 +8,7 @@ import { OmdbService } from './services/omdb.service';
 import { TmdbService } from './services/tmdb.service';
 import { IgdbService } from './services/igdb.service';
 import { IgdbAuthService } from './services/igdb-auth.service';
-import { JackettService } from './services/jackett.service';
+import { ProwlarrService } from './services/prowlarr.service';
 import { TorrentFilterService } from './services/torrent-filter.service';
 import { TorrentPreferencesService } from './services/torrent-preferences.service';
 
@@ -34,7 +34,7 @@ import { TorrentPreferencesController } from './controllers/torrent-preferences.
     TmdbService,
     IgdbService,
     IgdbAuthService,
-    JackettService,
+    ProwlarrService,
     TorrentFilterService,
     TorrentPreferencesService,
   ],
@@ -51,7 +51,7 @@ import { TorrentPreferencesController } from './controllers/torrent-preferences.
     TmdbService,
     IgdbService,
     IgdbAuthService,
-    JackettService,
+    ProwlarrService,
     TorrentFilterService,
     TorrentPreferencesService,
   ],

@@ -70,7 +70,7 @@ services:
       DATABASE_URL: postgresql://downloadarr:${POSTGRES_PASSWORD:-downloadarr}@postgres:5432/downloadarr
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      JACKETT_URL: http://jackett:9117
+      PROWLARR_URL: http://prowlarr:9696
       FLARESOLVERR_URL: http://flaresolverr:8191
       DOWNLOAD_PATH: /app/downloads
       LIBRARY_PATH: /app/library
@@ -173,20 +173,12 @@ services:
     volumes:
       - postgres_data_dev:/var/lib/postgresql/data
 
-  jackett:
-    container_name: downloadarr-jackett-dev-vpn
-    environment:
-      PUID: ${PUID:-1000}
-      PGID: ${PGID:-1000}
-      TZ: ${TZ:-UTC}
-      AUTO_UPDATE: true
-      # FlareSolverr configuration
-      JACKETT__FLARESOLVERR_URL: http://flaresolverr:8191/
-      JACKETT__FLARESOLVERR_MAXTIMEOUT: 60000
+  # FlareSolverr is registered with Prowlarr over its API by the Downloadarr
+  # API on start-up, so there is nothing to configure here.
+  prowlarr:
+    container_name: downloadarr-prowlarr-dev-vpn
     volumes:
-      - jackett_config_dev:/config
-      - jackett_config_dev:/jackett-config
-      - ${DOWNLOAD_PATH}:/downloads
+      - prowlarr_config_dev:/config
 
   flaresolverr:
     container_name: downloadarr-flaresolverr-dev-vpn
@@ -196,5 +188,5 @@ volumes:
   vpn_ip_share:  # Shared volume for VPN IP information
   redis_data_dev:
   postgres_data_dev:
-  jackett_config_dev:
+  prowlarr_config_dev:
   aria2_config_dev:
