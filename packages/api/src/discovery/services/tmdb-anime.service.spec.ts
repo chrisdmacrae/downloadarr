@@ -62,6 +62,43 @@ describe('TmdbService — anime classification', () => {
 
   const allShows = [cowboyBebop, rickAndMorty, midnightDiner, breakingBad];
 
+  // Animation + Japanese: an anime film.
+  const spiritedAway = {
+    id: 129,
+    title: 'Spirited Away',
+    original_title: '千と千尋の神隠し',
+    overview: 'A girl wanders into a world of spirits.',
+    poster_path: '/poster.jpg',
+    backdrop_path: '/backdrop.jpg',
+    release_date: '2001-07-20',
+    genre_ids: [16, 10751, 14],
+    original_language: 'ja',
+    popularity: 90,
+    vote_average: 8.5,
+    vote_count: 5000,
+    adult: false,
+  };
+
+  // Animation, not Japanese: a Pixar film, which belongs under Movies.
+  const toyStory = {
+    ...spiritedAway,
+    id: 862,
+    title: 'Toy Story',
+    genre_ids: [16, 35],
+    original_language: 'en',
+  };
+
+  // Japanese, live action: belongs under Movies.
+  const sevenSamurai = {
+    ...spiritedAway,
+    id: 346,
+    title: 'Seven Samurai',
+    genre_ids: [18, 28],
+    original_language: 'ja',
+  };
+
+  const allMovies = [spiritedAway, toyStory, sevenSamurai];
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -80,7 +117,12 @@ describe('TmdbService — anime classification', () => {
         if (endpoint === '/genre/tv/list') {
           return { success: true, data: { genres: [{ id: 16, name: 'Animation' }] } };
         }
-        return { success: true, data: { results: allShows } };
+        if (endpoint === '/genre/movie/list') {
+          return { success: true, data: { genres: [{ id: 16, name: 'Animation' }] } };
+        }
+        const isMovieEndpoint =
+          endpoint.includes('/movie') || endpoint === '/search/movie';
+        return { success: true, data: { results: isMovieEndpoint ? allMovies : allShows } };
       });
   });
 
@@ -141,6 +183,50 @@ describe('TmdbService — anime classification', () => {
         '/discover/tv',
         expect.objectContaining({ with_genres: '16,10759', with_original_language: 'ja' }),
       );
+    });
+  });
+
+  describe('anime films', () => {
+    it('excludes anime films from popular movies', async () => {
+      const result = await service.getPopularMovies(1);
+      expect(titlesFrom(result)).not.toContain('Spirited Away');
+    });
+
+    it('keeps Western animation, which is not anime', async () => {
+      const result = await service.getPopularMovies(1);
+      expect(titlesFrom(result)).toContain('Toy Story');
+    });
+
+    it('keeps Japanese live action, which is not anime', async () => {
+      const result = await service.getPopularMovies(1);
+      expect(titlesFrom(result)).toContain('Seven Samurai');
+    });
+
+    it('excludes anime films from movie search and genre rails', async () => {
+      expect(titlesFrom(await service.searchMovies('spirited'))).not.toContain('Spirited Away');
+      expect(titlesFrom(await service.getMoviesByGenre(16, 1))).not.toContain('Spirited Away');
+    });
+
+    it('keeps only anime films when searching the anime destination', async () => {
+      const result = await service.searchAnimeMovies('spirited');
+      expect(titlesFrom(result)).toEqual(['Spirited Away']);
+    });
+
+    it('asks TMDB for Japanese animated films', async () => {
+      await service.getPopularAnimeMovies(1);
+
+      expect(makeRequest).toHaveBeenCalledWith(
+        '/discover/movie',
+        expect.objectContaining({ with_genres: '16', with_original_language: 'ja' }),
+      );
+    });
+
+    it('partitions films between Movies and Anime', async () => {
+      const movies = titlesFrom(await service.getPopularMovies(1));
+      const anime = titlesFrom(await service.searchAnimeMovies('anything'));
+
+      expect(movies.filter(title => anime.includes(title))).toEqual([]);
+      expect([...movies, ...anime].sort()).toEqual(allMovies.map(m => m.title).sort());
     });
   });
 

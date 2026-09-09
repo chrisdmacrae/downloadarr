@@ -21,6 +21,7 @@ export const queryKeys = {
   jackettConfig: ['configuration', 'jackett'] as const,
   updateCheck: ['system', 'updates'] as const,
   systemInfo: ['system', 'info'] as const,
+  systemStorage: ['system', 'storage'] as const,
 };
 
 // Hook for queue statistics
@@ -455,5 +456,15 @@ export const useSystemInfo = () => {
     queryKey: queryKeys.systemInfo,
     queryFn: apiService.getSystemInfo,
     staleTime: 5 * 60 * 1000, // Consider stale after 5 minutes
+  });
+};
+
+// Hook for disk usage of the download and library paths
+export const useStorageInfo = () => {
+  return useQuery({
+    queryKey: queryKeys.systemStorage,
+    queryFn: apiService.getStorageInfo,
+    refetchInterval: 60000, // Refetch every minute
+    staleTime: 30000, // Consider data stale after 30 seconds
   });
 };

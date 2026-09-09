@@ -28,6 +28,46 @@ const TABS: Array<{ id: SearchTab; label: string; noun: string; kind: 'movie' | 
   { id: 'games', label: 'Games', noun: 'games', kind: 'game' },
 ]
 
+type DiscoveryResponse = { success: boolean; data?: SearchResult[]; error?: string }
+
+/**
+ * The anime tab spans both content types, so series and films are fetched
+ * together and interleaved. Each item keeps its own `type`, which is what the
+ * cards and detail modals key off.
+ */
+function mergeAnime(series: DiscoveryResponse, films: DiscoveryResponse): DiscoveryResponse {
+  if (!series.success && !films.success) {
+    return { success: false, error: series.error || films.error }
+  }
+
+  const merged: SearchResult[] = []
+  const seriesItems = series.data ?? []
+  const filmItems = films.data ?? []
+
+  for (let i = 0; i < Math.max(seriesItems.length, filmItems.length); i++) {
+    if (seriesItems[i]) merged.push(seriesItems[i])
+    if (filmItems[i]) merged.push(filmItems[i])
+  }
+
+  return { success: true, data: merged }
+}
+
+async function searchAllAnime(query: string): Promise<DiscoveryResponse> {
+  const [series, films] = await Promise.all([
+    apiService.searchAnime(query),
+    apiService.searchAnimeMovies(query),
+  ])
+  return mergeAnime(series, films)
+}
+
+async function popularAllAnime(): Promise<DiscoveryResponse> {
+  const [series, films] = await Promise.all([
+    apiService.getPopularAnime(1),
+    apiService.getPopularAnimeMovies(1),
+  ])
+  return mergeAnime(series, films)
+}
+
 export default function Search() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [activeTab, setActiveTab] = useState<SearchTab>('movies')
@@ -69,7 +109,7 @@ export default function Search() {
               : activeTab === 'tv'
                 ? await apiService.searchTvShows(activeQuery)
                 : activeTab === 'anime'
-                  ? await apiService.searchAnime(activeQuery)
+                  ? await searchAllAnime(activeQuery)
                   : await apiService.searchGames(activeQuery)
         } else {
           response =
@@ -78,7 +118,7 @@ export default function Search() {
               : activeTab === 'tv'
                 ? await apiService.getPopularTvShows(1)
                 : activeTab === 'anime'
-                  ? await apiService.getPopularAnime(1)
+                  ? await popularAllAnime()
                   : await apiService.getPopularGames(20)
         }
 

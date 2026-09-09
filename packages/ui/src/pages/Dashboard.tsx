@@ -16,6 +16,7 @@ import {
   useAria2Stats,
   useDownloads,
   useQueueStats,
+  useStorageInfo,
   useVpnStatus,
 } from '@/hooks/useApi'
 import {
@@ -42,6 +43,7 @@ export default function Dashboard() {
   const { data: vpnStatus, isLoading: vpnLoading, error: vpnError } = useVpnStatus()
   const { data: aria2Stats, isLoading: aria2Loading, error: aria2Error } = useAria2Stats()
   const { data: downloads, isLoading: downloadsLoading } = useDownloads()
+  const { data: storage, isLoading: storageLoading, error: storageError } = useStorageInfo()
   const { data: requestsPage } = useAggregatedRequests({
     limit: 12,
     sortBy: 'updatedAt',
@@ -78,6 +80,38 @@ export default function Dashboard() {
     : vpnStatus?.enabled
       ? 'var(--status-failed)'
       : 'var(--status-idle)'
+
+  // Downloads and library usually share a disk, so the API flags volumes that
+  // sit on the same filesystem — describe each disk once rather than twice.
+  const storageDetail = useMemo(() => {
+    const volumes = storage?.volumes ?? []
+    if (volumes.length === 0) return 'No paths configured'
+
+    return volumes
+      .filter((v) => !v.sharedWith)
+      .map((disk) => {
+        const names = [disk, ...volumes.filter((v) => v.sharedWith === disk.name)]
+          .map((v) => v.name)
+          .join(' + ')
+        const label = names.charAt(0).toUpperCase() + names.slice(1)
+        if (disk.total == null || disk.available == null) {
+          return `${label}: ${disk.error ?? 'unavailable'}`
+        }
+        return `${label}: ${formatFileSize(disk.available)} free of ${formatFileSize(disk.total)} (${Math.round(disk.usedPercent ?? 0)}% used)`
+      })
+      .join(' · ')
+  }, [storage])
+
+  const storageHealth = useMemo(() => {
+    if (storageLoading) return { status: 'PENDING', label: 'Checking' }
+    if (storageError || (storage?.volumes ?? []).some((v) => v.error)) {
+      return { status: 'FAILED', label: 'Unavailable' }
+    }
+    const worst = Math.max(0, ...(storage?.volumes ?? []).map((v) => v.usedPercent ?? 0))
+    if (worst >= 95) return { status: 'FAILED', label: 'Critical' }
+    if (worst >= 85) return { status: 'PAUSED', label: 'Low' }
+    return { status: 'COMPLETED', label: 'Healthy' }
+  }, [storage, storageLoading, storageError])
 
   return (
     <Page>
@@ -278,6 +312,18 @@ export default function Dashboard() {
               }
               status={aria2Error ? 'FAILED' : aria2Stats ? 'COMPLETED' : 'PENDING'}
             />
+            <SystemRow
+              label="Disk space"
+              detail={
+                storageLoading
+                  ? 'Checking…'
+                  : storageError
+                    ? 'Failed to read disk usage'
+                    : storageDetail
+              }
+              status={storageHealth.status}
+              statusLabel={storageHealth.label}
+            />
           </CardContent>
         </Card>
       </PageSection>
@@ -289,14 +335,17 @@ function SystemRow({
   label,
   detail,
   status,
+  statusLabel,
 }: {
   label: string
   detail: string
   status: string
+  /** Overrides the status pill's own wording — e.g. "Healthy" for disk space. */
+  statusLabel?: string
 }) {
   return (
     <div className="flex items-center gap-4">
-      <StatusBadge status={status} size="sm" />
+      <StatusBadge status={status} label={statusLabel} size="sm" />
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium text-fg-primary">{label}</p>
         <p className="text-xs text-fg-muted">{detail}</p>

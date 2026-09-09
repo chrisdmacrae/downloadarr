@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
+import { promises as fs } from 'fs';
 
 export interface UpdateInfo {
   updateAvailable: boolean;
@@ -11,6 +12,24 @@ export interface UpdateInfo {
   publishedAt: string;
   updateCommand: string;
   description?: string;
+}
+
+export interface StorageVolume {
+  /** Which configured path this is: `downloads` or `library`. */
+  name: string;
+  path: string;
+  /** Bytes; null when the path could not be read. */
+  total: number | null;
+  used: number | null;
+  available: number | null;
+  usedPercent: number | null;
+  /** Name of the volume this one shares a filesystem with, if any. */
+  sharedWith: string | null;
+  error?: string;
+}
+
+export interface StorageInfo {
+  volumes: StorageVolume[];
 }
 
 @Injectable()
@@ -143,5 +162,63 @@ export class SystemService {
       uptime: process.uptime(),
       memory: process.memoryUsage(),
     };
+  }
+
+  /**
+   * Disk usage for the configured download and library paths.
+   *
+   * statfs on a bind-mounted path reports the host filesystem backing the
+   * mount, which is what we want. Downloads and library usually sit on the
+   * same disk, so volumes sharing a device are flagged rather than counted
+   * twice.
+   */
+  async getStorageInfo(): Promise<StorageInfo> {
+    const configured = [
+      { name: 'downloads', path: this.configService.get<string>('DOWNLOAD_PATH', '/downloads') },
+      { name: 'library', path: this.configService.get<string>('LIBRARY_PATH', '/library') },
+    ];
+
+    const deviceOwner = new Map<number, string>();
+    const volumes: StorageVolume[] = [];
+
+    for (const { name, path } of configured) {
+      try {
+        const [fsStat, stat] = await Promise.all([fs.statfs(path), fs.stat(path)]);
+
+        const total = fsStat.bsize * fsStat.blocks;
+        // bavail excludes root-reserved blocks. The API runs as PUID 1000, so
+        // that — not bfree — is what we can actually write.
+        const available = fsStat.bsize * fsStat.bavail;
+        const used = fsStat.bsize * (fsStat.blocks - fsStat.bfree);
+
+        volumes.push({
+          name,
+          path,
+          total,
+          used,
+          available,
+          usedPercent: used + available > 0 ? (used / (used + available)) * 100 : 0,
+          sharedWith: deviceOwner.get(stat.dev) ?? null,
+        });
+
+        if (!deviceOwner.has(stat.dev)) {
+          deviceOwner.set(stat.dev, name);
+        }
+      } catch (error) {
+        this.logger.warn(`Failed to read disk usage for ${path}: ${error.message}`);
+        volumes.push({
+          name,
+          path,
+          total: null,
+          used: null,
+          available: null,
+          usedPercent: null,
+          sharedWith: null,
+          error: 'Path unavailable',
+        });
+      }
+    }
+
+    return { volumes };
   }
 }

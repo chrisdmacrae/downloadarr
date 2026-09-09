@@ -55,6 +55,7 @@ interface TmdbMovieItem {
   backdrop_path: string | null;
   release_date: string;
   genre_ids: number[];
+  origin_country?: string[];
   original_language: string;
   popularity: number;
   vote_average: number;
@@ -238,9 +239,10 @@ export class TmdbService extends BaseExternalApiService {
       }
 
       const genreNames = await this.getGenreNameMap('movie');
-      const searchResults: SearchResult[] = response.data.results.map(item =>
-        this.mapMovieItem(item, genreNames),
-      );
+      // Anime films have their own destination, so they are excluded here.
+      const searchResults: SearchResult[] = response.data.results
+        .filter(item => !this.isAnimeMovie(item))
+        .map(item => this.mapMovieItem(item, genreNames));
 
       return {
         success: true,
@@ -414,9 +416,10 @@ export class TmdbService extends BaseExternalApiService {
       }
 
       const genreNames = await this.getGenreNameMap('movie');
-      const searchResults: SearchResult[] = response.data.results.map(item =>
-        this.mapMovieItem(item, genreNames),
-      );
+      // Anime films have their own destination, so they are excluded here.
+      const searchResults: SearchResult[] = response.data.results
+        .filter(item => !this.isAnimeMovie(item))
+        .map(item => this.mapMovieItem(item, genreNames));
 
       return {
         success: true,
@@ -466,13 +469,25 @@ export class TmdbService extends BaseExternalApiService {
   private static readonly ANIME_LANGUAGE = 'ja';
 
   private isAnime(item: TmdbTvShowItem): boolean {
-    const isAnimated = (item.genre_ids || []).includes(TmdbService.ANIMATION_GENRE_ID);
+    return this.isJapaneseAnimation(item.genre_ids, item.original_language, item.origin_country);
+  }
+
+  /** The same rule for films: Studio Ghibli et al. belong under Anime, not Movies. */
+  private isAnimeMovie(item: TmdbMovieItem): boolean {
+    return this.isJapaneseAnimation(item.genre_ids, item.original_language, item.origin_country);
+  }
+
+  private isJapaneseAnimation(
+    genreIds: number[] | undefined,
+    originalLanguage: string | undefined,
+    originCountry: string[] | undefined,
+  ): boolean {
+    const isAnimated = (genreIds || []).includes(TmdbService.ANIMATION_GENRE_ID);
     if (!isAnimated) {
       return false;
     }
     return (
-      item.original_language === TmdbService.ANIME_LANGUAGE ||
-      (item.origin_country || []).includes('JP')
+      originalLanguage === TmdbService.ANIME_LANGUAGE || (originCountry || []).includes('JP')
     );
   }
 
@@ -547,9 +562,10 @@ export class TmdbService extends BaseExternalApiService {
       }
 
       const genreNames = await this.getGenreNameMap('movie');
-      const searchResults: SearchResult[] = response.data.results.map(item =>
-        this.mapMovieItem(item, genreNames),
-      );
+      // Anime films have their own destination, so they are excluded here.
+      const searchResults: SearchResult[] = response.data.results
+        .filter(item => !this.isAnimeMovie(item))
+        .map(item => this.mapMovieItem(item, genreNames));
 
       return {
         success: true,
@@ -661,6 +677,97 @@ export class TmdbService extends BaseExternalApiService {
       return { success: true, data: searchResults };
     } catch (error) {
       this.logger.error(`Error searching anime: ${error.message}`, error.stack);
+      return { success: false, error: error.message };
+    }
+  }
+
+  private animeMovieDiscoverParams(page: number): Record<string, string> {
+    return {
+      with_genres: TmdbService.ANIMATION_GENRE_ID.toString(),
+      with_original_language: TmdbService.ANIME_LANGUAGE,
+      page: page.toString(),
+      sort_by: 'popularity.desc',
+      include_adult: 'false',
+    };
+  }
+
+  async getPopularAnimeMovies(page: number = 1): Promise<ExternalApiResponse<SearchResult[]>> {
+    try {
+      const response = await this.makeRequest<TmdbMovieSearchResponse>(
+        '/discover/movie',
+        this.animeMovieDiscoverParams(page),
+      );
+
+      if (!response.success || !response.data) {
+        return { success: false, error: response.error };
+      }
+
+      const genreNames = await this.getGenreNameMap('movie');
+      const searchResults: SearchResult[] = response.data.results.map(item =>
+        this.mapMovieItem(item, genreNames),
+      );
+
+      return { success: true, data: searchResults };
+    } catch (error) {
+      this.logger.error(`Error getting popular anime movies: ${error.message}`, error.stack);
+      return { success: false, error: error.message };
+    }
+  }
+
+  async getAnimeMoviesByGenre(genreId: number, page: number = 1): Promise<ExternalApiResponse<SearchResult[]>> {
+    try {
+      const params = this.animeMovieDiscoverParams(page);
+      params.with_genres = `${TmdbService.ANIMATION_GENRE_ID},${genreId}`;
+
+      const response = await this.makeRequest<TmdbMovieSearchResponse>('/discover/movie', params);
+
+      if (!response.success || !response.data) {
+        return { success: false, error: response.error };
+      }
+
+      const genreNames = await this.getGenreNameMap('movie');
+      const searchResults: SearchResult[] = response.data.results.map(item =>
+        this.mapMovieItem(item, genreNames),
+      );
+
+      return { success: true, data: searchResults };
+    } catch (error) {
+      this.logger.error(`Error getting anime movies by genre: ${error.message}`, error.stack);
+      return { success: false, error: error.message };
+    }
+  }
+
+  async searchAnimeMovies(query: string, year?: number, page: number = 1): Promise<ExternalApiResponse<SearchResult[]>> {
+    try {
+      const sanitizedQuery = this.sanitizeSearchQuery(query);
+      if (!sanitizedQuery) {
+        return { success: false, error: 'Invalid search query' };
+      }
+
+      const params: Record<string, any> = {
+        query: sanitizedQuery,
+        page: page.toString(),
+        include_adult: 'false',
+      };
+
+      if (year) {
+        params.year = year.toString();
+      }
+
+      const response = await this.makeRequest<TmdbMovieSearchResponse>('/search/movie', params);
+
+      if (!response.success || !response.data) {
+        return { success: false, error: response.error };
+      }
+
+      const genreNames = await this.getGenreNameMap('movie');
+      const searchResults: SearchResult[] = response.data.results
+        .filter(item => this.isAnimeMovie(item))
+        .map(item => this.mapMovieItem(item, genreNames));
+
+      return { success: true, data: searchResults };
+    } catch (error) {
+      this.logger.error(`Error searching anime movies: ${error.message}`, error.stack);
       return { success: false, error: error.message };
     }
   }

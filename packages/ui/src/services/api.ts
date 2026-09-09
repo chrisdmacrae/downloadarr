@@ -81,6 +81,24 @@ export interface SystemInfo {
   memory: object;
 }
 
+export interface StorageVolume {
+  /** Which configured path this is: `downloads` or `library`. */
+  name: string;
+  path: string;
+  /** Bytes; null when the path could not be read. */
+  total: number | null;
+  used: number | null;
+  available: number | null;
+  usedPercent: number | null;
+  /** Name of the volume this one shares a filesystem with, if any. */
+  sharedWith: string | null;
+  error?: string;
+}
+
+export interface StorageInfo {
+  volumes: StorageVolume[];
+}
+
 export interface Aria2Stats {
   downloadSpeed: string;
   uploadSpeed: string;
@@ -706,6 +724,31 @@ export const apiService = {
   },
 
 
+  searchAnimeMovies: async (query: string, year?: number, page?: number): Promise<{ success: boolean; data?: SearchResult[]; error?: string }> => {
+    const params = new URLSearchParams({ query });
+    if (year) params.append('year', year.toString());
+    if (page) params.append('page', page.toString());
+    const response = await api.get(`/anime/movies/search?${params}`);
+    return response.data;
+  },
+
+  getPopularAnimeMovies: async (page?: number): Promise<{ success: boolean; data?: SearchResult[]; error?: string }> => {
+    const params = page ? `?page=${page}` : '';
+    const response = await api.get(`/anime/movies/popular${params}`);
+    return response.data;
+  },
+
+  getAnimeMovieGenres: async (): Promise<{ success: boolean; data?: Array<{ id: number; name: string }>; error?: string }> => {
+    const response = await api.get('/anime/movies/genres/list');
+    return response.data;
+  },
+
+  getAnimeMoviesByGenre: async (genreId: number, page?: number): Promise<{ success: boolean; data?: SearchResult[]; error?: string }> => {
+    const params = page ? `?page=${page}` : '';
+    const response = await api.get(`/anime/movies/genres/${genreId}${params}`);
+    return response.data;
+  },
+
   searchGames: async (query: string, limit?: number): Promise<{ success: boolean; data?: SearchResult[]; error?: string }> => {
     const params = new URLSearchParams({ query });
     if (limit) params.append('limit', limit.toString());
@@ -1166,6 +1209,11 @@ export const apiService = {
 
   getSystemInfo: async (): Promise<SystemInfo> => {
     const response = await api.get('/system/info');
+    return response.data;
+  },
+
+  getStorageInfo: async (): Promise<StorageInfo> => {
+    const response = await api.get('/system/storage');
     return response.data;
   },
 
