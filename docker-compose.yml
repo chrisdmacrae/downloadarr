@@ -67,7 +67,7 @@ services:
 
   # React Frontend
   frontend:
-    image: ghcr.io/chrisdmacrae/downloadarr/frontend:${APP_VERSION:-latest}
+    image: ghcr.io/chrisdmacrae/downloadarr/ui:${APP_VERSION:-latest}
     container_name: downloadarr-frontend
     restart: unless-stopped
     ports:
