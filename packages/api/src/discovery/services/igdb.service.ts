@@ -96,7 +96,7 @@ export class IgdbService extends BaseExternalApiService {
       const requestBody = `search "${sanitizedQuery}";
 fields id, name, summary, cover.url, first_release_date, genres.name, platforms.name;
 limit ${limit};
-where category = 0${platformFilter};`;
+where game_type = 0${platformFilter};`;
 
       const response = await this.makeIgdbRequest<IgdbGame[]>('/games', requestBody);
 
@@ -196,7 +196,7 @@ where id = ${id};`;
       const requestBody = `fields id, name, summary, cover.url, first_release_date, genres.name, platforms.name;
 sort rating desc;
 limit ${limit};
-where category = 0 & rating_count > 100 & platforms = (${platformFilter});`;
+where game_type = 0 & rating_count > 100 & platforms = (${platformFilter});`;
 
       this.logger.log(`IGDB request body: ${requestBody}`);
       const response = await this.makeIgdbRequest<IgdbGame[]>('/games', requestBody);
@@ -342,7 +342,7 @@ where category = 0 & rating_count > 100 & platforms = (${platformFilter});`;
       const requestBody = `fields id, name, summary, cover.url, first_release_date, genres.name, platforms.name;
 sort rating desc;
 limit ${limit};
-where category = 0 & platforms = (${platformId}) & rating_count > 10;`;
+where game_type = 0 & platforms = (${platformId}) & rating_count > 10;`;
 
       const response = await this.makeIgdbRequest<IgdbGame[]>('/games', requestBody);
 
@@ -406,7 +406,7 @@ where category = 0 & platforms = (${platformId}) & rating_count > 10;`;
       const requestBody = `fields id, name, summary, cover.url, first_release_date, genres.name, platforms.name;
 sort rating desc;
 limit ${limit};
-where category = 0 & platforms = (6) & genres = (${genreId}) & rating_count > 10;`;
+where game_type = 0 & platforms = (6) & genres = (${genreId}) & rating_count > 10;`;
 
       const response = await this.makeIgdbRequest<IgdbGame[]>('/games', requestBody);
 

@@ -2,12 +2,11 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { HttpService } from '@nestjs/axios';
 import { IgdbAuthService } from './igdb-auth.service';
+import { AppConfigurationService } from '../../config/services/app-configuration.service';
 import { of } from 'rxjs';
 
 describe('IgdbAuthService', () => {
   let service: IgdbAuthService;
-  let configService: ConfigService;
-  let httpService: HttpService;
 
   const mockConfigService = {
     get: jest.fn(),
@@ -16,6 +15,18 @@ describe('IgdbAuthService', () => {
   const mockHttpService = {
     post: jest.fn(),
   };
+
+  const mockAppConfigService = {
+    getApiKeysConfig: jest.fn(),
+  };
+
+  const apiKeys = (overrides: Partial<{ igdbClientId: string | null; igdbClientSecret: string | null }> = {}) => ({
+    omdbApiKey: null,
+    tmdbApiKey: null,
+    igdbClientId: 'test-client-id',
+    igdbClientSecret: 'test-client-secret',
+    ...overrides,
+  });
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -29,12 +40,14 @@ describe('IgdbAuthService', () => {
           provide: HttpService,
           useValue: mockHttpService,
         },
+        {
+          provide: AppConfigurationService,
+          useValue: mockAppConfigService,
+        },
       ],
     }).compile();
 
     service = module.get<IgdbAuthService>(IgdbAuthService);
-    configService = module.get<ConfigService>(ConfigService);
-    httpService = module.get<HttpService>(HttpService);
   });
 
   afterEach(() => {
@@ -43,17 +56,7 @@ describe('IgdbAuthService', () => {
 
   describe('getAccessToken', () => {
     it('should return a valid access token', async () => {
-      // Mock environment variables
-      mockConfigService.get.mockImplementation((key: string) => {
-        switch (key) {
-          case 'IGDB_CLIENT_ID':
-            return 'test-client-id';
-          case 'IGDB_CLIENT_SECRET':
-            return 'test-client-secret';
-          default:
-            return undefined;
-        }
-      });
+      mockAppConfigService.getApiKeysConfig.mockResolvedValue(apiKeys());
 
       // Mock successful token response
       const mockTokenResponse = {
@@ -79,7 +82,7 @@ describe('IgdbAuthService', () => {
 
       expect(token).toBe('test-access-token');
       expect(mockHttpService.post).toHaveBeenCalledTimes(2);
-      
+
       // Verify token request
       expect(mockHttpService.post).toHaveBeenNthCalledWith(
         1,
@@ -108,36 +111,18 @@ describe('IgdbAuthService', () => {
     });
 
     it('should throw error when client ID is missing', async () => {
-      mockConfigService.get.mockImplementation((key: string) => {
-        switch (key) {
-          case 'IGDB_CLIENT_ID':
-            return undefined;
-          case 'IGDB_CLIENT_SECRET':
-            return 'test-client-secret';
-          default:
-            return undefined;
-        }
-      });
+      mockAppConfigService.getApiKeysConfig.mockResolvedValue(apiKeys({ igdbClientId: null }));
 
       await expect(service.getAccessToken()).rejects.toThrow(
-        'IGDB_CLIENT_ID is required but not configured'
+        'IGDB Client ID is not configured'
       );
     });
 
     it('should throw error when client secret is missing', async () => {
-      mockConfigService.get.mockImplementation((key: string) => {
-        switch (key) {
-          case 'IGDB_CLIENT_ID':
-            return 'test-client-id';
-          case 'IGDB_CLIENT_SECRET':
-            return undefined;
-          default:
-            return undefined;
-        }
-      });
+      mockAppConfigService.getApiKeysConfig.mockResolvedValue(apiKeys({ igdbClientSecret: null }));
 
       await expect(service.getAccessToken()).rejects.toThrow(
-        'IGDB_CLIENT_SECRET is required but not configured'
+        'IGDB Client Secret is not configured'
       );
     });
   });
@@ -145,7 +130,7 @@ describe('IgdbAuthService', () => {
   describe('getTokenInfo', () => {
     it('should return token info', () => {
       const tokenInfo = service.getTokenInfo();
-      
+
       expect(tokenInfo).toHaveProperty('isValid');
       expect(tokenInfo).toHaveProperty('expiresAt');
       expect(tokenInfo).toHaveProperty('hasToken');
