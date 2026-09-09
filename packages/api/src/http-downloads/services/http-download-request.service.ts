@@ -154,6 +154,8 @@ export class HttpDownloadRequestService {
         genre: dto.genre,
         season: dto.season,
         episode: dto.episode,
+        posterUrl: dto.posterUrl,
+        backdropUrl: dto.backdropUrl,
         status: HttpDownloadRequestStatus.METADATA_MATCHED,
         metadataMatchedAt: new Date(),
         updatedAt: new Date(),

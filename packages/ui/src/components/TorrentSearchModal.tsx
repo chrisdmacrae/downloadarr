@@ -384,14 +384,14 @@ export function TorrentSearchModal({
           )}
 
           {error && (
-            <div className="flex items-center justify-center py-8 text-destructive">
+            <div className="flex items-center justify-center py-8 text-status-failed">
               <AlertCircle className="h-5 w-5 mr-2" />
               <span>{error}</span>
             </div>
           )}
 
           {!isLoading && !error && searchResults.length === 0 && (
-            <div className="flex items-center justify-center py-8 text-muted-foreground">
+            <div className="flex items-center justify-center py-8 text-fg-secondary">
               <span>No torrents found. Try adjusting your search criteria.</span>
             </div>
           )}
@@ -448,31 +448,31 @@ export function TorrentSearchModal({
                       {/* Stats */}
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                         <div className="flex items-center gap-2">
-                          <HardDrive className="h-4 w-4 text-muted-foreground" />
-                          <span className="text-muted-foreground">Size:</span>
+                          <HardDrive className="h-4 w-4 text-fg-secondary" />
+                          <span className="text-fg-secondary">Size:</span>
                           <span className="font-medium">{formatSize(result.size)}</span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <Zap className="h-4 w-4 text-green-500" />
-                          <span className="text-muted-foreground">Seeders:</span>
-                          <span className="font-medium text-green-600">{result.seeders}</span>
+                          <Zap className="h-4 w-4 text-fg-muted" />
+                          <span className="text-fg-secondary">Seeders:</span>
+                          <span className="font-mono font-medium text-fg-primary">{result.seeders}</span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <Users className="h-4 w-4 text-orange-500" />
-                          <span className="text-muted-foreground">Leechers:</span>
-                          <span className="font-medium text-orange-600">{result.leechers}</span>
+                          <Users className="h-4 w-4 text-fg-muted" />
+                          <span className="text-fg-secondary">Leechers:</span>
+                          <span className="font-mono font-medium text-fg-secondary">{result.leechers}</span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <Calendar className="h-4 w-4 text-muted-foreground" />
-                          <span className="text-muted-foreground">Date:</span>
+                          <Calendar className="h-4 w-4 text-fg-secondary" />
+                          <span className="text-fg-secondary">Date:</span>
                           <span className="font-medium">{formatDate(result.publishDate)}</span>
                         </div>
                       </div>
 
                       {result.rankingScore && (
                         <div className="flex items-center gap-2 text-sm">
-                          <Star className="h-4 w-4 text-yellow-500" />
-                          <span className="text-muted-foreground">Score:</span>
+                          <Star className="h-4 w-4 text-fg-muted" />
+                          <span className="text-fg-secondary">Score:</span>
                           <span className="font-medium">{result.rankingScore.toFixed(1)}</span>
                         </div>
                       )}

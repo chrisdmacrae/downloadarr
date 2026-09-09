@@ -34,11 +34,11 @@ export default function JackettStep({ data, onUpdate, onNext }: JackettStepProps
     <div className="space-y-6">
       <div className="space-y-4">
         <div className="text-center">
-          <div className="w-16 h-16 bg-orange-100 dark:bg-orange-900 rounded-full flex items-center justify-center mx-auto mb-4">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-pill bg-[color:var(--accent-quiet)]">
             <span className="text-2xl">🔍</span>
           </div>
           <h3 className="text-lg font-semibold mb-2">Configure Jackett</h3>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-fg-secondary">
             Jackett is required to search for torrents across multiple indexers.
             You'll need to get your API key from the Jackett web interface.
           </p>

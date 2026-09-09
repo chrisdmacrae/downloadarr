@@ -343,16 +343,16 @@ export function HttpDownloadRequestModal({ open, onOpenChange, onRequestCreated 
                   placeholder="https://example.com/file.zip"
                   value={formData.url}
                   onChange={(e) => handleUrlChange(e.target.value)}
-                  className={urlError ? 'border-red-500' : ''}
+                  className={urlError ? 'border-[color:var(--status-failed)]' : ''}
                   rows={3}
                 />
                 {urlError && (
-                  <div className="flex items-center space-x-2 text-destructive text-sm">
+                  <div className="flex items-center space-x-2 text-status-failed text-sm">
                     <AlertCircle className="h-4 w-4" />
                     <span>{urlError}</span>
                   </div>
                 )}
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-fg-secondary">
                   Paste the direct HTTP or HTTPS download URL
                 </p>
               </div>
@@ -369,7 +369,7 @@ export function HttpDownloadRequestModal({ open, onOpenChange, onRequestCreated 
                     value={formData.filename}
                     onChange={(e) => setFormData(prev => ({ ...prev, filename: e.target.value }))}
                   />
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm text-fg-secondary">
                     Override the detected filename
                   </p>
                 </div>
@@ -382,7 +382,7 @@ export function HttpDownloadRequestModal({ open, onOpenChange, onRequestCreated 
                     value={formData.destination}
                     onChange={(e) => setFormData(prev => ({ ...prev, destination: e.target.value }))}
                   />
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm text-fg-secondary">
                     Custom download destination
                   </p>
                 </div>
@@ -407,7 +407,7 @@ export function HttpDownloadRequestModal({ open, onOpenChange, onRequestCreated 
                     <SelectItem value="7">7 (Lowest)</SelectItem>
                   </SelectContent>
                 </Select>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-fg-secondary">
                   Download priority (1 = highest, 7 = lowest)
                 </p>
               </div>

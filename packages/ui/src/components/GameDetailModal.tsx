@@ -103,7 +103,7 @@ export function GameDetailModal({ gameId, title, open, onOpenChange }: GameDetai
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* Cover Art */}
           <div className="md:col-span-1">
-            <div className="aspect-[2/3] bg-muted rounded-lg overflow-hidden">
+            <div className="aspect-[2/3] bg-white/[.05] rounded-lg overflow-hidden">
               {gameDetails?.poster ? (
                 <img
                   src={gameDetails.poster}
@@ -111,7 +111,7 @@ export function GameDetailModal({ gameId, title, open, onOpenChange }: GameDetai
                   className="w-full h-full object-cover"
                 />
               ) : (
-                <div className="w-full h-full flex items-center justify-center text-muted-foreground">
+                <div className="w-full h-full flex items-center justify-center text-fg-secondary">
                   <Gamepad2 className="h-16 w-16" />
                 </div>
               )}
@@ -133,13 +133,13 @@ export function GameDetailModal({ gameId, title, open, onOpenChange }: GameDetai
                 <div className="flex flex-wrap gap-2 items-center">
                   <Badge variant="secondary">Game</Badge>
                   {gameDetails?.year && (
-                    <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                    <div className="flex items-center gap-1 text-sm text-fg-secondary">
                       <Calendar className="h-4 w-4" />
                       {gameDetails.year}
                     </div>
                   )}
                   {gameDetails?.rating && (
-                    <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                    <div className="flex items-center gap-1 text-sm text-fg-secondary">
                       <Star className="h-4 w-4" />
                       {gameDetails.rating}/10
                     </div>
@@ -172,7 +172,7 @@ export function GameDetailModal({ gameId, title, open, onOpenChange }: GameDetai
                 {gameDetails?.overview && (
                   <div>
                     <h3 className="font-semibold mb-2">Overview</h3>
-                    <p className="text-sm text-muted-foreground leading-relaxed">
+                    <p className="text-sm text-fg-secondary leading-relaxed">
                       {gameDetails.overview}
                     </p>
                   </div>
@@ -183,10 +183,10 @@ export function GameDetailModal({ gameId, title, open, onOpenChange }: GameDetai
                   <div className="space-y-2">
                     {gameDetails.developer && (
                       <div className="flex items-start gap-2">
-                        <User className="h-4 w-4 mt-0.5 text-muted-foreground" />
+                        <User className="h-4 w-4 mt-0.5 text-fg-secondary" />
                         <div>
                           <span className="text-sm font-medium">Developer: </span>
-                          <span className="text-sm text-muted-foreground">
+                          <span className="text-sm text-fg-secondary">
                             {gameDetails.developer}
                           </span>
                         </div>
@@ -194,10 +194,10 @@ export function GameDetailModal({ gameId, title, open, onOpenChange }: GameDetai
                     )}
                     {gameDetails.publisher && (
                       <div className="flex items-start gap-2">
-                        <Building className="h-4 w-4 mt-0.5 text-muted-foreground" />
+                        <Building className="h-4 w-4 mt-0.5 text-fg-secondary" />
                         <div>
                           <span className="text-sm font-medium">Publisher: </span>
-                          <span className="text-sm text-muted-foreground">
+                          <span className="text-sm text-fg-secondary">
                             {gameDetails.publisher}
                           </span>
                         </div>
@@ -212,7 +212,7 @@ export function GameDetailModal({ gameId, title, open, onOpenChange }: GameDetai
                     <h3 className="font-semibold mb-2">Screenshots</h3>
                     <div className="grid grid-cols-2 gap-2">
                       {gameDetails.screenshots.slice(0, 4).map((screenshot, index) => (
-                        <div key={index} className="aspect-video bg-muted rounded overflow-hidden">
+                        <div key={index} className="aspect-video bg-white/[.05] rounded overflow-hidden">
                           <img
                             src={screenshot}
                             alt={`${gameDetails.title} screenshot ${index + 1}`}

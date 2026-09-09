@@ -94,7 +94,7 @@ export class IgdbService extends BaseExternalApiService {
       }
 
       const requestBody = `search "${sanitizedQuery}";
-fields id, name, summary, cover.url, first_release_date, genres.name, platforms.name;
+fields id, name, summary, cover.url, first_release_date, genres.name, platforms.name, screenshots.url, rating;
 limit ${limit};
 where game_type = 0${platformFilter};`;
 
@@ -107,14 +107,7 @@ where game_type = 0${platformFilter};`;
         };
       }
 
-      const searchResults: SearchResult[] = response.data.map(game => ({
-        id: game.id.toString(),
-        title: game.name,
-        year: game.first_release_date ? new Date(game.first_release_date * 1000).getFullYear() : undefined,
-        poster: game.cover?.url ? this.formatImageUrl(game.cover.url) : undefined,
-        overview: game.summary || undefined,
-        type: 'game' as const,
-      }));
+      const searchResults: SearchResult[] = response.data.map(game => this.mapGameItem(game));
 
       return {
         success: true,
@@ -160,11 +153,13 @@ where id = ${id};`;
         title: game.name,
         year: game.first_release_date ? new Date(game.first_release_date * 1000).getFullYear() : undefined,
         poster: game.cover?.url ? this.formatImageUrl(game.cover.url) : undefined,
+        backdrop: game.screenshots?.[0]?.url ? this.formatScreenshotUrl(game.screenshots[0].url) : undefined,
         overview: game.summary || undefined,
         type: 'game',
         igdbId: game.id,
         platforms: game.platforms?.map(p => p.name) || undefined,
         genre: game.genres?.map(g => g.name) || undefined,
+        genres: game.genres?.map(g => g.name) || undefined,
         developer: developers.length > 0 ? developers.join(', ') : undefined,
         publisher: publishers.length > 0 ? publishers.join(', ') : undefined,
         releaseDate: game.first_release_date ? new Date(game.first_release_date * 1000).toISOString().split('T')[0] : undefined,
@@ -193,7 +188,7 @@ where id = ${id};`;
       const supportedPlatformIds = [18, 19, 4, 21, 5, 41, 33, 22, 24, 130, 29, 32, 23, 7, 8, 9, 11, 12];
       const platformFilter = supportedPlatformIds.join(',');
 
-      const requestBody = `fields id, name, summary, cover.url, first_release_date, genres.name, platforms.name;
+      const requestBody = `fields id, name, summary, cover.url, first_release_date, genres.name, platforms.name, screenshots.url, rating;
 sort rating desc;
 limit ${limit};
 where game_type = 0 & rating_count > 100 & platforms = (${platformFilter});`;
@@ -218,17 +213,7 @@ where game_type = 0 & rating_count > 100 & platforms = (${platformFilter});`;
 
       this.logger.log(`Raw IGDB data sample:`, response.data.slice(0, 1));
 
-      const searchResults: SearchResult[] = response.data.map(game => {
-        this.logger.log(`Mapping game:`, { id: game.id, name: game.name, hasName: !!game.name, hasCover: !!game.cover });
-        return {
-          id: game.id.toString(),
-          title: game.name,
-          year: game.first_release_date ? new Date(game.first_release_date * 1000).getFullYear() : undefined,
-          poster: game.cover?.url ? this.formatImageUrl(game.cover.url) : undefined,
-          overview: game.summary || undefined,
-          type: 'game' as const,
-        };
-      });
+      const searchResults: SearchResult[] = response.data.map(game => this.mapGameItem(game));
 
       this.logger.log(`Mapped ${searchResults.length} games for popular games response`);
       this.logger.log(`Sample mapped result:`, searchResults[0]);
@@ -281,6 +266,26 @@ where game_type = 0 & rating_count > 100 & platforms = (${platformFilter});`;
         statusCode: error.status || 500,
       };
     }
+  }
+
+  /**
+   * Maps an IGDB game onto the shared SearchResult shape, including the facts the
+   * poster hover panel shows: rating chip, platform, categories, and a screenshot
+   * standing in as landscape artwork (IGDB has no dedicated backdrop).
+   */
+  private mapGameItem(game: IgdbGame): SearchResult {
+    return {
+      id: game.id.toString(),
+      title: game.name,
+      year: game.first_release_date ? new Date(game.first_release_date * 1000).getFullYear() : undefined,
+      poster: game.cover?.url ? this.formatImageUrl(game.cover.url) : undefined,
+      backdrop: game.screenshots?.[0]?.url ? this.formatScreenshotUrl(game.screenshots[0].url) : undefined,
+      overview: game.summary || undefined,
+      type: 'game' as const,
+      rating: game.rating ? Math.round(game.rating) / 10 : undefined,
+      genres: game.genres?.map(g => g.name) || undefined,
+      platforms: game.platforms?.map(p => p.name) || undefined,
+    };
   }
 
   private formatImageUrl(url: string): string {
@@ -339,7 +344,7 @@ where game_type = 0 & rating_count > 100 & platforms = (${platformFilter});`;
         };
       }
 
-      const requestBody = `fields id, name, summary, cover.url, first_release_date, genres.name, platforms.name;
+      const requestBody = `fields id, name, summary, cover.url, first_release_date, genres.name, platforms.name, screenshots.url, rating;
 sort rating desc;
 limit ${limit};
 where game_type = 0 & platforms = (${platformId}) & rating_count > 10;`;
@@ -353,14 +358,7 @@ where game_type = 0 & platforms = (${platformId}) & rating_count > 10;`;
         };
       }
 
-      const searchResults: SearchResult[] = response.data.map(game => ({
-        id: game.id.toString(),
-        title: game.name,
-        year: game.first_release_date ? new Date(game.first_release_date * 1000).getFullYear() : undefined,
-        poster: game.cover?.url ? this.formatImageUrl(game.cover.url) : undefined,
-        overview: game.summary || undefined,
-        type: 'game' as const,
-      }));
+      const searchResults: SearchResult[] = response.data.map(game => this.mapGameItem(game));
 
       return {
         success: true,
@@ -403,7 +401,7 @@ where game_type = 0 & platforms = (${platformId}) & rating_count > 10;`;
       }
 
       // PC platform ID is 6 (Microsoft Windows)
-      const requestBody = `fields id, name, summary, cover.url, first_release_date, genres.name, platforms.name;
+      const requestBody = `fields id, name, summary, cover.url, first_release_date, genres.name, platforms.name, screenshots.url, rating;
 sort rating desc;
 limit ${limit};
 where game_type = 0 & platforms = (6) & genres = (${genreId}) & rating_count > 10;`;
@@ -417,14 +415,7 @@ where game_type = 0 & platforms = (6) & genres = (${genreId}) & rating_count > 1
         };
       }
 
-      const searchResults: SearchResult[] = response.data.map(game => ({
-        id: game.id.toString(),
-        title: game.name,
-        year: game.first_release_date ? new Date(game.first_release_date * 1000).getFullYear() : undefined,
-        poster: game.cover?.url ? this.formatImageUrl(game.cover.url) : undefined,
-        overview: game.summary || undefined,
-        type: 'game' as const,
-      }));
+      const searchResults: SearchResult[] = response.data.map(game => this.mapGameItem(game));
 
       this.logger.log(`Found ${searchResults.length} PC games for genre ${genreName}`);
 

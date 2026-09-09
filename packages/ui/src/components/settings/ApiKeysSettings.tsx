@@ -59,7 +59,7 @@ export default function ApiKeysSettings({
               <CardTitle className="text-base flex items-center">
                 <Film className="w-4 h-4 mr-2" />
                 OMDB API Key
-                <span className="ml-2 text-xs bg-secondary text-secondary-foreground px-2 py-1 rounded">
+                <span className="ml-2 text-xs bg-surface-raised text-fg-primary px-2 py-1 rounded">
                   Optional
                 </span>
               </CardTitle>
@@ -110,7 +110,7 @@ export default function ApiKeysSettings({
               <CardTitle className="text-base flex items-center">
                 <Film className="w-4 h-4 mr-2" />
                 TMDB API Key
-                <span className="ml-2 text-xs bg-secondary text-secondary-foreground px-2 py-1 rounded">
+                <span className="ml-2 text-xs bg-surface-raised text-fg-primary px-2 py-1 rounded">
                   Optional
                 </span>
               </CardTitle>
@@ -161,7 +161,7 @@ export default function ApiKeysSettings({
               <CardTitle className="text-base flex items-center">
                 <Gamepad2 className="w-4 h-4 mr-2" />
                 IGDB API Keys
-                <span className="ml-2 text-xs bg-secondary text-secondary-foreground px-2 py-1 rounded">
+                <span className="ml-2 text-xs bg-surface-raised text-fg-primary px-2 py-1 rounded">
                   Optional
                 </span>
               </CardTitle>
@@ -220,18 +220,18 @@ export default function ApiKeysSettings({
         </div>
 
         {hasAnyApiKey && (
-          <div className="bg-green-50 dark:bg-green-950/20 p-4 rounded-lg border border-green-200 dark:border-green-800">
+          <div className="rounded-card border border-hairline bg-white/[.08] p-4">
             <div className="flex items-center space-x-2">
-              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-              <p className="text-sm font-medium text-green-900 dark:text-green-100">
+              <span className="h-1.5 w-1.5 rounded-pill bg-[color:var(--status-completed)]" />
+              <p className="text-sm font-medium text-fg-primary">
                 API keys configured for enhanced functionality
               </p>
             </div>
           </div>
         )}
 
-        <div className="bg-gray-50 dark:bg-gray-950/20 p-4 rounded-lg border">
-          <p className="text-sm text-muted-foreground">
+        <div className="rounded-card border border-hairline bg-white/[.05] p-4">
+          <p className="text-sm text-fg-muted">
             <strong>Note:</strong> These API keys are optional. Downloadarr will work without them, 
             but some discovery and metadata features may be limited.
           </p>

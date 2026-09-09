@@ -72,7 +72,7 @@ export function TvShowSeasonBadges({ request, onSeasonClick, className }: TvShow
             Ongoing Series
           </Badge>
           <div className="flex items-center justify-between">
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-fg-secondary">
               Seasons will appear as episodes are discovered
             </p>
             <Button
@@ -154,7 +154,7 @@ export function TvShowSeasonBadges({ request, onSeasonClick, className }: TvShow
       {/* Ongoing Series Progress */}
       {overallProgress.totalEpisodes > 0 && (
         <div className="space-y-1">
-          <div className="flex justify-between text-xs text-muted-foreground">
+          <div className="flex justify-between text-xs text-fg-secondary">
             <span>Series Progress</span>
             <span>{overallProgress.completedEpisodes}/{overallProgress.totalEpisodes} episodes</span>
           </div>
@@ -176,7 +176,7 @@ export function TvShowSeasonBadges({ request, onSeasonClick, className }: TvShow
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-auto p-1 hover:bg-muted"
+                className="h-auto p-1 hover:bg-white/[.05]"
                 onClick={() => onSeasonClick?.(season.seasonNumber)}
               >
                 <Badge 
@@ -190,7 +190,7 @@ export function TvShowSeasonBadges({ request, onSeasonClick, className }: TvShow
               
               {/* Mini progress bar for individual season */}
               {season.totalEpisodes > 0 && progress > 0 && progress < 100 && (
-                <div className="absolute bottom-0 left-1 right-1 h-0.5 bg-muted rounded-full overflow-hidden">
+                <div className="absolute bottom-0 left-1 right-1 h-0.5 bg-white/[.05] rounded-full overflow-hidden">
                   <div 
                     className="h-full bg-primary transition-all duration-300"
                     style={{ width: `${progress}%` }}
@@ -229,7 +229,7 @@ export function TvShowSeasonBadges({ request, onSeasonClick, className }: TvShow
       </div>
 
       {/* Summary text for mobile */}
-      <div className="md:hidden text-xs text-muted-foreground">
+      <div className="md:hidden text-xs text-fg-secondary">
         {seasons.length} season{seasons.length !== 1 ? 's' : ''}
         {overallProgress.totalEpisodes > 0 && (
           <> • {overallProgress.completedEpisodes}/{overallProgress.totalEpisodes} episodes</>

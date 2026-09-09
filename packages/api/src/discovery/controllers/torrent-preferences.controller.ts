@@ -177,7 +177,7 @@ export class TorrentPreferencesController {
       // Validate updates
       this.validatePreferenceUpdates(updates);
       
-      const updatedPreferences = this.preferencesService.updatePreferences(updates);
+      const updatedPreferences = await this.preferencesService.updatePreferences(updates);
 
       return {
         success: true,

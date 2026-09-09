@@ -218,9 +218,9 @@ export function HttpMetadataMatchModal({ request, open, onOpenChange, onMetadata
           {/* Request Info */}
           <div className="space-y-2">
             <Label>Download Request</Label>
-            <div className="p-3 bg-muted rounded-lg">
+            <div className="p-3 bg-white/[.05] rounded-lg">
               <p className="font-medium">{request.filename || 'Unknown filename'}</p>
-              <p className="text-sm text-muted-foreground truncate">{request.url}</p>
+              <p className="text-sm text-fg-secondary truncate">{request.url}</p>
             </div>
           </div>
 
@@ -288,7 +288,7 @@ export function HttpMetadataMatchModal({ request, open, onOpenChange, onMetadata
                       <Card
                         key={result.id}
                         className={`cursor-pointer transition-colors ${
-                          selectedResult?.id === result.id ? 'ring-2 ring-primary' : 'hover:bg-muted'
+                          selectedResult?.id === result.id ? 'ring-2 ring-primary' : 'hover:bg-white/[.05]'
                         }`}
                         onClick={() => setSelectedResult(result)}
                       >
@@ -296,7 +296,7 @@ export function HttpMetadataMatchModal({ request, open, onOpenChange, onMetadata
                           <div className="flex items-center justify-between">
                             <div>
                               <p className="font-medium">{result.title}</p>
-                              {result.year && <p className="text-sm text-muted-foreground">{result.year}</p>}
+                              {result.year && <p className="text-sm text-fg-secondary">{result.year}</p>}
                             </div>
                             <Badge variant="outline">{result.type}</Badge>
                           </div>

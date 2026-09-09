@@ -5,17 +5,27 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 
 const labelVariants = cva(
-  "text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+  "inline-flex items-center gap-1.5 text-sm font-medium leading-snug text-fg-body peer-disabled:cursor-not-allowed peer-disabled:opacity-70",
+  {
+    variants: {
+      variant: {
+        default: "",
+        // The only uppercase in the system besides status pills.
+        eyebrow: "font-condensed text-2xs font-bold uppercase tracking-eyebrow text-fg-muted",
+      },
+    },
+    defaultVariants: { variant: "default" },
+  }
 )
 
 const Label = React.forwardRef<
   React.ElementRef<typeof LabelPrimitive.Root>,
   React.ComponentPropsWithoutRef<typeof LabelPrimitive.Root> &
     VariantProps<typeof labelVariants>
->(({ className, ...props }, ref) => (
+>(({ className, variant, ...props }, ref) => (
   <LabelPrimitive.Root
     ref={ref}
-    className={cn(labelVariants(), className)}
+    className={cn(labelVariants({ variant }), className)}
     {...props}
   />
 ))

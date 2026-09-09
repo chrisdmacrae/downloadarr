@@ -135,7 +135,7 @@ export function TvShowSeasonModal({ isOpen, onClose, request, seasonNumber }: Tv
                     <Badge variant={season.status === 'COMPLETED' ? 'default' : 'secondary'}>
                       {season.status}
                     </Badge>
-                    <span className="text-sm text-muted-foreground">
+                    <span className="text-sm text-fg-secondary">
                       {completedEpisodes}/{totalEpisodes} episodes completed
                     </span>
                   </div>
@@ -153,7 +153,7 @@ export function TvShowSeasonModal({ isOpen, onClose, request, seasonNumber }: Tv
                 {totalEpisodes > 0 && (
                   <div className="space-y-1">
                     <Progress value={progress} className="h-2" />
-                    <div className="flex justify-between text-xs text-muted-foreground">
+                    <div className="flex justify-between text-xs text-fg-secondary">
                       <span>{progress.toFixed(1)}% complete</span>
                       <span>{totalEpisodes} total episodes</span>
                     </div>
@@ -167,7 +167,7 @@ export function TvShowSeasonModal({ isOpen, onClose, request, seasonNumber }: Tv
               <h3 className="text-lg font-semibold">Episodes</h3>
               
               {episodes.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
+                <div className="text-center py-8 text-fg-secondary">
                   <Clock className="h-12 w-12 mx-auto mb-4 opacity-50" />
                   <p>No episodes found for this season</p>
                   <p className="text-sm">Episodes will appear as they become available</p>
@@ -180,7 +180,7 @@ export function TvShowSeasonModal({ isOpen, onClose, request, seasonNumber }: Tv
                     return (
                       <div
                         key={episode.id}
-                        className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50"
+                        className="flex items-center justify-between p-3 border rounded-lg hover:bg-white/[.05]"
                       >
                         <div className="flex items-center gap-3 flex-1 min-w-0">
                           <Badge variant={getEpisodeVariant(episode)} className="flex items-center gap-1">
@@ -194,13 +194,13 @@ export function TvShowSeasonModal({ isOpen, onClose, request, seasonNumber }: Tv
                                 Episode {episode.episodeNumber}
                               </span>
                               {episode.title && (
-                                <span className="text-muted-foreground truncate">
+                                <span className="text-fg-secondary truncate">
                                   - {episode.title}
                                 </span>
                               )}
                             </div>
                             
-                            <div className="flex items-center gap-4 text-xs text-muted-foreground mt-1">
+                            <div className="flex items-center gap-4 text-xs text-fg-secondary mt-1">
                               {episode.airDate && (
                                 <div className="flex items-center gap-1">
                                   <Calendar className="h-3 w-3" />

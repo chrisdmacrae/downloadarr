@@ -1,369 +1,180 @@
-import { useState, useEffect } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
-import { SearchResultCarousel } from '@/components/SearchResultCarousel'
-import { SearchResultCard } from '@/components/SearchResultCard'
+import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
+
+import { DiscoveryScreen, type DiscoveryRail } from '@/components/discovery/DiscoveryScreen'
 import { GameDetailModal } from '@/components/GameDetailModal'
-import { DownloadStatusBadge } from '@/components/DownloadStatusBadge'
 import { SearchResult, apiService } from '@/services/api'
 import { useToast } from '@/hooks/use-toast'
-import { useTorrentRequests } from '@/hooks/useTorrentRequests'
-import { Skeleton } from '@/components/ui/skeleton'
-import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
-import { Search as SearchIcon } from 'lucide-react'
 
-interface Platform {
-  name: string
-  id: number
-}
+type GamesTab = 'pc' | 'rom'
 
-interface Genre {
-  name: string
-}
+/** ROM platforms this screen builds rails from, in order. */
+const TARGET_PLATFORMS = [
+  'NES',
+  'SNES',
+  'N64',
+  'GameCube',
+  'Wii',
+  'Wii U',
+  'Game Boy',
+  'Game Boy Color',
+  'Game Boy Advance',
+  'Switch',
+  'Genesis',
+  'Saturn',
+  'Dreamcast',
+  'PlayStation',
+  'PlayStation 2',
+  'PlayStation 3',
+  'Xbox',
+  'Xbox 360',
+]
+
+const PC_GENRES = [
+  'Action',
+  'Adventure',
+  'Strategy',
+  'RPG',
+  'Shooter',
+  'Simulation',
+  'Sports',
+  'Racing',
+  'Puzzle',
+  'Indie',
+]
 
 export default function GamesDiscovery() {
   const [searchParams, setSearchParams] = useSearchParams()
-  const [activeTab, setActiveTab] = useState<'pc' | 'rom'>('pc')
-  const [featuredGames, setFeaturedGames] = useState<SearchResult[]>([])
-  const [popularGames, setPopularGames] = useState<SearchResult[]>([])
-  const [platforms, setPlatforms] = useState<Platform[]>([])
-  const [platformGames, setPlatformGames] = useState<Record<string, SearchResult[]>>({})
-  const [pcGenres, setPcGenres] = useState<Genre[]>([])
-  const [pcGenreGames, setPcGenreGames] = useState<Record<string, SearchResult[]>>({})
-  const [selectedGame, setSelectedGame] = useState<{
-    id: string
-    title: string
-  } | null>(null)
+  const [activeTab, setActiveTab] = useState<GamesTab>('pc')
+  const [featured, setFeatured] = useState<SearchResult[]>([])
+  const [popular, setPopular] = useState<SearchResult[]>([])
+  const [rails, setRails] = useState<DiscoveryRail[]>([])
+  const [selectedGame, setSelectedGame] = useState<{ id: string; title: string } | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
-  const [searchQuery, setSearchQuery] = useState('')
   const { toast } = useToast()
-  const navigate = useNavigate()
-  const { getRequestForGame } = useTorrentRequests()
 
-  // Target platforms from the spec (for ROM tab)
-  const targetPlatforms = [
-    'NES', 'SNES', 'N64', 'GameCube', 'Wii', 'Wii U',
-    'Game Boy', 'Game Boy Color', 'Game Boy Advance', 'Switch',
-    'Genesis', 'Saturn', 'Dreamcast',
-    'PlayStation', 'PlayStation 2', 'PlayStation 3',
-    'Xbox', 'Xbox 360'
-  ]
-
-  // PC game genres
-  const pcGameGenres = [
-    'Action', 'Adventure', 'Strategy', 'RPG', 'Shooter',
-    'Simulation', 'Sports', 'Racing', 'Puzzle', 'Indie'
-  ]
-
-  // Handle tab changes
-  const handleTabChange = (tab: 'pc' | 'rom') => {
-    setActiveTab(tab)
-    const newParams = new URLSearchParams(searchParams)
-    newParams.set('tab', tab)
-    setSearchParams(newParams)
-  }
-
-  // Initialize from URL parameters
   useEffect(() => {
-    const tab = searchParams.get('tab') as 'pc' | 'rom'
-    if (tab && ['pc', 'rom'].includes(tab)) {
-      setActiveTab(tab)
-    }
+    const tab = searchParams.get('tab') as GamesTab | null
+    if (tab && ['pc', 'rom'].includes(tab)) setActiveTab(tab)
   }, [searchParams])
 
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab as GamesTab)
+    const next = new URLSearchParams(searchParams)
+    next.set('tab', tab)
+    setSearchParams(next)
+  }
+
   useEffect(() => {
-    loadDiscoveryData()
+    let cancelled = false
+
+    const load = async () => {
+      setIsLoading(true)
+      setRails([])
+      try {
+        if (activeTab === 'pc') {
+          const first = await apiService.getPcGamesByGenre(PC_GENRES[0], 25)
+          if (!cancelled && first.success && first.data) {
+            setFeatured(first.data.slice(0, 5))
+            setPopular(first.data.slice(5))
+          }
+
+          const built: DiscoveryRail[] = []
+          for (const genre of PC_GENRES) {
+            try {
+              const response = await apiService.getPcGamesByGenre(genre, 20)
+              if (response.success && response.data?.length) {
+                built.push({ id: genre, title: genre, items: response.data.slice(0, 20) })
+              }
+            } catch (err) {
+              console.error(`Failed to load PC games for genre ${genre}:`, err)
+            }
+          }
+          if (!cancelled) setRails(built)
+        } else {
+          const popularResponse = await apiService.getPopularGames(25)
+          if (!cancelled && popularResponse.success && popularResponse.data) {
+            setFeatured(popularResponse.data.slice(0, 5))
+            setPopular(popularResponse.data.slice(5))
+          }
+
+          const platformsResponse = await apiService.getSupportedPlatforms()
+          if (!cancelled && platformsResponse.success && platformsResponse.data) {
+            const platforms = TARGET_PLATFORMS.map((name) =>
+              platformsResponse.data!.find((p) => p.name === name)
+            ).filter(Boolean) as Array<{ name: string; id: number }>
+
+            const built: DiscoveryRail[] = []
+            for (const platform of platforms) {
+              try {
+                const response = await apiService.getGamesByPlatform(platform.name, 20)
+                if (response.success && response.data?.length) {
+                  built.push({
+                    id: platform.name,
+                    title: platform.name,
+                    items: response.data.slice(0, 20),
+                  })
+                }
+              } catch (err) {
+                console.error(`Failed to load games for platform ${platform.name}:`, err)
+              }
+            }
+            if (!cancelled) setRails(built)
+          }
+        }
+      } catch {
+        if (!cancelled) {
+          toast({
+            title: 'Discovery unavailable',
+            description: 'Failed to load games discovery data. Check your IGDB keys in Settings.',
+            variant: 'destructive',
+          })
+        }
+      } finally {
+        if (!cancelled) setIsLoading(false)
+      }
+    }
+
+    load()
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab])
 
-  const loadDiscoveryData = async () => {
-    setIsLoading(true)
-    try {
-      if (activeTab === 'pc') {
-        // Load PC games by genre
-        // Get PC games from the first genre for featured/popular
-        const firstGenreResponse = await apiService.getPcGamesByGenre(pcGameGenres[0], 25)
-        if (firstGenreResponse.success && firstGenreResponse.data) {
-          const games = firstGenreResponse.data
-          setFeaturedGames(games.slice(0, 5)) // Top 5 for featured
-          setPopularGames(games.slice(5)) // Rest for carousel
-        }
-
-        // Set up PC genres
-        const genres = pcGameGenres.map(name => ({ name }))
-        setPcGenres(genres)
-
-        // Load games for each PC genre
-        const genreGamesData: Record<string, SearchResult[]> = {}
-        for (const genreName of pcGameGenres) {
-          try {
-            const genreResponse = await apiService.getPcGamesByGenre(genreName, 20)
-            if (genreResponse.success && genreResponse.data) {
-              genreGamesData[genreName] = genreResponse.data.slice(0, 20) // Limit to 20 per genre
-            }
-          } catch (error) {
-            console.error(`Failed to load PC games for genre ${genreName}:`, error)
-          }
-        }
-        setPcGenreGames(genreGamesData)
-
-        // Clear platform data for PC tab
-        setPlatforms([])
-        setPlatformGames({})
-      } else {
-        // ROM tab - load platform-based games
-        // Load popular games first
-        const popularResponse = await apiService.getPopularGames(25)
-        if (popularResponse.success && popularResponse.data) {
-          const games = popularResponse.data
-          setFeaturedGames(games.slice(0, 5)) // Top 5 for featured
-          setPopularGames(games.slice(5)) // Rest for carousel
-        }
-
-        // Load supported platforms
-        const platformsResponse = await apiService.getSupportedPlatforms()
-        if (platformsResponse.success && platformsResponse.data) {
-          // Filter to only include the platforms we want and in the order we want
-          const filteredPlatforms = targetPlatforms
-            .map(targetName => platformsResponse.data!.find(p => p.name === targetName))
-            .filter(Boolean) as Platform[]
-
-          setPlatforms(filteredPlatforms)
-
-          // Load games for each platform
-          const platformGamesData: Record<string, SearchResult[]> = {}
-          for (const platform of filteredPlatforms) {
-            try {
-              const platformResponse = await apiService.getGamesByPlatform(platform.name, 20)
-              if (platformResponse.success && platformResponse.data) {
-                platformGamesData[platform.name] = platformResponse.data.slice(0, 20) // Limit to 20 per platform
-              }
-            } catch (error) {
-              console.error(`Failed to load games for platform ${platform.name}:`, error)
-            }
-          }
-          setPlatformGames(platformGamesData)
-        }
-
-        // Clear PC genre data for ROM tab
-        setPcGenres([])
-        setPcGenreGames({})
-      }
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to load games discovery data",
-      })
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  const handleGameClick = (game: SearchResult) => {
-    setSelectedGame({
-      id: game.id,
-      title: game.title
-    })
-    setIsModalOpen(true)
-  }
-
-  const handleSearch = () => {
-    if (searchQuery.trim()) {
-      navigate(`/search?q=${encodeURIComponent(searchQuery.trim())}&tab=games`)
-    }
-  }
-
-  const tabs = [
-    { id: 'pc' as const, label: 'PC' },
-    { id: 'rom' as const, label: 'ROM' },
-  ]
-
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      handleSearch()
-    }
-  }
-
-  const getStatusBadge = (item: SearchResult) => {
-    const torrentRequest = getRequestForGame(item.title, item.year)
-    return torrentRequest ? <DownloadStatusBadge request={torrentRequest} variant="compact" /> : undefined
-  }
-
-  if (isLoading) {
-    return (
-      <div className="space-y-4 md:space-y-8">
-        <div>
-          <h1 className="text-3xl font-bold mb-2">Discover Games</h1>
-          <p className="text-muted-foreground">Find your next gaming adventure</p>
-        </div>
-
-        {/* Search Bar Skeleton */}
-        <div className="max-w-2xl">
-          <div className="flex space-x-2">
-            <Skeleton className="flex-1 h-10" />
-            <Skeleton className="h-10 w-20" />
-          </div>
-        </div>
-
-        {/* Tabs Skeleton */}
-        <div className="flex space-x-1 bg-muted p-1 rounded-lg w-fit">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                activeTab === tab.id
-                  ? 'bg-background text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Featured Section Skeleton */}
-        <div className="space-y-4">
-          <Skeleton className="h-8 w-48" />
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="space-y-2">
-                <Skeleton className="aspect-[2/3] w-full" />
-                <Skeleton className="h-4 w-3/4" />
-                <Skeleton className="h-3 w-1/2" />
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Carousels Skeleton */}
-        {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="space-y-4">
-            <Skeleton className="h-6 w-32" />
-            <div className="flex space-x-4 overflow-hidden">
-              {Array.from({ length: 6 }).map((_, j) => (
-                <div key={j} className="flex-shrink-0 w-48 space-y-2">
-                  <Skeleton className="aspect-[2/3] w-full" />
-                  <Skeleton className="h-4 w-3/4" />
-                  <Skeleton className="h-3 w-1/2" />
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-    )
-  }
-
   return (
-    <div className="space-y-4 md:space-y-8">
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold mb-2">Discover Games</h1>
-        <p className="text-muted-foreground">Find your next gaming adventure</p>
-      </div>
+    <>
+      <DiscoveryScreen
+        kind="game"
+        eyebrow="Find"
+        title="Discover games"
+        description="Find your next gaming adventure, for games that you own"
+        searchPlaceholder="Search for games…"
+        searchTab="games"
+        featured={featured}
+        popular={popular}
+        popularTitle={activeTab === 'pc' ? 'Popular PC games' : 'Popular ROMs'}
+        genreRails={rails}
+        isLoading={isLoading}
+        tabs={[
+          { id: 'pc', label: 'PC' },
+          { id: 'rom', label: 'ROM' },
+        ]}
+        activeTab={activeTab}
+        onTabChange={handleTabChange}
+        onItemClick={(item) => {
+          setSelectedGame({ id: item.id, title: item.title })
+          setIsModalOpen(true)
+        }}
+        requestLabel="View details"
+        onRequest={(item) => {
+          // Games pick a platform first, so the detail modal owns the request.
+          setSelectedGame({ id: item.id, title: item.title })
+          setIsModalOpen(true)
+        }}
+      />
 
-      {/* Search Bar */}
-      <div className="max-w-2xl">
-        <div className="flex space-x-2">
-          <div className="relative flex-1">
-            <SearchIcon className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-            <Input
-              type="text"
-              placeholder="Search for games..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={handleKeyPress}
-              className="pl-10"
-            />
-          </div>
-          <Button onClick={handleSearch} disabled={!searchQuery.trim()}>
-            Search
-          </Button>
-        </div>
-      </div>
-
-      {/* Tabs */}
-      <div className="flex space-x-1 bg-muted p-1 rounded-lg w-fit">
-        {tabs.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => handleTabChange(tab.id)}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-              activeTab === tab.id
-                ? 'bg-background text-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Featured Section */}
-      {featuredGames.length > 0 && (
-        <div className="space-y-4">
-          <h2 className="text-2xl font-semibold">Featured</h2>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-            {featuredGames.map((game) => (
-              <SearchResultCard
-                key={game.id}
-                item={game}
-                onClick={handleGameClick}
-                size="medium"
-                showOverview={false}
-                statusBadge={getStatusBadge(game)}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Popular Games Carousel */}
-      {popularGames.length > 0 && (
-        <SearchResultCarousel
-          title={activeTab === 'pc' ? 'Popular PC Games' : 'Popular Games'}
-          items={popularGames}
-          onItemClick={handleGameClick}
-          cardSize="medium"
-          getStatusBadge={getStatusBadge}
-        />
-      )}
-
-      {/* PC Genre Carousels - Only show for PC tab */}
-      {activeTab === 'pc' && pcGenres.map((genre) => {
-        const games = pcGenreGames[genre.name]
-        if (!games || games.length === 0) return null
-
-        return (
-          <SearchResultCarousel
-            key={genre.name}
-            title={genre.name}
-            items={games}
-            onItemClick={handleGameClick}
-            cardSize="medium"
-            getStatusBadge={getStatusBadge}
-          />
-        )
-      })}
-
-      {/* Platform Carousels - Only show for ROM tab */}
-      {activeTab === 'rom' && platforms.map((platform) => {
-        const games = platformGames[platform.name]
-        if (!games || games.length === 0) return null
-
-        return (
-          <SearchResultCarousel
-            key={platform.name}
-            title={platform.name}
-            items={games}
-            onItemClick={handleGameClick}
-            cardSize="medium"
-            getStatusBadge={getStatusBadge}
-          />
-        )
-      })}
-
-      {/* Game Detail Modal */}
       {selectedGame && (
         <GameDetailModal
           gameId={selectedGame.id}
@@ -372,6 +183,6 @@ export default function GamesDiscovery() {
           onOpenChange={setIsModalOpen}
         />
       )}
-    </div>
+    </>
   )
 }

@@ -1,322 +1,250 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Card, CardContent } from '@/components/ui/card'
+import { AlertCircle, Loader2, Search as SearchIcon } from 'lucide-react'
+
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Search as SearchIcon, Loader2, AlertCircle } from 'lucide-react'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { EmptyState, Page, PageHeader, PageSection } from '@/components/ds/Page'
+import { PosterCard, PosterCardSkeleton } from '@/components/ds/PosterCard'
+import { Rail } from '@/components/ds/Rail'
+import { StatusBadge } from '@/components/ds/StatusBadge'
+import { posterDetails } from '@/components/discovery/DiscoveryScreen'
 import { MovieDetailModal } from '@/components/MovieDetailModal'
 import { GameDetailModal } from '@/components/GameDetailModal'
-import { SearchResultCard } from '@/components/SearchResultCard'
-
-import { DownloadStatusBadge } from '@/components/DownloadStatusBadge'
-
+import { DownloadRequestModal } from '@/components/DownloadRequestModal'
 import { apiService, SearchResult } from '@/services/api'
 import { useTorrentRequests } from '@/hooks/useTorrentRequests'
 import { useToast } from '@/hooks/use-toast'
 
+type SearchTab = 'movies' | 'tv' | 'games'
+
+const TABS: Array<{ id: SearchTab; label: string; noun: string; kind: 'movie' | 'tv' | 'game' }> = [
+  { id: 'movies', label: 'Movies', noun: 'movies', kind: 'movie' },
+  { id: 'tv', label: 'TV shows', noun: 'TV shows', kind: 'tv' },
+  { id: 'games', label: 'Games', noun: 'games', kind: 'game' },
+]
+
 export default function Search() {
   const [searchParams, setSearchParams] = useSearchParams()
-  const [activeTab, setActiveTab] = useState<'movies' | 'tv' | 'games'>('movies')
+  const [activeTab, setActiveTab] = useState<SearchTab>('movies')
   const [searchQuery, setSearchQuery] = useState('')
-  const [searchResults, setSearchResults] = useState<SearchResult[]>([])
+  const [results, setResults] = useState<SearchResult[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selectedItem, setSelectedItem] = useState<SearchResult | null>(null)
   const [showDetailModal, setShowDetailModal] = useState(false)
+  const [requestItem, setRequestItem] = useState<SearchResult | null>(null)
 
-  const { getRequestForItem, getRequestForShow } = useTorrentRequests()
+  const { getRequestForItem, getRequestForShow, getRequestForGame } = useTorrentRequests()
   const { toast } = useToast()
 
-  // Update URL when tab changes
-  const handleTabChange = (tab: 'movies' | 'tv' | 'games') => {
-    setActiveTab(tab)
-    const newParams = new URLSearchParams(searchParams)
-    newParams.set('tab', tab)
-    setSearchParams(newParams)
-  }
+  const tabConfig = TABS.find((t) => t.id === activeTab)!
+  const activeQuery = searchParams.get('q')?.trim() || ''
 
-  // Initialize from URL parameters
+  // Initialize from URL parameters.
   useEffect(() => {
     const query = searchParams.get('q')
-    const tab = searchParams.get('tab') as 'movies' | 'tv' | 'games'
-
-    if (query) {
-      setSearchQuery(query)
-    }
-
-    if (tab && ['movies', 'tv', 'games'].includes(tab)) {
-      setActiveTab(tab)
-    }
+    const tab = searchParams.get('tab') as SearchTab | null
+    if (query) setSearchQuery(query)
+    if (tab && TABS.some((t) => t.id === tab)) setActiveTab(tab)
   }, [searchParams])
 
-  // Perform search when query is set from URL
+  // A query searches; no query shows the tab's popular content.
   useEffect(() => {
-    const query = searchParams.get('q')
-    if (query && query.trim()) {
-      performSearch(query.trim())
-    }
-  }, [searchParams, activeTab])
+    let cancelled = false
 
-  // Load popular content when tab changes
-  useEffect(() => {
-    loadPopularContent()
-  }, [activeTab])
-
-  const loadPopularContent = async () => {
-    if (searchQuery) return // Don't load popular if there's a search query
-
-    setIsLoading(true)
-    setError(null)
-
-    try {
-      let response
-      switch (activeTab) {
-        case 'movies':
-          response = await apiService.getPopularMovies(1)
-          break
-        case 'tv':
-          response = await apiService.getPopularTvShows(1)
-          break
-        case 'games':
-          response = await apiService.getPopularGames(20)
-          break
-        default:
-          setSearchResults([])
-          setIsLoading(false)
-          return
-      }
-
-      if (response.success && response.data) {
-        setSearchResults(response.data)
-      } else {
-        setError(response.error || 'Failed to load content')
-      }
-    } catch (err) {
-      setError('Failed to load content')
-      console.error('Error loading popular content:', err)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  const performSearch = async (query: string) => {
-    if (!query.trim()) {
-      return
-    }
-
-    setIsLoading(true)
-    setError(null)
-
-    try {
-      let response
-      switch (activeTab) {
-        case 'movies':
-          response = await apiService.searchMovies(query)
-          break
-        case 'tv':
-          response = await apiService.searchTvShows(query)
-          break
-        case 'games':
-          response = await apiService.searchGames(query)
-          break
-      }
-
-      if (response.success && response.data) {
-        setSearchResults(response.data)
-        if (response.data.length === 0) {
-          toast({
-            title: "No results found",
-            description: `No ${activeTab} found for "${query}"`,
-          })
+    const run = async () => {
+      setIsLoading(true)
+      setError(null)
+      try {
+        let response
+        if (activeQuery) {
+          response =
+            activeTab === 'movies'
+              ? await apiService.searchMovies(activeQuery)
+              : activeTab === 'tv'
+                ? await apiService.searchTvShows(activeQuery)
+                : await apiService.searchGames(activeQuery)
+        } else {
+          response =
+            activeTab === 'movies'
+              ? await apiService.getPopularMovies(1)
+              : activeTab === 'tv'
+                ? await apiService.getPopularTvShows(1)
+                : await apiService.getPopularGames(20)
         }
-      } else {
-        setError(response.error || 'Search failed')
-        toast({
-          title: "Search failed",
-          description: response.error || 'An error occurred while searching',
-        })
-      }
-    } catch (err) {
-      setError('Search failed')
-      toast({
-        title: "Search failed",
-        description: 'An error occurred while searching',
-      })
-      console.error('Search error:', err)
-    } finally {
-      setIsLoading(false)
-    }
-  }
 
-  const handleSearch = async () => {
-    if (!searchQuery.trim()) {
-      toast({
-        title: "Search query required",
-        description: "Please enter a search term",
-      })
+        if (cancelled) return
+
+        if (response.success && response.data) {
+          setResults(response.data)
+          if (activeQuery && response.data.length === 0) {
+            toast({
+              title: 'No results found',
+              description: `No ${tabConfig.noun} found for “${activeQuery}”.`,
+            })
+          }
+        } else {
+          setError(response.error || (activeQuery ? 'Search failed' : 'Failed to load content'))
+        }
+      } catch (err) {
+        if (cancelled) return
+        console.error('Search error:', err)
+        setError(activeQuery ? 'Search failed' : 'Failed to load content')
+      } finally {
+        if (!cancelled) setIsLoading(false)
+      }
+    }
+
+    run()
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeQuery, activeTab])
+
+  const submitSearch = (e: React.FormEvent) => {
+    e.preventDefault()
+    const trimmed = searchQuery.trim()
+    if (!trimmed) {
+      toast({ title: 'Search query required', description: 'Enter a search term to continue.' })
       return
     }
-
-    // Update URL parameters
-    const newParams = new URLSearchParams(searchParams)
-    newParams.set('q', searchQuery.trim())
-    newParams.set('tab', activeTab)
-    setSearchParams(newParams)
-
-    await performSearch(searchQuery.trim())
+    const next = new URLSearchParams(searchParams)
+    next.set('q', trimmed)
+    next.set('tab', activeTab)
+    setSearchParams(next)
   }
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      handleSearch()
-    }
+  const changeTab = (tab: SearchTab) => {
+    setActiveTab(tab)
+    const next = new URLSearchParams(searchParams)
+    if (searchQuery.trim()) next.set('q', searchQuery.trim())
+    next.set('tab', tab)
+    setSearchParams(next)
   }
 
-  const handleItemClick = (item: SearchResult) => {
-    setSelectedItem(item)
-    if (item.type === 'game') {
-      setShowDetailModal(true)
-    } else {
-      setShowDetailModal(true)
-    }
+  const requestFor = (item: SearchResult) => {
+    if (item.type === 'tv') return getRequestForShow(item.title, item.year)
+    if (item.type === 'game') return getRequestForGame(item.title, item.year)
+    return getRequestForItem(item.title, item.year, undefined, undefined, 'MOVIE')
   }
-
-
-
-  const tabs = [
-    { id: 'movies' as const, label: 'Movies' },
-    { id: 'tv' as const, label: 'TV Shows' },
-    { id: 'games' as const, label: 'Games' },
-  ]
 
   return (
-    <div className="space-y-4 md:space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Search</h1>
-        <p className="text-muted-foreground">
-          Discover and download movies, TV shows, and ROMs
-        </p>
-      </div>
+    <Page className="pt-8">
+      <PageSection bleedRails className="gap-6">
+        <PageHeader
+          eyebrow="Find"
+          title="Search"
+          description="Discover and download movies, TV shows and ROMs you own"
+        />
 
-      {/* Search Bar */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex space-x-2">
-            <div className="relative flex-1">
-              <SearchIcon className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-              <Input
-                type="text"
-                placeholder={`Search for ${activeTab === 'games' ? 'games' : activeTab === 'tv' ? 'TV shows' : 'movies'}...`}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyDown={handleKeyPress}
-                className="pl-10"
-              />
-            </div>
-            <Button onClick={handleSearch} disabled={isLoading}>
-              {isLoading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                'Search'
-              )}
-            </Button>
+        <form onSubmit={submitSearch} className="flex max-w-2xl gap-2">
+          <div className="relative flex-1">
+            <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-muted" />
+            <Input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={`Search for ${tabConfig.noun}…`}
+              className="pl-10"
+            />
           </div>
-        </CardContent>
-      </Card>
+          <Button type="submit" disabled={isLoading}>
+            {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Search'}
+          </Button>
+        </form>
 
-      {/* Tabs */}
-      <div className="flex space-x-1 bg-muted p-1 rounded-lg w-fit">
-        {tabs.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => {
-              handleTabChange(tab.id)
-              setSearchResults([])
-              setError(null)
-              // Keep search query in URL when switching tabs
-              const newParams = new URLSearchParams(searchParams)
-              if (searchQuery.trim()) {
-                newParams.set('q', searchQuery.trim())
-              }
-              newParams.set('tab', tab.id)
-              setSearchParams(newParams)
+        <Tabs value={activeTab} onValueChange={(value) => changeTab(value as SearchTab)}>
+          <TabsList>
+            {TABS.map((tab) => (
+              <TabsTrigger key={tab.id} value={tab.id}>
+                {tab.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
 
-              // If there's a search query, perform search for the new tab
-              if (searchQuery.trim()) {
-                performSearch(searchQuery.trim())
-              }
-            }}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-              activeTab === tab.id
-                ? 'bg-background text-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
+        {error ? (
+          <EmptyState icon={<AlertCircle />} title="Search unavailable" description={error} />
+        ) : isLoading ? (
+          <Rail title={activeQuery ? `Results for “${activeQuery}”` : `Popular ${tabConfig.noun}`}>
+            {Array.from({ length: 8 }).map((_, i) => (
+              <PosterCardSkeleton key={i} game={activeTab === 'games'} />
+            ))}
+          </Rail>
+        ) : results.length === 0 ? (
+          <EmptyState
+            icon={<SearchIcon />}
+            title={activeQuery ? `No results for “${activeQuery}”` : 'Nothing to show yet'}
+            description={
+              activeQuery
+                ? 'Try a different spelling, or switch tabs to search another content type.'
+                : 'Check your discovery API keys in Settings, then reload this page.'
+            }
+          />
+        ) : (
+          <Rail
+            title={activeQuery ? `Results for “${activeQuery}”` : `Popular ${tabConfig.noun}`}
+            count={results.length}
           >
-            {tab.label}
-          </button>
-        ))}
-      </div>
+            {results.map((item, index) => {
+              const request = requestFor(item)
+              return (
+                <PosterCard
+                  key={item.id}
+                  title={item.title}
+                  type={item.type}
+                  poster={item.poster}
+                  year={item.year}
+                  details={posterDetails(item)}
+                  anchor={index === 0 ? 'start' : index === results.length - 1 ? 'end' : 'center'}
+                  status={
+                    request ? <StatusBadge status={request.status} onArtwork size="sm" /> : undefined
+                  }
+                  onClick={() => {
+                    setSelectedItem(item)
+                    setShowDetailModal(true)
+                  }}
+                  actions={
+                    <>
+                      <Button
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          if (item.type === 'game') {
+                            setSelectedItem(item)
+                            setShowDetailModal(true)
+                          } else {
+                            setRequestItem(item)
+                          }
+                        }}
+                      >
+                        {item.type === 'game' ? 'View details' : 'Request'}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setSelectedItem(item)
+                          setShowDetailModal(true)
+                        }}
+                      >
+                        Details
+                      </Button>
+                    </>
+                  }
+                />
+              )
+            })}
+          </Rail>
+        )}
+      </PageSection>
 
-      {/* Error State */}
-      {error && (
-        <Card className="border-destructive">
-          <CardContent className="pt-6">
-            <div className="flex items-center space-x-2 text-destructive">
-              <AlertCircle className="h-4 w-4" />
-              <span>{error}</span>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Loading State */}
-      {isLoading && (
-        <div className="flex justify-center py-8">
-          <Loader2 className="h-8 w-8 animate-spin" />
-        </div>
-      )}
-
-      {/* Search Results */}
-      {!isLoading && !error && (
-        <>
-          {searchResults.length === 0 && searchQuery && (
-            <Card>
-              <CardContent className="pt-6 text-center text-muted-foreground">
-                <SearchIcon className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>No results found for "{searchQuery}"</p>
-              </CardContent>
-            </Card>
-          )}
-
-          {searchResults.length > 0 && (
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
-              {searchResults.map((item) => {
-                const torrentRequest = item.type === 'tv'
-                  ? getRequestForShow(item.title, item.year)
-                  : item.type === 'movie'
-                    ? getRequestForItem(item.title, item.year, undefined, undefined, 'MOVIE')
-                    : undefined
-
-                return (
-                  <SearchResultCard
-                    key={item.id}
-                    item={item}
-                    onClick={handleItemClick}
-                    showOverview={true}
-                    showDownloadButton={item.type === 'game'}
-                    statusBadge={torrentRequest ? <DownloadStatusBadge request={torrentRequest} variant='compact' /> : undefined}
-                  />
-                )
-              })}
-            </div>
-          )}
-        </>
-      )}
-
-      {/* Detail Modals */}
       {selectedItem && selectedItem.type !== 'game' && (
         <MovieDetailModal
-          contentType={selectedItem.type as 'movie' | 'tv'}
+          contentType={selectedItem.type}
           contentId={selectedItem.id}
           title={selectedItem.title}
           open={showDetailModal}
@@ -333,6 +261,11 @@ export default function Search() {
         />
       )}
 
-    </div>
+      <DownloadRequestModal
+        item={requestItem}
+        open={!!requestItem}
+        onOpenChange={(open) => !open && setRequestItem(null)}
+      />
+    </Page>
   )
 }

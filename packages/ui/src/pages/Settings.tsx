@@ -1,48 +1,109 @@
-import { useState, useEffect } from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { useEffect, useMemo, useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
+import {
+  FolderTree,
+  Gauge,
+  HardDrive,
+  KeyRound,
+  Radar,
+  ShieldCheck,
+  SlidersHorizontal,
+  Wand2,
+} from 'lucide-react'
+
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import { Switch } from '@/components/ui/switch'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
-import { useToast } from '@/hooks/use-toast'
-import { useOrganizationSettings, useUpdateOrganizationSettings, useTriggerReverseIndexing, useReverseIndexingStatus } from '@/hooks/useApi'
-import { useAppConfiguration, useUpdateAppConfiguration } from '@/hooks/useOnboarding'
+import { Switch } from '@/components/ui/switch'
+import { Page, PageHeader, PageSection } from '@/components/ds/Page'
+import { SidebarNav, type SidebarGroup } from '@/components/ds/SidebarNav'
+import { StatusBadge } from '@/components/ds/StatusBadge'
 import ApiKeysSettings from '@/components/settings/ApiKeysSettings'
 import JackettSettings from '@/components/settings/JackettSettings'
+import { OrganizationSection } from '@/components/settings/OrganizationSection'
+import { QualityRulesSettings } from '@/components/settings/QualityRulesSettings'
+import { useToast } from '@/hooks/use-toast'
+import {
+  useOrganizationSettings,
+  useOrganizeQueueStats,
+  useReverseIndexingStatus,
+  useSystemInfo,
+  useTriggerReverseIndexing,
+  useUpdateOrganizationSettings,
+  useVpnStatus,
+} from '@/hooks/useApi'
+import { useAppConfiguration, useUpdateAppConfiguration } from '@/hooks/useOnboarding'
 import type { OrganizationSettings } from '@/services/api'
 
+type SectionId =
+  | 'general'
+  | 'indexing'
+  | 'discovery'
+  | 'quality'
+  | 'organization'
+  | 'paths'
+  | 'vpn'
+  | 'setup'
+
+const SECTION_TITLES: Record<SectionId, { title: string; description: string }> = {
+  general: { title: 'General', description: 'How this instance is configured and what version it runs' },
+  indexing: { title: 'Indexing', description: 'Jackett and the Cloudflare bypass your indexers need' },
+  discovery: { title: 'Discovery keys', description: 'API keys for movie, TV and game metadata' },
+  quality: { title: 'Quality rules', description: 'Defaults applied to every new request' },
+  organization: {
+    title: 'Organization',
+    description: 'Naming rules, and folders that need manual organization',
+  },
+  paths: { title: 'Paths & storage', description: 'Where your library lives and how files get filed' },
+  vpn: { title: 'VPN', description: 'Download traffic routing and connection health' },
+  setup: { title: 'Setup wizard', description: 'Re-run onboarding from the beginning' },
+}
+
+const SECTION_IDS = Object.keys(SECTION_TITLES) as SectionId[]
+
 export default function Settings() {
+  const { section } = useParams<{ section?: string }>()
+  const navigate = useNavigate()
   const { toast } = useToast()
+
+  const activeSection: SectionId =
+    section && SECTION_IDS.includes(section as SectionId) ? (section as SectionId) : 'general'
+
   const { data: settings, isLoading: settingsLoading } = useOrganizationSettings()
   const { data: reverseIndexingStatus } = useReverseIndexingStatus()
   const { data: appConfig, isLoading: appConfigLoading } = useAppConfiguration()
+  const { data: queueStats } = useOrganizeQueueStats()
+  const { data: systemInfo } = useSystemInfo()
+  const { data: vpnStatus } = useVpnStatus()
   const updateSettings = useUpdateOrganizationSettings()
   const updateAppConfig = useUpdateAppConfiguration()
   const triggerReverseIndexing = useTriggerReverseIndexing()
 
-  // Local state for forms
   const [formData, setFormData] = useState<Partial<OrganizationSettings>>({})
   const [appConfigData, setAppConfigData] = useState({
     jackettApiKey: '',
     jackettUrl: '',
+    flaresolverrUrl: '',
     omdbApiKey: '',
     tmdbApiKey: '',
     igdbClientId: '',
     igdbClientSecret: '',
   })
 
-  // Update form data when settings are loaded
   useEffect(() => {
-    if (settings) {
-      setFormData(settings)
-    }
+    if (settings) setFormData(settings)
   }, [settings])
 
-  // Update app config data when loaded
   useEffect(() => {
     if (appConfig) {
       setAppConfigData({
         jackettApiKey: appConfig.jackettApiKey || '',
         jackettUrl: appConfig.jackettUrl || '',
+        flaresolverrUrl: appConfig.flaresolverrUrl || '',
         omdbApiKey: appConfig.omdbApiKey || '',
         tmdbApiKey: appConfig.tmdbApiKey || '',
         igdbClientId: appConfig.igdbClientId || '',
@@ -51,28 +112,65 @@ export default function Settings() {
     }
   }, [appConfig])
 
-  const handleInputChange = (field: keyof OrganizationSettings, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }))
-  }
+  const groups: SidebarGroup[] = useMemo(
+    () => [
+      {
+        label: 'Configuration',
+        items: [
+          { id: 'general', label: 'General', icon: SlidersHorizontal },
+          { id: 'indexing', label: 'Indexing', icon: Radar },
+          { id: 'discovery', label: 'Discovery keys', icon: KeyRound },
+          { id: 'quality', label: 'Quality rules', icon: Gauge },
+        ],
+      },
+      {
+        label: 'Library',
+        items: [
+          {
+            id: 'organization',
+            label: 'Organization',
+            icon: FolderTree,
+            count: queueStats?.pending || undefined,
+          },
+          { id: 'paths', label: 'Paths & storage', icon: HardDrive },
+        ],
+      },
+      {
+        label: 'System',
+        items: [
+          { id: 'vpn', label: 'VPN', icon: ShieldCheck },
+          { id: 'setup', label: 'Setup wizard', icon: Wand2 },
+        ],
+      },
+    ],
+    [queueStats]
+  )
 
-  const handleAppConfigChange = (updates: Partial<typeof appConfigData>) => {
-    setAppConfigData(prev => ({ ...prev, ...updates }))
-  }
+  const handleAppConfigChange = (updates: Partial<typeof appConfigData>) =>
+    setAppConfigData((prev) => ({ ...prev, ...updates }))
+
+  const handleInputChange = (field: keyof OrganizationSettings, value: string) =>
+    setFormData((prev) => ({ ...prev, [field]: value }))
+
+  const handleSwitchChange = (field: keyof OrganizationSettings, checked: boolean) =>
+    setFormData((prev) => ({ ...prev, [field]: checked }))
 
   const handleSaveJackettConfig = async () => {
     try {
       await updateAppConfig.mutateAsync({
         jackettApiKey: appConfigData.jackettApiKey || undefined,
         jackettUrl: appConfigData.jackettUrl || undefined,
+        flaresolverrUrl: appConfigData.flaresolverrUrl || undefined,
       })
       toast({
-        title: "Jackett settings saved",
-        description: "Jackett configuration has been updated successfully.",
+        title: 'Indexing settings saved',
+        description: 'Jackett configuration has been updated successfully.',
       })
-    } catch (error) {
+    } catch {
       toast({
-        title: "Error",
-        description: "Failed to save Jackett settings. Please try again.",
+        title: 'Save failed',
+        description: 'Failed to save indexing settings. Please try again.',
+        variant: 'destructive',
       })
     }
   }
@@ -86,25 +184,21 @@ export default function Settings() {
         igdbClientSecret: appConfigData.igdbClientSecret || undefined,
       })
       toast({
-        title: "API keys saved",
-        description: "External API keys have been updated successfully.",
+        title: 'API keys saved',
+        description: 'External API keys have been updated successfully.',
       })
-    } catch (error) {
+    } catch {
       toast({
-        title: "Error",
-        description: "Failed to save API keys. Please try again.",
+        title: 'Save failed',
+        description: 'Failed to save API keys. Please try again.',
+        variant: 'destructive',
       })
     }
   }
 
-  const handleSwitchChange = (field: keyof OrganizationSettings, checked: boolean) => {
-    setFormData(prev => ({ ...prev, [field]: checked }))
-  }
-
   const handleSaveSettings = async () => {
     try {
-      // Filter out read-only fields before sending the update
-      const updateData = {
+      await updateSettings.mutateAsync({
         libraryPath: formData.libraryPath,
         moviesPath: formData.moviesPath,
         tvShowsPath: formData.tvShowsPath,
@@ -115,17 +209,16 @@ export default function Settings() {
         deleteAfterExtraction: formData.deleteAfterExtraction,
         enableReverseIndexing: formData.enableReverseIndexing,
         reverseIndexingCron: formData.reverseIndexingCron,
-      }
-
-      await updateSettings.mutateAsync(updateData)
-      toast({
-        title: "Settings saved",
-        description: "Organization settings have been updated successfully.",
       })
-    } catch (error) {
       toast({
-        title: "Error",
-        description: "Failed to save organization settings. Please try again.",
+        title: 'Settings saved',
+        description: 'Organization settings have been updated successfully.',
+      })
+    } catch {
+      toast({
+        title: 'Save failed',
+        description: 'Failed to save organization settings. Please try again.',
+        variant: 'destructive',
       })
     }
   }
@@ -133,396 +226,435 @@ export default function Settings() {
   const handleTriggerReverseIndexing = async () => {
     try {
       const result = await triggerReverseIndexing.mutateAsync()
+      toast({ title: 'Reverse indexing started', description: result.message })
+    } catch {
       toast({
-        title: "Reverse indexing started",
-        description: result.message,
-      })
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to start reverse indexing. Please try again.",
+        title: 'Scan failed',
+        description: 'Failed to start reverse indexing. Please try again.',
+        variant: 'destructive',
       })
     }
   }
 
   const handleResetToDefaults = () => {
-    if (settings) {
-      setFormData({
-        libraryPath: '/library',
-        moviesPath: '',
-        tvShowsPath: '',
-        gamesPath: '',
-        organizeOnComplete: true,
-        replaceExistingFiles: true,
-        extractArchives: true,
-        deleteAfterExtraction: true,
-        enableReverseIndexing: true,
-        reverseIndexingCron: '0 * * * *',
-      })
-    }
+    setFormData({
+      libraryPath: '/library',
+      moviesPath: '',
+      tvShowsPath: '',
+      gamesPath: '',
+      organizeOnComplete: true,
+      replaceExistingFiles: true,
+      extractArchives: true,
+      deleteAfterExtraction: true,
+      enableReverseIndexing: true,
+      reverseIndexingCron: '0 * * * *',
+    })
   }
 
-  if (settingsLoading || appConfigLoading) {
-    return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold">Settings</h1>
-          <p className="text-muted-foreground">Configure your downloadarr instance</p>
-        </div>
-
-        {/* Download Settings Skeleton */}
-        <Card>
-          <CardHeader>
-            <Skeleton className="h-6 w-48" />
-            <Skeleton className="h-4 w-96" />
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Skeleton className="h-4 w-32" />
-              <Skeleton className="h-10 w-full" />
-            </div>
-            <div className="space-y-2">
-              <Skeleton className="h-4 w-24" />
-              <Skeleton className="h-10 w-full" />
-            </div>
-            <div className="flex space-x-2">
-              <Skeleton className="h-10 w-32" />
-              <Skeleton className="h-10 w-40" />
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Jackett Settings Skeleton */}
-        <Card>
-          <CardHeader>
-            <Skeleton className="h-6 w-40" />
-            <Skeleton className="h-4 w-64" />
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Skeleton className="h-4 w-24" />
-              <Skeleton className="h-10 w-full" />
-            </div>
-            <div className="space-y-2">
-              <Skeleton className="h-4 w-20" />
-              <Skeleton className="h-10 w-full" />
-            </div>
-            <div className="flex space-x-2">
-              <Skeleton className="h-10 w-32" />
-              <Skeleton className="h-10 w-48" />
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* API Keys Settings Skeleton */}
-        <Card>
-          <CardHeader>
-            <Skeleton className="h-6 w-48" />
-            <Skeleton className="h-4 w-80" />
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="space-y-4">
-              <Skeleton className="h-32 w-full" />
-              <Skeleton className="h-32 w-full" />
-              <Skeleton className="h-32 w-full" />
-            </div>
-            <div className="flex justify-end">
-              <Skeleton className="h-10 w-32" />
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Organization Settings Skeleton */}
-        <Card>
-          <CardHeader>
-            <Skeleton className="h-6 w-48" />
-            <Skeleton className="h-4 w-80" />
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {/* Library Paths Skeleton */}
-            <div className="space-y-4">
-              <Skeleton className="h-5 w-32" />
-              <div className="space-y-2">
-                <Skeleton className="h-4 w-40" />
-                <Skeleton className="h-10 w-full" />
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Skeleton className="h-4 w-24" />
-                  <Skeleton className="h-10 w-full" />
-                </div>
-                <div className="space-y-2">
-                  <Skeleton className="h-4 w-28" />
-                  <Skeleton className="h-10 w-full" />
-                </div>
-                <div className="space-y-2">
-                  <Skeleton className="h-4 w-24" />
-                  <Skeleton className="h-10 w-full" />
-                </div>
-              </div>
-            </div>
-
-            {/* Organization Behavior Skeleton */}
-            <div className="space-y-4">
-              <Skeleton className="h-5 w-48" />
-              <div className="space-y-3">
-                {[1, 2, 3, 4].map((i) => (
-                  <div key={i} className="flex items-center justify-between">
-                    <div className="space-y-1">
-                      <Skeleton className="h-4 w-48" />
-                      <Skeleton className="h-3 w-80" />
-                    </div>
-                    <Skeleton className="h-6 w-11 rounded-full" />
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Reverse Indexing Skeleton */}
-            <div className="space-y-4">
-              <Skeleton className="h-5 w-40" />
-              <div className="flex items-center justify-between">
-                <div className="space-y-1">
-                  <Skeleton className="h-4 w-44" />
-                  <Skeleton className="h-3 w-96" />
-                </div>
-                <Skeleton className="h-6 w-11 rounded-full" />
-              </div>
-              <div className="space-y-2">
-                <Skeleton className="h-4 w-28" />
-                <Skeleton className="h-10 w-full" />
-              </div>
-              <div className="flex space-x-2">
-                <Skeleton className="h-10 w-24" />
-                <Skeleton className="h-10 w-32" />
-              </div>
-            </div>
-
-            <div className="flex space-x-2">
-              <Skeleton className="h-10 w-48" />
-              <Skeleton className="h-10 w-36" />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
+  const isLoading = settingsLoading || appConfigLoading
+  const meta = SECTION_TITLES[activeSection]
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Settings</h1>
-        <p className="text-muted-foreground">
-          Configure your download preferences and system settings
-        </p>
-      </div>
-
-      <div className="grid gap-6">
-        {/* Jackett Settings */}
-        <JackettSettings
-          data={{
-            jackettApiKey: appConfigData.jackettApiKey,
-            jackettUrl: appConfigData.jackettUrl,
-          }}
-          onUpdate={handleAppConfigChange}
-          onSave={handleSaveJackettConfig}
-          isLoading={updateAppConfig.isPending}
+    <Page className="pt-8">
+      <PageSection>
+        <PageHeader
+          eyebrow="System"
+          title="Settings"
+          description="Configure your download preferences and system settings"
         />
 
-        {/* API Keys Settings */}
-        <ApiKeysSettings
-          data={{
-            omdbApiKey: appConfigData.omdbApiKey,
-            tmdbApiKey: appConfigData.tmdbApiKey,
-            igdbClientId: appConfigData.igdbClientId,
-            igdbClientSecret: appConfigData.igdbClientSecret,
-          }}
-          onUpdate={handleAppConfigChange}
-          onSave={handleSaveApiKeys}
-          isLoading={updateAppConfig.isPending}
-        />
+        {/* Two panes: a sticky 232px sub-nav beside one pane per section. */}
+        <div className="flex flex-col gap-8 lg:flex-row lg:items-start">
+          <div className="w-full shrink-0 lg:sticky lg:top-[calc(var(--topbar-h)+24px)] lg:w-settings-nav">
+            <SidebarNav
+              bare
+              aria-label="Settings sections"
+              groups={groups}
+              active={activeSection}
+              onNavigate={(id) => navigate(`/settings/${id}`)}
+            />
+          </div>
 
-        {/* Organization Settings */}
-        <Card>
-          <CardHeader>
-            <CardTitle>File Organization</CardTitle>
-            <CardDescription>
-              Configure how downloaded files are organized and renamed
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {/* Library Paths */}
-            <div className="space-y-4">
-              <h4 className="text-sm font-medium">Library Paths</h4>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Base Library Path</label>
-                <input
-                  type="text"
-                  placeholder="/library"
-                  value={formData.libraryPath || ''}
-                  onChange={(e) => handleInputChange('libraryPath', e.target.value)}
-                  className="w-full px-3 py-2 border border-input rounded-md bg-background"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Movies Path</label>
-                  <input
-                    type="text"
-                    placeholder="/library/movies"
-                    value={formData.moviesPath || ''}
-                    onChange={(e) => handleInputChange('moviesPath', e.target.value)}
-                    className="w-full px-3 py-2 border border-input rounded-md bg-background"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">TV Shows Path</label>
-                  <input
-                    type="text"
-                    placeholder="/library/tv-shows"
-                    value={formData.tvShowsPath || ''}
-                    onChange={(e) => handleInputChange('tvShowsPath', e.target.value)}
-                    className="w-full px-3 py-2 border border-input rounded-md bg-background"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Games Path</label>
-                  <input
-                    type="text"
-                    placeholder="/library/games"
-                    value={formData.gamesPath || ''}
-                    onChange={(e) => handleInputChange('gamesPath', e.target.value)}
-                    className="w-full px-3 py-2 border border-input rounded-md bg-background"
-                  />
-                </div>
-              </div>
+          <div className="min-w-0 flex-1">
+            <div className="mb-6 flex flex-col gap-1">
+              <h2 className="text-2xl font-bold leading-tight tracking-tight text-fg-primary">
+                {meta.title}
+              </h2>
+              <p className="text-sm text-fg-secondary">{meta.description}</p>
             </div>
 
-            {/* Organization Behavior */}
-            <div className="space-y-4">
-              <h4 className="text-sm font-medium">Organization Behavior</h4>
+            {isLoading ? (
+              <SectionSkeleton />
+            ) : (
+              <>
+                {activeSection === 'general' && (
+                  <div className="flex flex-col gap-6">
+                    <Alert>
+                      <AlertTitle>Settings are stored in the database</AlertTitle>
+                      <AlertDescription>
+                        Everything on this screen persists to Downloadarr's database, not to env
+                        files — env values are only a fallback for a fresh install.
+                      </AlertDescription>
+                    </Alert>
 
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium">Organize on Download Complete</p>
-                    <p className="text-sm text-muted-foreground">
-                      Automatically organize files when downloads finish
-                    </p>
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Instance</CardTitle>
+                        <CardDescription>What this Downloadarr is running</CardDescription>
+                      </CardHeader>
+                      <CardContent className="grid gap-4 sm:grid-cols-2">
+                        <Field label="Version" value={systemInfo?.version ?? '—'} mono />
+                        <Field label="Environment" value={systemInfo?.environment ?? '—'} mono />
+                        <Field
+                          label="Uptime"
+                          value={
+                            systemInfo?.uptime
+                              ? `${Math.floor(systemInfo.uptime / 3600)}h ${Math.floor(
+                                  (systemInfo.uptime % 3600) / 60
+                                )}m`
+                              : '—'
+                          }
+                          mono
+                        />
+                        <Field
+                          label="VPN"
+                          value={systemInfo?.vpnEnabled ? 'Enabled' : 'Disabled'}
+                          mono
+                        />
+                      </CardContent>
+                    </Card>
+
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Organization</CardTitle>
+                        <CardDescription>
+                          Naming rules and the organize queue moved into Library → Organization
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <Button variant="secondary" onClick={() => navigate('/settings/organization')}>
+                          <FolderTree className="h-4 w-4" />
+                          Open organization
+                        </Button>
+                      </CardContent>
+                    </Card>
                   </div>
-                  <Switch
-                    checked={formData.organizeOnComplete || false}
-                    onCheckedChange={(checked) => handleSwitchChange('organizeOnComplete', checked)}
-                  />
-                </div>
+                )}
 
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium">Replace Existing Files</p>
-                    <p className="text-sm text-muted-foreground">
-                      Replace files if they already exist in the library
-                    </p>
+                {activeSection === 'indexing' && (
+                  <div className="flex flex-col gap-6">
+                    <JackettSettings
+                      data={{
+                        jackettApiKey: appConfigData.jackettApiKey,
+                        jackettUrl: appConfigData.jackettUrl,
+                        flaresolverrUrl: appConfigData.flaresolverrUrl,
+                      }}
+                      onUpdate={handleAppConfigChange}
+                      onSave={handleSaveJackettConfig}
+                      isLoading={updateAppConfig.isPending}
+                    />
                   </div>
-                  <Switch
-                    checked={formData.replaceExistingFiles || false}
-                    onCheckedChange={(checked) => handleSwitchChange('replaceExistingFiles', checked)}
+                )}
+
+                {activeSection === 'discovery' && (
+                  <ApiKeysSettings
+                    data={{
+                      omdbApiKey: appConfigData.omdbApiKey,
+                      tmdbApiKey: appConfigData.tmdbApiKey,
+                      igdbClientId: appConfigData.igdbClientId,
+                      igdbClientSecret: appConfigData.igdbClientSecret,
+                    }}
+                    onUpdate={handleAppConfigChange}
+                    onSave={handleSaveApiKeys}
+                    isLoading={updateAppConfig.isPending}
                   />
-                </div>
+                )}
 
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium">Extract Archives</p>
-                    <p className="text-sm text-muted-foreground">
-                      Automatically extract ZIP, RAR, and other archives
-                    </p>
-                  </div>
-                  <Switch
-                    checked={formData.extractArchives || false}
-                    onCheckedChange={(checked) => handleSwitchChange('extractArchives', checked)}
-                  />
-                </div>
+                {activeSection === 'quality' && <QualityRulesSettings />}
 
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium">Delete After Extraction</p>
-                    <p className="text-sm text-muted-foreground">
-                      Delete archive files after successful extraction
-                    </p>
-                  </div>
-                  <Switch
-                    checked={formData.deleteAfterExtraction || false}
-                    onCheckedChange={(checked) => handleSwitchChange('deleteAfterExtraction', checked)}
-                  />
-                </div>
-              </div>
-            </div>
+                {activeSection === 'organization' && <OrganizationSection />}
 
-            {/* Reverse Indexing */}
-            <div className="space-y-4">
-              <h4 className="text-sm font-medium">Reverse Indexing</h4>
+                {activeSection === 'paths' && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>File organization</CardTitle>
+                      <CardDescription>
+                        Configure how downloaded files are organized and renamed
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="flex flex-col gap-8">
+                      <div className="flex flex-col gap-4">
+                        <h4 className="font-condensed text-2xs font-bold uppercase tracking-eyebrow text-fg-muted">
+                          Library paths
+                        </h4>
 
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium">Enable Reverse Indexing</p>
-                  <p className="text-sm text-muted-foreground">
-                    Scan library directories and add existing files to the database
-                  </p>
-                </div>
-                <Switch
-                  checked={formData.enableReverseIndexing || false}
-                  onCheckedChange={(checked) => handleSwitchChange('enableReverseIndexing', checked)}
-                />
-              </div>
+                        <div className="flex flex-col gap-2">
+                          <Label htmlFor="libraryPath">Base library path</Label>
+                          <Input
+                            id="libraryPath"
+                            placeholder="/library"
+                            className="font-mono"
+                            value={formData.libraryPath || ''}
+                            onChange={(e) => handleInputChange('libraryPath', e.target.value)}
+                          />
+                        </div>
 
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Scan Schedule</label>
-                <select
-                  className="w-full px-3 py-2 border border-input rounded-md bg-background"
-                  value={formData.reverseIndexingCron || '0 * * * *'}
-                  onChange={(e) => handleInputChange('reverseIndexingCron', e.target.value)}
-                >
-                  <option value="0 * * * *">Every hour</option>
-                  <option value="0 */6 * * *">Every 6 hours</option>
-                  <option value="0 0 * * *">Daily</option>
-                  <option value="0 0 * * 0">Weekly</option>
-                </select>
-              </div>
+                        <div className="grid gap-4 md:grid-cols-3">
+                          <div className="flex flex-col gap-2">
+                            <Label htmlFor="moviesPath">Movies path</Label>
+                            <Input
+                              id="moviesPath"
+                              placeholder="/library/movies"
+                              className="font-mono"
+                              value={formData.moviesPath || ''}
+                              onChange={(e) => handleInputChange('moviesPath', e.target.value)}
+                            />
+                          </div>
+                          <div className="flex flex-col gap-2">
+                            <Label htmlFor="tvShowsPath">TV shows path</Label>
+                            <Input
+                              id="tvShowsPath"
+                              placeholder="/library/tv-shows"
+                              className="font-mono"
+                              value={formData.tvShowsPath || ''}
+                              onChange={(e) => handleInputChange('tvShowsPath', e.target.value)}
+                            />
+                          </div>
+                          <div className="flex flex-col gap-2">
+                            <Label htmlFor="gamesPath">Games path</Label>
+                            <Input
+                              id="gamesPath"
+                              placeholder="/library/games"
+                              className="font-mono"
+                              value={formData.gamesPath || ''}
+                              onChange={(e) => handleInputChange('gamesPath', e.target.value)}
+                            />
+                          </div>
+                        </div>
+                      </div>
 
-              <div className="flex space-x-2">
-                <Button
-                  variant="outline"
-                  onClick={handleTriggerReverseIndexing}
-                  disabled={triggerReverseIndexing.isPending || reverseIndexingStatus?.isRunning}
-                >
-                  {reverseIndexingStatus?.isRunning ? 'Scanning...' : 'Scan Now'}
-                </Button>
-                <Button variant="outline">
-                  {reverseIndexingStatus?.isRunning ? 'Running' : 'Idle'}
-                </Button>
-              </div>
-            </div>
+                      <div className="flex flex-col gap-4">
+                        <h4 className="font-condensed text-2xs font-bold uppercase tracking-eyebrow text-fg-muted">
+                          Organization behaviour
+                        </h4>
+                        <SettingSwitch
+                          label="Organize on download complete"
+                          description="Automatically organize files when downloads finish"
+                          checked={formData.organizeOnComplete || false}
+                          onChange={(checked) => handleSwitchChange('organizeOnComplete', checked)}
+                        />
+                        <SettingSwitch
+                          label="Replace existing files"
+                          description="Replace files if they already exist in the library"
+                          checked={formData.replaceExistingFiles || false}
+                          onChange={(checked) => handleSwitchChange('replaceExistingFiles', checked)}
+                        />
+                        <SettingSwitch
+                          label="Extract archives"
+                          description="Automatically extract ZIP, RAR and other archives"
+                          checked={formData.extractArchives || false}
+                          onChange={(checked) => handleSwitchChange('extractArchives', checked)}
+                        />
+                        <SettingSwitch
+                          label="Delete after extraction"
+                          description="Delete archive files after successful extraction"
+                          checked={formData.deleteAfterExtraction || false}
+                          onChange={(checked) => handleSwitchChange('deleteAfterExtraction', checked)}
+                        />
+                      </div>
 
-            <div className="flex space-x-2">
-              <Button
-                onClick={handleSaveSettings}
-                disabled={updateSettings.isPending}
-              >
-                {updateSettings.isPending ? 'Saving...' : 'Save Organization Settings'}
-              </Button>
-              <Button
-                variant="outline"
-                onClick={handleResetToDefaults}
-              >
-                Reset to Defaults
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+                      <div className="flex flex-col gap-4">
+                        <h4 className="font-condensed text-2xs font-bold uppercase tracking-eyebrow text-fg-muted">
+                          Reverse indexing
+                        </h4>
+                        <SettingSwitch
+                          label="Enable reverse indexing"
+                          description="Scan library directories and add existing files to the database"
+                          checked={formData.enableReverseIndexing || false}
+                          onChange={(checked) => handleSwitchChange('enableReverseIndexing', checked)}
+                        />
+
+                        <div className="flex flex-col gap-2">
+                          <Label htmlFor="reverseIndexingCron">Scan schedule</Label>
+                          <Select
+                            value={formData.reverseIndexingCron || '0 * * * *'}
+                            onValueChange={(value) => handleInputChange('reverseIndexingCron', value)}
+                          >
+                            <SelectTrigger id="reverseIndexingCron" className="max-w-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="0 * * * *">Every hour</SelectItem>
+                              <SelectItem value="0 */6 * * *">Every 6 hours</SelectItem>
+                              <SelectItem value="0 0 * * *">Daily</SelectItem>
+                              <SelectItem value="0 0 * * 0">Weekly</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            onClick={handleTriggerReverseIndexing}
+                            disabled={
+                              triggerReverseIndexing.isPending || reverseIndexingStatus?.isRunning
+                            }
+                          >
+                            {reverseIndexingStatus?.isRunning ? 'Scanning…' : 'Scan now'}
+                          </Button>
+                          <StatusBadge
+                            status={reverseIndexingStatus?.isRunning ? 'PROCESSING' : 'PENDING'}
+                            label={reverseIndexingStatus?.isRunning ? 'Running' : 'Idle'}
+                            size="sm"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button onClick={handleSaveSettings} disabled={updateSettings.isPending}>
+                          {updateSettings.isPending ? 'Saving…' : 'Save organization settings'}
+                        </Button>
+                        <Button variant="outline" onClick={handleResetToDefaults}>
+                          Reset to defaults
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {activeSection === 'vpn' && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>VPN</CardTitle>
+                      <CardDescription>
+                        With the VPN overlay only aria2 routes through the tunnel; the API, frontend
+                        and Jackett keep normal networking.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="flex flex-col gap-4">
+                      <div className="flex items-center gap-3">
+                        <StatusBadge
+                          status={
+                            !vpnStatus?.enabled
+                              ? 'CANCELLED'
+                              : vpnStatus.connected
+                                ? 'COMPLETED'
+                                : 'FAILED'
+                          }
+                          label={
+                            !vpnStatus?.enabled
+                              ? 'Disabled'
+                              : vpnStatus.connected
+                                ? 'Connected'
+                                : 'Disconnected'
+                          }
+                        />
+                        <span className="text-sm text-fg-secondary">
+                          {vpnStatus?.message || 'Status unknown'}
+                        </span>
+                      </div>
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <Field label="Public IP" value={vpnStatus?.publicIP ?? '—'} mono />
+                        <Field
+                          label="Container"
+                          value={
+                            vpnStatus?.containerRunning
+                              ? vpnStatus.containerHealthy
+                                ? 'Running, healthy'
+                                : 'Running'
+                              : 'Not running'
+                          }
+                          mono
+                        />
+                      </div>
+                      <p className="text-sm text-fg-muted">
+                        VPN credentials live in <code className="font-mono">config.ovpn</code> and{' '}
+                        <code className="font-mono">credentials.txt</code> on the host, and are read
+                        by the vpn container at start-up.
+                      </p>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {activeSection === 'setup' && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Setup wizard</CardTitle>
+                      <CardDescription>
+                        Walk through Jackett, organization and discovery keys again
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="flex flex-col gap-4">
+                      <p className="text-sm text-fg-secondary">
+                        Re-running the wizard does not erase anything — each step is pre-filled with
+                        your current configuration, and saving overwrites only what you change.
+                      </p>
+                      <div>
+                        <Button onClick={() => navigate('/onboarding')}>
+                          <Wand2 className="h-4 w-4" />
+                          Re-run setup wizard
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      </PageSection>
+    </Page>
+  )
+}
+
+function Field({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="font-condensed text-2xs font-bold uppercase tracking-eyebrow text-fg-muted">
+        {label}
+      </span>
+      <span className={mono ? 'font-mono text-sm text-fg-primary' : 'text-sm text-fg-primary'}>
+        {value}
+      </span>
     </div>
+  )
+}
+
+function SettingSwitch({
+  label,
+  description,
+  checked,
+  onChange,
+}: {
+  label: string
+  description: string
+  checked: boolean
+  onChange: (checked: boolean) => void
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-fg-primary">{label}</p>
+        <p className="text-xs text-fg-muted">{description}</p>
+      </div>
+      <Switch checked={checked} onCheckedChange={onChange} />
+    </div>
+  )
+}
+
+/** Per-card skeleton, so a slow section never blanks the whole screen. */
+function SectionSkeleton() {
+  return (
+    <Card>
+      <CardHeader className="gap-2">
+        <Skeleton className="h-6 w-48" />
+        <Skeleton className="h-4 w-80" />
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        <Skeleton className="h-10 w-full" />
+        <Skeleton className="h-10 w-full" />
+        <Skeleton className="h-10 w-40" />
+      </CardContent>
+    </Card>
   )
 }

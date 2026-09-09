@@ -115,6 +115,22 @@ export class CreateTorrentRequestDto {
   genre?: string;
 
   @ApiPropertyOptional({
+    description: 'Poster artwork URL captured from the discovery provider',
+    example: 'https://image.tmdb.org/t/p/w500/abc.jpg',
+  })
+  @IsOptional()
+  @IsString()
+  posterUrl?: string;
+
+  @ApiPropertyOptional({
+    description: 'Backdrop (16:9) artwork URL captured from the discovery provider',
+    example: 'https://image.tmdb.org/t/p/w780/abc.jpg',
+  })
+  @IsOptional()
+  @IsString()
+  backdropUrl?: string;
+
+  @ApiPropertyOptional({
     description: 'Preferred video qualities',
     enum: TorrentQuality,
     isArray: true,

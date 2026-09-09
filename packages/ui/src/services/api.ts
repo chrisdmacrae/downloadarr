@@ -123,6 +123,15 @@ export interface SearchResult {
   poster?: string;
   overview?: string;
   type: 'movie' | 'tv' | 'game';
+  // Enrichment the media-library UI needs: 16:9 artwork for heroes and
+  // stateful cards, plus the facts the poster hover panel shows.
+  backdrop?: string;
+  rating?: number;
+  genres?: string[];
+  runtime?: number;
+  seasons?: number;
+  episodeRuntime?: number;
+  platforms?: string[];
 }
 
 export interface MovieDetails extends SearchResult {
@@ -170,6 +179,20 @@ export interface GamePlatform {
   category: string;
   description: string;
   aliases: string[];
+}
+
+export interface TorrentPreferences {
+  defaultQualities: string[];
+  defaultFormats: string[];
+  defaultLanguages: string[];
+  defaultCategory: string;
+  minSeeders: number;
+  maxSizeGB: number;
+  trustedIndexers: string[];
+  blacklistedWords: string[];
+  autoSelectBest: boolean;
+  preferRemux: boolean;
+  preferSmallSize: boolean;
 }
 
 export interface OrganizationSettings {
@@ -313,6 +336,8 @@ export interface HttpDownloadRequest {
   genre?: string;
   season?: number;
   episode?: number;
+  posterUrl?: string;
+  backdropUrl?: string;
   status: 'PENDING_METADATA' | 'METADATA_MATCHED' | 'DOWNLOADING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
   priority: number;
   destination?: string;
@@ -347,6 +372,8 @@ export interface MatchMetadataDto {
   genre?: string;
   season?: number;
   episode?: number;
+  posterUrl?: string;
+  backdropUrl?: string;
 }
 
 export interface AggregatedRequest {
@@ -372,6 +399,11 @@ export interface AggregatedRequest {
   platform?: string;
   season?: number;
   episode?: number;
+  // Artwork captured at request time so a request card can render without a
+  // round trip to the metadata provider.
+  posterUrl?: string;
+  backdropUrl?: string;
+  isOngoing?: boolean;
 }
 
 // TV Show Season Management Types
@@ -473,6 +505,8 @@ export interface CreateTorrentRequestDto {
   igdbId?: number;
   platform?: string;
   genre?: string;
+  posterUrl?: string;
+  backdropUrl?: string;
   preferredQualities?: string[];
   preferredFormats?: string[];
   preferredLanguages?: string[];
@@ -1081,6 +1115,19 @@ export const apiService = {
   getTmdbPosterUrl: async (tmdbId: number, contentType: 'movie' | 'tv' = 'movie'): Promise<{ success: boolean; data?: string; error?: string }> => {
     const endpoint = contentType === 'tv' ? 'tv-shows' : 'movies';
     const response = await api.get(`/discovery/${endpoint}/tmdb/${tmdbId}/poster`);
+    return response.data;
+  },
+
+  // Default torrent quality rules, persisted on AppConfiguration
+  getTorrentPreferences: async (): Promise<{ success: boolean; data: TorrentPreferences }> => {
+    const response = await api.get('/torrents/preferences');
+    return response.data;
+  },
+
+  updateTorrentPreferences: async (
+    updates: Partial<TorrentPreferences>
+  ): Promise<{ success: boolean; data: TorrentPreferences }> => {
+    const response = await api.put('/torrents/preferences', updates);
     return response.data;
   },
 

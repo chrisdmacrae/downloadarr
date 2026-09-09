@@ -9,6 +9,9 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Folder, Film, Tv, Gamepad2, Check, X, Trash2 } from 'lucide-react'
 
+import { StatusBadge } from '@/components/ds/StatusBadge'
+import { EmptyState } from '@/components/ds/Page'
+import { contentTypeTone } from '@/lib/status'
 import { useToast } from '@/hooks/use-toast'
 import { 
   useOrganizeQueue, 
@@ -48,25 +51,9 @@ export function OrganizeQueue() {
     }
   }
 
-  const getContentTypeColor = (contentType: string) => {
-    switch (contentType) {
-      case 'MOVIE': return 'bg-blue-100 text-blue-800'
-      case 'TV_SHOW': return 'bg-green-100 text-green-800'
-      case 'GAME': return 'bg-purple-100 text-purple-800'
-      default: return 'bg-gray-100 text-gray-800'
-    }
-  }
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'PENDING': return 'bg-yellow-100 text-yellow-800'
-      case 'PROCESSING': return 'bg-blue-100 text-blue-800'
-      case 'COMPLETED': return 'bg-green-100 text-green-800'
-      case 'FAILED': return 'bg-red-100 text-red-800'
-      case 'SKIPPED': return 'bg-gray-100 text-gray-800'
-      default: return 'bg-gray-100 text-gray-800'
-    }
-  }
+  // Content type and status are monochrome; the shared tone map owns both.
+  const getContentTypeVariant = (contentType: string) =>
+    contentTypeTone(contentType).variant
 
   const handleProcessItem = (item: OrganizeQueueItem) => {
     setSelectedItem(item)
@@ -165,15 +152,11 @@ export function OrganizeQueue() {
 
   if (items.length === 0) {
     return (
-      <Card>
-        <CardContent className="flex flex-col items-center justify-center py-12">
-          <Folder className="h-12 w-12 text-muted-foreground mb-4" />
-          <h3 className="text-lg font-semibold mb-2">No items in organize queue</h3>
-          <p className="text-muted-foreground text-center">
-            Folders that need manual organization will appear here after reverse indexing.
-          </p>
-        </CardContent>
-      </Card>
+      <EmptyState
+        icon={<Folder />}
+        title="No items in organize queue"
+        description="Folders that need manual organization will appear here after reverse indexing."
+      />
     )
   }
 
@@ -187,13 +170,11 @@ export function OrganizeQueue() {
             <CardHeader>
               <div className="flex justify-between items-start">
                 <div className="flex items-center gap-3">
-                  <Badge className={getContentTypeColor(item.contentType)}>
-                    <Icon className="w-3 h-3 mr-1" />
-                    {item.contentType.replace('_', ' ')}
+                  <Badge variant={getContentTypeVariant(item.contentType)}>
+                    <Icon className="h-3 w-3" />
+                    {contentTypeTone(item.contentType).label}
                   </Badge>
-                  <Badge className={getStatusColor(item.status)} variant="outline">
-                    {item.status}
-                  </Badge>
+                  <StatusBadge status={item.status} size="sm" />
                 </div>
                 <div className="flex gap-2">
                   {item.status === 'PENDING' && (
@@ -231,8 +212,8 @@ export function OrganizeQueue() {
             </CardHeader>
             <CardContent className="space-y-3">
               <div>
-                <label className="text-sm font-medium text-muted-foreground">Folder Path:</label>
-                <code className="block mt-1 p-2 bg-muted rounded text-sm break-all">
+                <label className="text-sm font-medium text-fg-muted">Folder Path:</label>
+                <code className="block break-all rounded-md bg-white/[.05] p-2 font-mono text-sm text-fg-body">
                   {item.folderPath}
                 </code>
               </div>
@@ -260,7 +241,7 @@ export function OrganizeQueue() {
                 </div>
               )}
               
-              <div className="text-xs text-muted-foreground">
+              <div className="text-xs text-fg-muted">
                 Created: {new Date(item.createdAt).toLocaleString()}
               </div>
             </CardContent>
@@ -282,7 +263,7 @@ export function OrganizeQueue() {
             <div className="space-y-4">
               <div>
                 <Label>Folder Path</Label>
-                <code className="block mt-1 p-2 bg-muted rounded text-sm break-all">
+                <code className="block break-all rounded-md bg-white/[.05] p-2 font-mono text-sm text-fg-body">
                   {selectedItem.folderPath}
                 </code>
               </div>

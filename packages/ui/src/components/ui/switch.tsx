@@ -5,21 +5,35 @@ interface SwitchProps extends React.InputHTMLAttributes<HTMLInputElement> {
   onCheckedChange?: (checked: boolean) => void
 }
 
+/** 40×22 track; on goes brand red, the knob travels 18px. */
 const Switch = React.forwardRef<HTMLInputElement, SwitchProps>(
-  ({ className, onCheckedChange, ...props }, ref) => {
+  ({ className, onCheckedChange, disabled, ...props }, ref) => {
     return (
-      <label className="relative inline-flex items-center cursor-pointer">
+      <label
+        className={cn(
+          "relative inline-flex shrink-0 items-center",
+          disabled ? "cursor-not-allowed opacity-45" : "cursor-pointer"
+        )}
+      >
         <input
           type="checkbox"
-          className="sr-only peer"
+          role="switch"
+          className="peer sr-only"
           ref={ref}
+          disabled={disabled}
           onChange={(e) => onCheckedChange?.(e.target.checked)}
           {...props}
         />
-        <div className={cn(
-          "w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600",
-          className
-        )} />
+        <div
+          className={cn(
+            "h-[22px] w-10 rounded-pill border border-subtle bg-ink-700 transition-colors duration-fast ease-standard",
+            "after:absolute after:left-[3px] after:top-[3px] after:h-4 after:w-4 after:rounded-pill after:bg-ink-200 after:transition-transform after:duration-fast after:ease-standard after:content-['']",
+            "peer-checked:border-[color:var(--accent)] peer-checked:bg-brand-500",
+            "peer-checked:after:translate-x-[18px] peer-checked:after:bg-white",
+            "peer-focus-visible:shadow-focus",
+            className
+          )}
+        />
       </label>
     )
   }

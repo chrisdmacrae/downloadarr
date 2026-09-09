@@ -26,6 +26,9 @@ model RequestedTorrent {
   igdbId             Int?               // IGDB game ID
   platform           String?            // Game platform (PC, PlayStation, etc.)
   genre              String?            // Game genre
+  // Artwork captured from the discovery provider at request time
+  posterUrl          String?            // Poster artwork URL (2:3 / 3:4)
+  backdropUrl        String?            // Backdrop artwork URL (16:9)
   status             RequestStatus      @default(PENDING)
   priority           Int                @default(5)
   preferredQualities TorrentQuality[]
@@ -190,6 +193,8 @@ model HttpDownloadRequest {
   genre              String?                   // Game genre
   season             Int?                      // TV show season (if applicable)
   episode            Int?                      // TV show episode (if applicable)
+  posterUrl          String?                   // Poster artwork URL (2:3 / 3:4)
+  backdropUrl        String?                   // Backdrop artwork URL (16:9)
   status             HttpDownloadRequestStatus @default(PENDING_METADATA)
   priority           Int                       @default(5)
   destination        String?                   // Download destination path
@@ -453,6 +458,9 @@ model AppConfiguration {
   // Jackett configuration
   jackettApiKey         String?
   jackettUrl            String   @default("http://jackett:9117")
+  // FlareSolverr, for indexers behind Cloudflare. Falls back to
+  // FLARESOLVERR_URL when unset.
+  flaresolverrUrl       String?
 
   // External API Keys for Discovery Services
   omdbApiKey            String?  // OMDB API key for movie/TV metadata
@@ -462,6 +470,20 @@ model AppConfiguration {
 
   // Organization preferences
   organizationEnabled   Boolean  @default(true)
+
+  // Default torrent quality rules, edited in Settings > Configuration > Quality
+  // rules. Stored here rather than in env so they survive a restart, like every
+  // other runtime setting.
+  defaultQualities      TorrentQuality[]
+  defaultFormats        TorrentFormat[]
+  defaultLanguages      TorrentLanguage[]
+  minSeeders            Int?
+  maxSizeGB             Int?
+  trustedIndexers       String[]  @default([])
+  blacklistedWords      String[]  @default([])
+  autoSelectBest        Boolean?
+  preferRemux           Boolean?
+  preferSmallSize       Boolean?
 
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt

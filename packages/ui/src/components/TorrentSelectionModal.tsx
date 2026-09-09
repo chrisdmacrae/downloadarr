@@ -124,9 +124,10 @@ export function TorrentSelectionModal({
   }
 
   const getSeedersColor = (seeders: number) => {
-    if (seeders >= 50) return 'text-green-600'
-    if (seeders >= 10) return 'text-yellow-600'
-    return 'text-red-600'
+    // Health reads as value on the ink ramp, not as hue.
+    if (seeders >= 50) return 'text-fg-primary'
+    if (seeders >= 10) return 'text-fg-secondary'
+    return 'text-fg-muted'
   }
 
   return (
@@ -147,9 +148,9 @@ export function TorrentSelectionModal({
           )}
 
           {error && (
-            <Card className="border-destructive">
+            <Card className="border-[color:var(--status-failed)]">
               <CardContent className="pt-6">
-                <div className="flex items-center space-x-2 text-destructive">
+                <div className="flex items-center space-x-2 text-status-failed">
                   <AlertCircle className="h-4 w-4" />
                   <span>{error}</span>
                 </div>
@@ -159,7 +160,7 @@ export function TorrentSelectionModal({
 
           {!isLoading && !error && searchResults.length === 0 && (
             <Card>
-              <CardContent className="pt-6 text-center text-muted-foreground">
+              <CardContent className="pt-6 text-center text-fg-secondary">
                 <AlertCircle className="h-12 w-12 mx-auto mb-4 opacity-50" />
                 <p>No search results found</p>
                 <p className="text-sm">Try searching again or adjusting your criteria</p>
@@ -209,7 +210,7 @@ export function TorrentSelectionModal({
                       {/* Details Grid */}
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                         <div className="flex items-center gap-2">
-                          <HardDrive className="h-4 w-4 text-muted-foreground" />
+                          <HardDrive className="h-4 w-4 text-fg-secondary" />
                           <span className="font-medium">{formatSize(result.size)}</span>
                         </div>
                         
@@ -221,12 +222,12 @@ export function TorrentSelectionModal({
                         </div>
 
                         <div className="flex items-center gap-2">
-                          <Users className="h-4 w-4 text-muted-foreground" />
+                          <Users className="h-4 w-4 text-fg-secondary" />
                           <span>{result.leechers} leechers</span>
                         </div>
 
                         <div className="flex items-center gap-2">
-                          <Calendar className="h-4 w-4 text-muted-foreground" />
+                          <Calendar className="h-4 w-4 text-fg-secondary" />
                           <span>{formatDate(result.publishDate)}</span>
                         </div>
                       </div>
@@ -254,7 +255,7 @@ export function TorrentSelectionModal({
 
                       {/* Ranking Score */}
                       {result.rankingScore > 0 && (
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <div className="flex items-center gap-2 text-xs text-fg-secondary">
                           <Star className="h-3 w-3" />
                           <span>Score: {result.rankingScore.toFixed(1)}</span>
                         </div>

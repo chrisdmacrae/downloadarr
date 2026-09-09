@@ -26,7 +26,7 @@ interface RuleFormData {
   platform?: string // For game rules
 }
 
-export default function OrganizationRules() {
+export function OrganizationSection() {
   const { toast } = useToast()
   const { data: rules, isLoading } = useOrganizationRules()
   const updateRule = useUpdateOrganizationRule()
@@ -415,12 +415,13 @@ export default function OrganizationRules() {
     }))
   }
 
-  const getContentTypeColor = (contentType: string) => {
+  // Content-type badges are monochrome: value, not hue.
+  const getContentTypeVariant = (contentType: string) => {
     switch (contentType) {
-      case 'MOVIE': return 'bg-blue-100 text-blue-800'
-      case 'TV_SHOW': return 'bg-green-100 text-green-800'
-      case 'GAME': return 'bg-purple-100 text-purple-800'
-      default: return 'bg-gray-100 text-gray-800'
+      case 'MOVIE': return 'movie' as const
+      case 'TV_SHOW': return 'tv' as const
+      case 'GAME': return 'game' as const
+      default: return 'other' as const
     }
   }
 
@@ -436,13 +437,7 @@ export default function OrganizationRules() {
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-3xl font-bold">Organization Rules</h1>
-            <p className="text-muted-foreground">
-              Configure how files are organized and renamed for different content types
-            </p>
-          </div>
+        <div className="flex items-center justify-end">
           <Skeleton className="h-10 w-32" />
         </div>
 
@@ -475,7 +470,7 @@ export default function OrganizationRules() {
             <CardHeader>
               <div className="flex justify-between items-start">
                 <div className="flex items-center gap-3">
-                  <Skeleton className="h-6 w-16 rounded-full bg-blue-100" />
+                  <Skeleton className="h-6 w-16 rounded-full" />
                   <Skeleton className="h-6 w-20 rounded-full" />
                   <div className="flex items-center gap-2">
                     <Skeleton className="h-4 w-12" />
@@ -514,7 +509,7 @@ export default function OrganizationRules() {
             <CardHeader>
               <div className="flex justify-between items-start">
                 <div className="flex items-center gap-3">
-                  <Skeleton className="h-6 w-20 rounded-full bg-green-100" />
+                  <Skeleton className="h-6 w-20 rounded-full" />
                   <Skeleton className="h-6 w-20 rounded-full" />
                   <div className="flex items-center gap-2">
                     <Skeleton className="h-4 w-12" />
@@ -558,8 +553,8 @@ export default function OrganizationRules() {
             <CardHeader>
               <div className="flex justify-between items-start">
                 <div className="flex items-center gap-3">
-                  <Skeleton className="h-6 w-16 rounded-full bg-purple-100" />
-                  <Skeleton className="h-6 w-24 rounded-full bg-gray-200" />
+                  <Skeleton className="h-6 w-16 rounded-full" />
+                  <Skeleton className="h-6 w-24 rounded-full" />
                   <Skeleton className="h-6 w-20 rounded-full" />
                   <div className="flex items-center gap-2">
                     <Skeleton className="h-4 w-12" />
@@ -612,7 +607,7 @@ export default function OrganizationRules() {
 
             <Skeleton className="h-10 w-32" />
 
-            <div className="p-4 bg-muted rounded">
+            <div className="rounded-md bg-white/[.05] p-4">
               <div className="space-y-1">
                 <Skeleton className="h-4 w-80" />
                 <Skeleton className="h-4 w-96" />
@@ -626,22 +621,13 @@ export default function OrganizationRules() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold">Organization</h1>
-          <p className="text-muted-foreground">
-            Manage organization rules and process folders that need manual organization
-          </p>
-        </div>
-      </div>
-
       <Tabs defaultValue="rules" className="space-y-6">
         <TabsList>
           <TabsTrigger value="rules">Organization Rules</TabsTrigger>
           <TabsTrigger value="queue" className="relative">
             Organize Queue
             {queueStats && queueStats.pending > 0 && (
-              <Badge className="ml-2 h-5 w-5 rounded-full p-0 text-xs bg-red-500 text-white">
+              <Badge variant="count" size="sm" className="ml-2">
                 {queueStats.pending}
               </Badge>
             )}
@@ -652,7 +638,7 @@ export default function OrganizationRules() {
           <div className="flex justify-between items-center">
             <div>
               <h2 className="text-xl font-semibold">Organization Rules</h2>
-              <p className="text-muted-foreground">
+              <p className="text-fg-muted">
                 Configure how files are organized and renamed for different content types
               </p>
             </div>
@@ -671,7 +657,7 @@ export default function OrganizationRules() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
             <div>
               <h4 className="font-medium mb-2">General</h4>
-              <ul className="space-y-1 text-muted-foreground">
+              <ul className="space-y-1 text-fg-muted">
                 <li><code>{'{title}'}</code> - Content title</li>
                 <li><code>{'{year}'}</code> - Release year</li>
                 <li><code>{'{filename}'}</code> - Original filename (no ext)</li>
@@ -679,7 +665,7 @@ export default function OrganizationRules() {
             </div>
             <div>
               <h4 className="font-medium mb-2">Movies & TV Shows</h4>
-              <ul className="space-y-1 text-muted-foreground">
+              <ul className="space-y-1 text-fg-muted">
                 <li><code>{'{quality}'}</code> - Video quality (1080p, 720p)</li>
                 <li><code>{'{format}'}</code> - Video format (x265, x264)</li>
                 <li><code>{'{edition}'}</code> - Release type (BluRay, WEBRip)</li>
@@ -687,7 +673,7 @@ export default function OrganizationRules() {
             </div>
             <div>
               <h4 className="font-medium mb-2">TV Shows</h4>
-              <ul className="space-y-1 text-muted-foreground">
+              <ul className="space-y-1 text-fg-muted">
                 <li><code>{'{season}'}</code> - Season number</li>
                 <li><code>{'{seasonNumber}'}</code> - Season (padded)</li>
                 <li><code>{'{episode}'}</code> - Episode number</li>
@@ -696,7 +682,7 @@ export default function OrganizationRules() {
             </div>
             <div>
               <h4 className="font-medium mb-2">Games</h4>
-              <ul className="space-y-1 text-muted-foreground">
+              <ul className="space-y-1 text-fg-muted">
                 <li><code>{'{platform}'}</code> - Game platform</li>
               </ul>
             </div>
@@ -711,7 +697,7 @@ export default function OrganizationRules() {
             <CardHeader>
               <div className="flex justify-between items-start">
                 <div className="flex items-center gap-3">
-                  <Badge className={getContentTypeColor(rule.contentType)}>
+                  <Badge variant={getContentTypeVariant(rule.contentType)}>
                     {getContentTypeLabel(rule.contentType)}
                   </Badge>
                   {rule.platform && (
@@ -721,7 +707,7 @@ export default function OrganizationRules() {
                     <Badge variant="outline">Default</Badge>
                   )}
                   <div className="flex items-center gap-2">
-                    <span className="text-sm text-muted-foreground">Active:</span>
+                    <span className="text-sm text-fg-muted">Active:</span>
                     <Switch
                       checked={rule.isActive}
                       onCheckedChange={() => handleToggleRule(rule)}
@@ -749,14 +735,14 @@ export default function OrganizationRules() {
             <CardContent className="space-y-3">
               <div>
                 <label className="text-sm font-medium">Folder Pattern:</label>
-                <code className="block mt-1 p-2 bg-muted rounded text-sm">
+                <code className="block mt-1 p-2 rounded-md bg-white/[.05] font-mono text-sm text-fg-body">
                   {rule.folderNamePattern}
                 </code>
               </div>
               
               <div>
                 <label className="text-sm font-medium">File Pattern:</label>
-                <code className="block mt-1 p-2 bg-muted rounded text-sm">
+                <code className="block mt-1 p-2 rounded-md bg-white/[.05] font-mono text-sm text-fg-body">
                   {rule.fileNamePattern}
                 </code>
               </div>
@@ -764,7 +750,7 @@ export default function OrganizationRules() {
               {rule.seasonFolderPattern && (
                 <div>
                   <label className="text-sm font-medium">Season Folder Pattern:</label>
-                  <code className="block mt-1 p-2 bg-muted rounded text-sm">
+                  <code className="block mt-1 p-2 rounded-md bg-white/[.05] font-mono text-sm text-fg-body">
                     {rule.seasonFolderPattern}
                   </code>
                 </div>
@@ -773,7 +759,7 @@ export default function OrganizationRules() {
               {rule.basePath && (
                 <div>
                   <label className="text-sm font-medium">Base Path Override:</label>
-                  <code className="block mt-1 p-2 bg-muted rounded text-sm">
+                  <code className="block mt-1 p-2 rounded-md bg-white/[.05] font-mono text-sm text-fg-body">
                     {rule.basePath}
                   </code>
                 </div>
@@ -782,7 +768,7 @@ export default function OrganizationRules() {
               {/* Preview */}
               <div className="pt-2 border-t">
                 <label className="text-sm font-medium">Preview:</label>
-                <div className="mt-1 text-sm text-muted-foreground">
+                <div className="mt-1 text-sm text-fg-muted">
                   {rule.contentType === 'MOVIE' && (
                     <>
                       <div>Folder: <code>The Matrix (1999)</code></div>
@@ -821,7 +807,7 @@ export default function OrganizationRules() {
             <div className="space-y-2">
               <label className="text-sm font-medium">Content Type</label>
               <select
-                className="w-full px-3 py-2 border border-input rounded-md bg-background"
+                className="h-10 w-full rounded-control border border-subtle bg-surface-input px-3 text-sm text-fg-primary transition-[background-color,border-color,box-shadow] duration-fast ease-standard hover:border-strong focus:border-[color:var(--accent)] focus:shadow-[0_0_0_3px_var(--brand-tint-16)] focus:outline-none"
                 value={previewData.contentType}
                 onChange={(e) => setPreviewData(prev => ({
                   ...prev,
@@ -841,7 +827,7 @@ export default function OrganizationRules() {
               <input
                 type="text"
                 placeholder="The Matrix"
-                className="w-full px-3 py-2 border border-input rounded-md bg-background"
+                className="h-10 w-full rounded-control border border-subtle bg-surface-input px-3 text-sm text-fg-primary transition-[background-color,border-color,box-shadow] duration-fast ease-standard hover:border-strong focus:border-[color:var(--accent)] focus:shadow-[0_0_0_3px_var(--brand-tint-16)] focus:outline-none"
                 value={previewData.title}
                 onChange={(e) => setPreviewData(prev => ({ ...prev, title: e.target.value }))}
               />
@@ -850,14 +836,14 @@ export default function OrganizationRules() {
             <div className="space-y-2">
               <label className="text-sm font-medium">
                 Filename (Optional)
-                <span className="text-xs text-muted-foreground ml-1">
+                <span className="text-xs text-fg-muted ml-1">
                   - Leave empty to generate from metadata
                 </span>
               </label>
               <input
                 type="text"
                 placeholder="The.Matrix.1999.1080p.BluRay.x265.10bit.mkv"
-                className="w-full px-3 py-2 border border-input rounded-md bg-background"
+                className="h-10 w-full rounded-control border border-subtle bg-surface-input px-3 text-sm text-fg-primary transition-[background-color,border-color,box-shadow] duration-fast ease-standard hover:border-strong focus:border-[color:var(--accent)] focus:shadow-[0_0_0_3px_var(--brand-tint-16)] focus:outline-none"
                 value={previewData.filename}
                 onChange={(e) => setPreviewData(prev => ({ ...prev, filename: e.target.value }))}
               />
@@ -868,7 +854,7 @@ export default function OrganizationRules() {
               <input
                 type="number"
                 placeholder="1999"
-                className="w-full px-3 py-2 border border-input rounded-md bg-background"
+                className="h-10 w-full rounded-control border border-subtle bg-surface-input px-3 text-sm text-fg-primary transition-[background-color,border-color,box-shadow] duration-fast ease-standard hover:border-strong focus:border-[color:var(--accent)] focus:shadow-[0_0_0_3px_var(--brand-tint-16)] focus:outline-none"
                 value={previewData.year}
                 onChange={(e) => setPreviewData(prev => ({ ...prev, year: e.target.value }))}
               />
@@ -880,7 +866,7 @@ export default function OrganizationRules() {
                 <input
                   type="text"
                   placeholder="1080p"
-                  className="w-full px-3 py-2 border border-input rounded-md bg-background"
+                  className="h-10 w-full rounded-control border border-subtle bg-surface-input px-3 text-sm text-fg-primary transition-[background-color,border-color,box-shadow] duration-fast ease-standard hover:border-strong focus:border-[color:var(--accent)] focus:shadow-[0_0_0_3px_var(--brand-tint-16)] focus:outline-none"
                   value={previewData.quality}
                   onChange={(e) => setPreviewData(prev => ({ ...prev, quality: e.target.value }))}
                 />
@@ -894,7 +880,7 @@ export default function OrganizationRules() {
                   <input
                     type="number"
                     placeholder="1"
-                    className="w-full px-3 py-2 border border-input rounded-md bg-background"
+                    className="h-10 w-full rounded-control border border-subtle bg-surface-input px-3 text-sm text-fg-primary transition-[background-color,border-color,box-shadow] duration-fast ease-standard hover:border-strong focus:border-[color:var(--accent)] focus:shadow-[0_0_0_3px_var(--brand-tint-16)] focus:outline-none"
                     value={previewData.season}
                     onChange={(e) => setPreviewData(prev => ({ ...prev, season: e.target.value }))}
                   />
@@ -905,7 +891,7 @@ export default function OrganizationRules() {
                   <input
                     type="number"
                     placeholder="1"
-                    className="w-full px-3 py-2 border border-input rounded-md bg-background"
+                    className="h-10 w-full rounded-control border border-subtle bg-surface-input px-3 text-sm text-fg-primary transition-[background-color,border-color,box-shadow] duration-fast ease-standard hover:border-strong focus:border-[color:var(--accent)] focus:shadow-[0_0_0_3px_var(--brand-tint-16)] focus:outline-none"
                     value={previewData.episode}
                     onChange={(e) => setPreviewData(prev => ({ ...prev, episode: e.target.value }))}
                   />
@@ -917,7 +903,7 @@ export default function OrganizationRules() {
               <div className="space-y-2">
                 <label className="text-sm font-medium">Platform</label>
                 <select
-                  className="w-full px-3 py-2 border border-input rounded-md bg-background"
+                  className="h-10 w-full rounded-control border border-subtle bg-surface-input px-3 text-sm text-fg-primary transition-[background-color,border-color,box-shadow] duration-fast ease-standard hover:border-strong focus:border-[color:var(--accent)] focus:shadow-[0_0_0_3px_var(--brand-tint-16)] focus:outline-none"
                   value={previewData.platform}
                   onChange={(e) => setPreviewData(prev => ({ ...prev, platform: e.target.value }))}
                 >
@@ -938,7 +924,7 @@ export default function OrganizationRules() {
               <input
                 type="text"
                 placeholder={previewData.contentType === 'GAME' ? 'NTSC-U' : 'BluRay'}
-                className="w-full px-3 py-2 border border-input rounded-md bg-background"
+                className="h-10 w-full rounded-control border border-subtle bg-surface-input px-3 text-sm text-fg-primary transition-[background-color,border-color,box-shadow] duration-fast ease-standard hover:border-strong focus:border-[color:var(--accent)] focus:shadow-[0_0_0_3px_var(--brand-tint-16)] focus:outline-none"
                 value={previewData.format}
                 onChange={(e) => setPreviewData(prev => ({ ...prev, format: e.target.value }))}
               />
@@ -949,7 +935,7 @@ export default function OrganizationRules() {
               <input
                 type="text"
                 placeholder="Director's Cut"
-                className="w-full px-3 py-2 border border-input rounded-md bg-background"
+                className="h-10 w-full rounded-control border border-subtle bg-surface-input px-3 text-sm text-fg-primary transition-[background-color,border-color,box-shadow] duration-fast ease-standard hover:border-strong focus:border-[color:var(--accent)] focus:shadow-[0_0_0_3px_var(--brand-tint-16)] focus:outline-none"
                 value={previewData.edition}
                 onChange={(e) => setPreviewData(prev => ({ ...prev, edition: e.target.value }))}
               />
@@ -1000,11 +986,11 @@ export default function OrganizationRules() {
           </div>
 
           {previewResult && (
-            <div className="p-4 bg-muted rounded">
+            <div className="rounded-md bg-white/[.05] p-4">
               <div className="text-sm space-y-1">
                 <div><strong>Folder:</strong> <code>{previewResult.folderPath}</code></div>
                 <div><strong>File:</strong> <code>{previewResult.fileName}</code></div>
-                <div className="pt-2 border-t border-muted-foreground/20">
+                <div className="pt-2 border-t border-[color:var(--border-hairline)]">
                   <strong>Full Path:</strong> <code className="text-xs break-all">{previewResult.fullPath}</code>
                 </div>
               </div>
@@ -1012,8 +998,8 @@ export default function OrganizationRules() {
           )}
 
           {!previewResult && (
-            <div className="p-4 bg-muted rounded">
-              <div className="text-sm text-muted-foreground">
+            <div className="rounded-md bg-white/[.05] p-4">
+              <div className="text-sm text-fg-muted">
                 Fill in the form above and click "Generate Preview" to see how your files will be organized.
               </div>
             </div>
@@ -1025,7 +1011,7 @@ export default function OrganizationRules() {
         <TabsContent value="queue" className="space-y-6">
           <div>
             <h2 className="text-xl font-semibold">Organize Queue</h2>
-            <p className="text-muted-foreground">
+            <p className="text-fg-muted">
               Folders that need manual organization after reverse indexing
             </p>
           </div>
@@ -1138,7 +1124,7 @@ export default function OrganizationRules() {
                     )}
                   </SelectContent>
                 </Select>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-fg-muted">
                   Leave empty for a general game rule, or specify a platform for platform-specific organization
                 </p>
               </div>
@@ -1182,7 +1168,7 @@ export default function OrganizationRules() {
           <div className="space-y-4">
             <div className="space-y-2">
               <Label>Content Type</Label>
-              <div className="p-2 bg-muted rounded">
+              <div className="rounded-md bg-white/[.05] p-2 text-sm text-fg-body">
                 {editingRule && getContentTypeLabel(editingRule.contentType)}
               </div>
             </div>
@@ -1264,7 +1250,7 @@ export default function OrganizationRules() {
                     )}
                   </SelectContent>
                 </Select>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-fg-muted">
                   Leave empty for a general game rule, or specify a platform for platform-specific organization
                 </p>
               </div>

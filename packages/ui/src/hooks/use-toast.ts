@@ -1,27 +1,74 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
-interface Toast {
+export type ToastVariant = 'default' | 'destructive'
+
+export interface Toast {
   id: string
   title?: string
   description?: string
   action?: React.ReactNode
-  variant?: 'default' | 'destructive'
+  variant?: ToastVariant
+}
+
+/**
+ * Toasts live in a module-level store rather than in each hook instance, so a
+ * `toast()` call from any component reaches the single mounted `<Toaster />`.
+ */
+const AUTO_DISMISS_MS = 3200
+const MAX_VISIBLE = 4
+
+let toasts: Toast[] = []
+const listeners = new Set<(next: Toast[]) => void>()
+const timers = new Map<string, ReturnType<typeof setTimeout>>()
+
+function emit() {
+  listeners.forEach((listener) => listener(toasts))
+}
+
+export function dismissToast(id: string) {
+  const timer = timers.get(id)
+  if (timer) {
+    clearTimeout(timer)
+    timers.delete(id)
+  }
+  toasts = toasts.filter((t) => t.id !== id)
+  emit()
+}
+
+export function toast({
+  title,
+  description,
+  variant = 'default',
+  action,
+}: {
+  title?: string
+  description?: string
+  variant?: ToastVariant
+  action?: React.ReactNode
+}) {
+  const id = Math.random().toString(36).slice(2, 11)
+
+  toasts = [...toasts, { id, title, description, variant, action }].slice(-MAX_VISIBLE)
+  emit()
+
+  timers.set(
+    id,
+    setTimeout(() => dismissToast(id), AUTO_DISMISS_MS)
+  )
+
+  return { id, dismiss: () => dismissToast(id) }
 }
 
 export function useToast() {
-  const [toasts, setToasts] = useState<Toast[]>([])
+  const [current, setCurrent] = useState<Toast[]>(toasts)
 
-  const toast = ({ title, description, variant }: { title?: string; description?: string; variant?: 'default' | 'destructive' }) => {
-    const id = Math.random().toString(36).substr(2, 9)
-    const newToast = { id, title, description, variant }
-    
-    setToasts(prev => [...prev, newToast])
-    
-    // Auto remove after 5 seconds
-    setTimeout(() => {
-      setToasts(prev => prev.filter(t => t.id !== id))
-    }, 5000)
-  }
+  useEffect(() => {
+    listeners.add(setCurrent)
+    setCurrent(toasts)
+    return () => {
+      listeners.delete(setCurrent)
+    }
+  }, [])
 
-  return { toasts, toast }
+  return { toasts: current, toast, dismiss: dismissToast }
 }

@@ -1,16 +1,9 @@
-import { Badge } from '@/components/ui/badge'
+import { StatusBadge } from '@/components/ds/StatusBadge'
 import { Progress } from '@/components/ui/progress'
-import {
-  Clock,
-  Search,
-  CheckCircle,
-  Download,
-  AlertCircle,
-  XCircle,
-  Timer
-} from 'lucide-react'
 import { TorrentRequest } from '@/services/api'
 import { useDownloadStatus } from '@/hooks/useDownloadStatus'
+import { cn } from '@/lib/utils'
+import { formatFileSize, formatPercent, statusTone } from '@/lib/status'
 
 interface DownloadStatusBadgeProps {
   request: TorrentRequest | undefined
@@ -18,146 +11,69 @@ interface DownloadStatusBadgeProps {
   variant?: 'default' | 'compact'
 }
 
-// Utility function to format file sizes
-function formatFileSize(bytes: number): string {
-  if (bytes === 0) return '0 B'
-  const k = 1024
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
-}
-
-export function DownloadStatusBadge({ request, className, variant = 'default' }: DownloadStatusBadgeProps) {
-  if (!request) return null
-
-  // Get live download status for downloading requests
+/**
+ * A request's status pill plus its live transfer telemetry. Status colour is
+ * monochrome — value on the ink ramp, never hue — and the label always rides
+ * with the dot.
+ */
+export function DownloadStatusBadge({
+  request,
+  className,
+  variant = 'default',
+}: DownloadStatusBadgeProps) {
+  // Hooks must run unconditionally; the id is undefined when there is nothing
+  // to poll, which the hook already treats as a no-op.
   const { downloadStatus } = useDownloadStatus(
-    request.status === 'DOWNLOADING' ? request.id : undefined
+    request?.status === 'DOWNLOADING' ? request.id : undefined
   )
 
-  const getStatusConfig = (status: TorrentRequest['status']) => {
-    switch (status) {
-      case 'PENDING':
-        return {
-          icon: Clock,
-          label: 'Pending',
-          variant: 'secondary' as const,
-          color: 'text-yellow-600',
-        }
-      case 'SEARCHING':
-        return {
-          icon: Search,
-          label: 'Searching',
-          variant: 'secondary' as const,
-          color: 'text-blue-600',
-        }
-      case 'FOUND':
-        return {
-          icon: CheckCircle,
-          label: 'Found',
-          variant: 'default' as const,
-          color: 'text-green-600',
-        }
-      case 'DOWNLOADING':
-        return {
-          icon: Download,
-          label: 'Downloading',
-          variant: 'default' as const,
-          color: 'text-blue-600',
-        }
-      case 'COMPLETED':
-        return {
-          icon: CheckCircle,
-          label: 'Completed',
-          variant: 'default' as const,
-          color: 'text-green-600',
-        }
-      case 'FAILED':
-        return {
-          icon: AlertCircle,
-          label: 'Failed',
-          variant: 'destructive' as const,
-          color: 'text-red-600',
-        }
-      case 'CANCELLED':
-        return {
-          icon: XCircle,
-          label: 'Cancelled',
-          variant: 'secondary' as const,
-          color: 'text-gray-600',
-        }
-      case 'EXPIRED':
-        return {
-          icon: Timer,
-          label: 'Expired',
-          variant: 'secondary' as const,
-          color: 'text-gray-600',
-        }
-      default:
-        return {
-          icon: Clock,
-          label: 'Unknown',
-          variant: 'secondary' as const,
-          color: 'text-gray-600',
-        }
-    }
-  }
+  if (!request) return null
 
-  const config = getStatusConfig(request.status)
-  const Icon = config.icon
-
-  if (variant === 'compact') {
-    return (
-      <div className={`space-y-1 ${className}`}>
-        <Badge variant={config.variant} className="flex items-center gap-1">
-          <Icon className="h-3 w-3" />
-          {config.label}
-        </Badge>
-
-        {request.status === 'DOWNLOADING' && downloadStatus && (
-          <Progress value={downloadStatus.progress} className="h-1" />
-        )}
-      </div>
-    )
-  }
+  const tone = statusTone(request.status)
+  const isDownloading = request.status === 'DOWNLOADING' && downloadStatus
 
   return (
-    <div className={`space-y-1 ${className}`}>
-      <Badge variant={config.variant} className="flex items-center gap-1">
-        <Icon className="h-3 w-3" />
-        {config.label}
-      </Badge>
+    <div className={cn('flex flex-col gap-1.5', className)}>
+      <StatusBadge status={request.status} size={variant === 'compact' ? 'sm' : 'default'} />
 
-      {request.status === 'DOWNLOADING' && downloadStatus && (
-        <div className="space-y-1">
-          <Progress value={downloadStatus.progress} className="h-1" />
-          <div className="flex justify-between text-xs text-muted-foreground">
-            <span>{downloadStatus.progress.toFixed(1)}%</span>
+      {isDownloading && (
+        <Progress
+          value={downloadStatus.progress}
+          className="h-[3px]"
+          indicatorColor={tone.color}
+          striped
+        />
+      )}
+
+      {variant === 'default' && isDownloading && (
+        <div className="flex flex-col gap-0.5 font-mono text-xs text-fg-muted">
+          <div className="flex justify-between gap-3">
+            <span>{formatPercent(downloadStatus.progress)}</span>
             <span>{downloadStatus.downloadSpeed}</span>
           </div>
-          {downloadStatus.eta && downloadStatus.eta !== '∞' && (
-            <div className="text-xs text-muted-foreground">
-              ETA: {downloadStatus.eta}
-            </div>
-          )}
+          {downloadStatus.eta && downloadStatus.eta !== '∞' && <span>ETA {downloadStatus.eta}</span>}
           {downloadStatus.totalSize > 0 && (
-            <div className="text-xs text-muted-foreground">
-              {formatFileSize(downloadStatus.completedSize)} / {formatFileSize(downloadStatus.totalSize)}
-            </div>
+            <span>
+              {formatFileSize(downloadStatus.completedSize)} /{' '}
+              {formatFileSize(downloadStatus.totalSize)}
+            </span>
           )}
         </div>
       )}
 
-      {request.status === 'SEARCHING' && (
-        <div className="text-xs text-muted-foreground">
+      {variant === 'default' && request.status === 'SEARCHING' && (
+        <span className="font-mono text-xs text-fg-muted">
           Attempt {request.searchAttempts} of {request.maxSearchAttempts}
-        </div>
+        </span>
       )}
 
-      {request.status === 'FOUND' && request.foundTorrentTitle && (
-        <div className="text-xs text-muted-foreground line-clamp-1" title={request.foundTorrentTitle}>
-          Found: {request.foundTorrentTitle}
-        </div>
+      {variant === 'default' && request.status === 'FOUND' && request.foundTorrentTitle && (
+        <span
+          className="line-clamp-1 break-all font-mono text-xs text-fg-muted"
+          title={request.foundTorrentTitle}
+        >
+          {request.foundTorrentTitle}
+        </span>
       )}
     </div>
   )

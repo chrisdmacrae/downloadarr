@@ -76,6 +76,7 @@ interface TmdbTvShowDetails {
   networks: Array<{ id: number; name: string; logo_path: string | null }>;
   number_of_episodes: number;
   number_of_seasons: number;
+  episode_run_time: number[];
   status: string;
   type: string;
   vote_average: number;
@@ -111,6 +112,14 @@ interface TmdbMovieDetails {
 @Injectable()
 export class TmdbService extends BaseExternalApiService {
   private readonly imageBaseUrl = 'https://image.tmdb.org/t/p/w500';
+  private readonly backdropBaseUrl = 'https://image.tmdb.org/t/p/w780';
+
+  /**
+   * Genre id -> name, cached per kind. List endpoints return `genre_ids` only, but the
+   * poster hover panel and hero banner show category names, so the two small genre
+   * lists are fetched once and reused.
+   */
+  private readonly genreNameCache = new Map<'movie' | 'tv', Map<number, string>>();
 
   constructor(
     protected readonly httpService: HttpService,
@@ -228,14 +237,10 @@ export class TmdbService extends BaseExternalApiService {
         };
       }
 
-      const searchResults: SearchResult[] = response.data.results.map(item => ({
-        id: item.id.toString(),
-        title: item.title,
-        year: item.release_date ? new Date(item.release_date).getFullYear() : undefined,
-        poster: item.poster_path ? `${this.imageBaseUrl}${item.poster_path}` : undefined,
-        overview: item.overview || undefined,
-        type: 'movie' as const,
-      }));
+      const genreNames = await this.getGenreNameMap('movie');
+      const searchResults: SearchResult[] = response.data.results.map(item =>
+        this.mapMovieItem(item, genreNames),
+      );
 
       return {
         success: true,
@@ -279,14 +284,10 @@ export class TmdbService extends BaseExternalApiService {
         };
       }
 
-      const searchResults: SearchResult[] = response.data.results.map(item => ({
-        id: item.id.toString(),
-        title: item.name,
-        year: item.first_air_date ? new Date(item.first_air_date).getFullYear() : undefined,
-        poster: item.poster_path ? `${this.imageBaseUrl}${item.poster_path}` : undefined,
-        overview: item.overview || undefined,
-        type: 'tv' as const,
-      }));
+      const genreNames = await this.getGenreNameMap('tv');
+      const searchResults: SearchResult[] = response.data.results.map(item =>
+        this.mapTvItem(item, genreNames),
+      );
 
       return {
         success: true,
@@ -329,8 +330,12 @@ export class TmdbService extends BaseExternalApiService {
         title: response.data.name,
         year: response.data.first_air_date ? new Date(response.data.first_air_date).getFullYear() : undefined,
         poster: response.data.poster_path ? `${this.imageBaseUrl}${response.data.poster_path}` : undefined,
+        backdrop: response.data.backdrop_path ? `${this.backdropBaseUrl}${response.data.backdrop_path}` : undefined,
         overview: response.data.overview || undefined,
         type: 'tv',
+        rating: response.data.vote_average || undefined,
+        genres: response.data.genres?.map(g => g.name) || undefined,
+        episodeRuntime: response.data.episode_run_time?.[0] || undefined,
         tmdbId: response.data.id,
         imdbId: response.data.external_ids?.imdb_id || undefined,
         seasons: response.data.number_of_seasons,
@@ -371,14 +376,10 @@ export class TmdbService extends BaseExternalApiService {
         };
       }
 
-      const searchResults: SearchResult[] = response.data.results.map(item => ({
-        id: item.id.toString(),
-        title: item.name,
-        year: item.first_air_date ? new Date(item.first_air_date).getFullYear() : undefined,
-        poster: item.poster_path ? `${this.imageBaseUrl}${item.poster_path}` : undefined,
-        overview: item.overview || undefined,
-        type: 'tv' as const,
-      }));
+      const genreNames = await this.getGenreNameMap('tv');
+      const searchResults: SearchResult[] = response.data.results.map(item =>
+        this.mapTvItem(item, genreNames),
+      );
 
       return {
         success: true,
@@ -408,14 +409,10 @@ export class TmdbService extends BaseExternalApiService {
         };
       }
 
-      const searchResults: SearchResult[] = response.data.results.map(item => ({
-        id: item.id.toString(),
-        title: item.title,
-        year: item.release_date ? new Date(item.release_date).getFullYear() : undefined,
-        poster: item.poster_path ? `${this.imageBaseUrl}${item.poster_path}` : undefined,
-        overview: item.overview || undefined,
-        type: 'movie' as const,
-      }));
+      const genreNames = await this.getGenreNameMap('movie');
+      const searchResults: SearchResult[] = response.data.results.map(item =>
+        this.mapMovieItem(item, genreNames),
+      );
 
       return {
         success: true,
@@ -428,6 +425,59 @@ export class TmdbService extends BaseExternalApiService {
         error: error.message,
       };
     }
+  }
+
+  /**
+   * Fetches (and caches) the TMDB genre list for a kind so list results can carry
+   * category names. A failed lookup caches nothing and simply yields no categories.
+   */
+  private async getGenreNameMap(kind: 'movie' | 'tv'): Promise<Map<number, string>> {
+    const cached = this.genreNameCache.get(kind);
+    if (cached) {
+      return cached;
+    }
+
+    const response = await this.makeRequest<TmdbGenresResponse>(`/genre/${kind}/list`);
+    if (!response.success || !response.data) {
+      return new Map();
+    }
+
+    const map = new Map(response.data.genres.map(g => [g.id, g.name] as const));
+    this.genreNameCache.set(kind, map);
+    return map;
+  }
+
+  private resolveGenreNames(ids: number[] | undefined, names: Map<number, string>): string[] | undefined {
+    const resolved = (ids || []).map(id => names.get(id)).filter((name): name is string => !!name);
+    return resolved.length ? resolved : undefined;
+  }
+
+  private mapMovieItem(item: TmdbMovieItem, genreNames: Map<number, string>): SearchResult {
+    return {
+      id: item.id.toString(),
+      title: item.title,
+      year: item.release_date ? new Date(item.release_date).getFullYear() : undefined,
+      poster: item.poster_path ? `${this.imageBaseUrl}${item.poster_path}` : undefined,
+      backdrop: item.backdrop_path ? `${this.backdropBaseUrl}${item.backdrop_path}` : undefined,
+      overview: item.overview || undefined,
+      type: 'movie' as const,
+      rating: item.vote_average || undefined,
+      genres: this.resolveGenreNames(item.genre_ids, genreNames),
+    };
+  }
+
+  private mapTvItem(item: TmdbTvShowItem, genreNames: Map<number, string>): SearchResult {
+    return {
+      id: item.id.toString(),
+      title: item.name,
+      year: item.first_air_date ? new Date(item.first_air_date).getFullYear() : undefined,
+      poster: item.poster_path ? `${this.imageBaseUrl}${item.poster_path}` : undefined,
+      backdrop: item.backdrop_path ? `${this.backdropBaseUrl}${item.backdrop_path}` : undefined,
+      overview: item.overview || undefined,
+      type: 'tv' as const,
+      rating: item.vote_average || undefined,
+      genres: this.resolveGenreNames(item.genre_ids, genreNames),
+    };
   }
 
   async getMovieGenres(): Promise<ExternalApiResponse<Array<{ id: number; name: string }>>> {
@@ -472,14 +522,10 @@ export class TmdbService extends BaseExternalApiService {
         };
       }
 
-      const searchResults: SearchResult[] = response.data.results.map(item => ({
-        id: item.id.toString(),
-        title: item.title,
-        year: item.release_date ? new Date(item.release_date).getFullYear() : undefined,
-        poster: item.poster_path ? `${this.imageBaseUrl}${item.poster_path}` : undefined,
-        overview: item.overview || undefined,
-        type: 'movie' as const,
-      }));
+      const genreNames = await this.getGenreNameMap('movie');
+      const searchResults: SearchResult[] = response.data.results.map(item =>
+        this.mapMovieItem(item, genreNames),
+      );
 
       return {
         success: true,
@@ -536,14 +582,10 @@ export class TmdbService extends BaseExternalApiService {
         };
       }
 
-      const searchResults: SearchResult[] = response.data.results.map(item => ({
-        id: item.id.toString(),
-        title: item.name,
-        year: item.first_air_date ? new Date(item.first_air_date).getFullYear() : undefined,
-        poster: item.poster_path ? `${this.imageBaseUrl}${item.poster_path}` : undefined,
-        overview: item.overview || undefined,
-        type: 'tv' as const,
-      }));
+      const genreNames = await this.getGenreNameMap('tv');
+      const searchResults: SearchResult[] = response.data.results.map(item =>
+        this.mapTvItem(item, genreNames),
+      );
 
       return {
         success: true,
@@ -586,8 +628,10 @@ export class TmdbService extends BaseExternalApiService {
         title: response.data.title,
         year: response.data.release_date ? new Date(response.data.release_date).getFullYear() : undefined,
         poster: response.data.poster_path ? `${this.imageBaseUrl}${response.data.poster_path}` : undefined,
+        backdrop: response.data.backdrop_path ? `${this.backdropBaseUrl}${response.data.backdrop_path}` : undefined,
         overview: response.data.overview || undefined,
         type: 'movie',
+        genres: response.data.genres?.map(g => g.name) || undefined,
         tmdbId: response.data.id,
         imdbId: response.data.external_ids?.imdb_id || undefined,
         runtime: response.data.runtime,

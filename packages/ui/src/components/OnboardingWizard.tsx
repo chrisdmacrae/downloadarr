@@ -156,11 +156,11 @@ export default function OnboardingWizard() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
+    <div className="min-h-screen bg-surface-app flex items-center justify-center p-4">
       <div className="w-full max-w-2xl">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold mb-2">Welcome to Downloadarr</h1>
-          <p className="text-muted-foreground">
+          <p className="text-fg-secondary">
             Let's get you set up with everything you need to start downloading media
           </p>
         </div>
@@ -172,7 +172,7 @@ export default function OnboardingWizard() {
                 <CardTitle>{STEPS[currentStep].title}</CardTitle>
                 <CardDescription>{STEPS[currentStep].description}</CardDescription>
               </div>
-              <div className="text-sm text-muted-foreground">
+              <div className="text-sm text-fg-secondary">
                 Step {currentStep + 1} of {STEPS.length}
               </div>
             </div>

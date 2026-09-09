@@ -1,6 +1,12 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { TorrentQuality, TorrentFormat, TorrentLanguage, TorrentCategory } from '../dto/torrent-search.dto';
+import { PrismaService } from '../../database/prisma.service';
+import {
+  TorrentQuality as PrismaTorrentQuality,
+  TorrentFormat as PrismaTorrentFormat,
+  TorrentLanguage as PrismaTorrentLanguage,
+} from '../../../generated/prisma';
 
 export interface TorrentPreferences {
   defaultQualities: TorrentQuality[];
@@ -16,21 +22,117 @@ export interface TorrentPreferences {
   preferSmallSize: boolean;
 }
 
+/**
+ * The API's enums use display values ('1080p', 'x265') while the database uses
+ * the enum keys ('HD_1080P', 'X265'). These convert between the two.
+ */
+function toEnumKey<T extends Record<string, string>>(source: T, value: string): string | undefined {
+  return Object.entries(source).find(([key, v]) => v === value || key === value)?.[0];
+}
+
+function toEnumValue<T extends Record<string, string>>(source: T, key: string): string | undefined {
+  return (source as Record<string, string>)[key];
+}
+
 @Injectable()
-export class TorrentPreferencesService {
+export class TorrentPreferencesService implements OnModuleInit {
   private readonly logger = new Logger(TorrentPreferencesService.name);
   private preferences: TorrentPreferences;
 
-  constructor(private readonly configService: ConfigService) {
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly prisma: PrismaService,
+  ) {
     this.preferences = this.loadDefaultPreferences();
+  }
+
+  /**
+   * Quality rules are edited in Settings and persist on AppConfiguration, so
+   * they survive a restart. Env values remain the fallback for a fresh
+   * install, and are used for any field the user has not set.
+   */
+  async onModuleInit(): Promise<void> {
+    try {
+      await this.reload();
+    } catch (error) {
+      this.logger.warn(`Could not load stored torrent preferences, using defaults: ${error.message}`);
+    }
+  }
+
+  async reload(): Promise<TorrentPreferences> {
+    const config = await this.prisma.appConfiguration.findFirst();
+    if (!config) {
+      return this.getPreferences();
+    }
+
+    const defaults = this.loadDefaultPreferences();
+    this.preferences = {
+      defaultQualities: config.defaultQualities?.length
+        ? (config.defaultQualities
+            .map(key => toEnumValue(TorrentQuality, key))
+            .filter(Boolean) as TorrentQuality[])
+        : defaults.defaultQualities,
+      defaultFormats: config.defaultFormats?.length
+        ? (config.defaultFormats
+            .map(key => toEnumValue(TorrentFormat, key))
+            .filter(Boolean) as TorrentFormat[])
+        : defaults.defaultFormats,
+      defaultLanguages: config.defaultLanguages?.length
+        ? (config.defaultLanguages as unknown as TorrentLanguage[])
+        : defaults.defaultLanguages,
+      defaultCategory: defaults.defaultCategory,
+      minSeeders: config.minSeeders ?? defaults.minSeeders,
+      maxSizeGB: config.maxSizeGB ?? defaults.maxSizeGB,
+      trustedIndexers: config.trustedIndexers?.length ? config.trustedIndexers : defaults.trustedIndexers,
+      blacklistedWords: config.blacklistedWords?.length ? config.blacklistedWords : defaults.blacklistedWords,
+      autoSelectBest: config.autoSelectBest ?? defaults.autoSelectBest,
+      preferRemux: config.preferRemux ?? defaults.preferRemux,
+      preferSmallSize: config.preferSmallSize ?? defaults.preferSmallSize,
+    };
+
+    return this.getPreferences();
   }
 
   getPreferences(): TorrentPreferences {
     return { ...this.preferences };
   }
 
-  updatePreferences(updates: Partial<TorrentPreferences>): TorrentPreferences {
+  async updatePreferences(updates: Partial<TorrentPreferences>): Promise<TorrentPreferences> {
     this.preferences = { ...this.preferences, ...updates };
+
+    const data: Record<string, unknown> = {};
+    if (updates.defaultQualities) {
+      data.defaultQualities = updates.defaultQualities
+        .map(value => toEnumKey(TorrentQuality, value))
+        .filter(Boolean) as PrismaTorrentQuality[];
+    }
+    if (updates.defaultFormats) {
+      data.defaultFormats = updates.defaultFormats
+        .map(value => toEnumKey(TorrentFormat, value))
+        .filter(Boolean) as PrismaTorrentFormat[];
+    }
+    if (updates.defaultLanguages) {
+      data.defaultLanguages = updates.defaultLanguages
+        .map(value => toEnumKey(TorrentLanguage, value))
+        .filter(Boolean) as PrismaTorrentLanguage[];
+    }
+    if (updates.minSeeders !== undefined) data.minSeeders = updates.minSeeders;
+    if (updates.maxSizeGB !== undefined) data.maxSizeGB = updates.maxSizeGB;
+    if (updates.trustedIndexers) data.trustedIndexers = updates.trustedIndexers;
+    if (updates.blacklistedWords) data.blacklistedWords = updates.blacklistedWords;
+    if (updates.autoSelectBest !== undefined) data.autoSelectBest = updates.autoSelectBest;
+    if (updates.preferRemux !== undefined) data.preferRemux = updates.preferRemux;
+    if (updates.preferSmallSize !== undefined) data.preferSmallSize = updates.preferSmallSize;
+
+    if (Object.keys(data).length > 0) {
+      const config = await this.prisma.appConfiguration.findFirst();
+      if (config) {
+        await this.prisma.appConfiguration.update({ where: { id: config.id }, data });
+      } else {
+        await this.prisma.appConfiguration.create({ data });
+      }
+    }
+
     this.logger.log('Torrent preferences updated');
     return this.getPreferences();
   }

@@ -91,11 +91,17 @@ export class AppConfigurationService {
   /**
    * Get Jackett configuration
    */
-  async getJackettConfig(): Promise<{ apiKey: string | null; url: string }> {
+  async getJackettConfig(): Promise<{
+    apiKey: string | null;
+    url: string;
+    flaresolverrUrl: string | null;
+  }> {
     const config = await this.getConfiguration();
     return {
       apiKey: config.jackettApiKey,
       url: config.jackettUrl,
+      // Env stays the fallback for installs that never set it in the UI.
+      flaresolverrUrl: config.flaresolverrUrl || process.env.FLARESOLVERR_URL || null,
     };
   }
 

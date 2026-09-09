@@ -175,6 +175,22 @@ export class MatchMetadataDto {
   @IsInt()
   @Min(1)
   episode?: number;
+
+  @ApiPropertyOptional({
+    description: 'Poster artwork URL captured from the discovery provider',
+    example: 'https://image.tmdb.org/t/p/w500/abc.jpg',
+  })
+  @IsOptional()
+  @IsString()
+  posterUrl?: string;
+
+  @ApiPropertyOptional({
+    description: 'Backdrop (16:9) artwork URL captured from the discovery provider',
+    example: 'https://image.tmdb.org/t/p/w780/abc.jpg',
+  })
+  @IsOptional()
+  @IsString()
+  backdropUrl?: string;
 }
 
 export class HttpDownloadRequestQueryDto {

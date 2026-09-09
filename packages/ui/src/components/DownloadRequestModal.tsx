@@ -287,7 +287,7 @@ export function DownloadRequestModal({ item, open, onOpenChange, onRequestCreate
         <div className="space-y-6">
           {/* Item Info */}
           <div className="flex gap-4">
-            <div className="w-20 h-28 bg-muted rounded overflow-hidden flex-shrink-0">
+            <div className="w-20 h-28 bg-white/[.05] rounded overflow-hidden flex-shrink-0">
               {item.poster ? (
                 <img
                   src={item.poster}
@@ -302,12 +302,12 @@ export function DownloadRequestModal({ item, open, onOpenChange, onRequestCreate
             </div>
             <div className="flex-1">
               <h3 className="font-semibold">{item.title}</h3>
-              <p className="text-sm text-muted-foreground">{item.year}</p>
+              <p className="text-sm text-fg-secondary">{item.year}</p>
               <Badge variant="secondary" className="mt-1">
                 {isMovie ? 'Movie' : isTvShow ? 'TV Show' : 'Game'}
               </Badge>
               {item.overview && (
-                <p className="text-xs text-muted-foreground mt-2 line-clamp-3">
+                <p className="text-xs text-fg-secondary mt-2 line-clamp-3">
                   {item.overview}
                 </p>
               )}
@@ -331,7 +331,7 @@ export function DownloadRequestModal({ item, open, onOpenChange, onRequestCreate
                     <Label htmlFor="isOngoing" className="text-sm font-medium">
                       Ongoing Request
                     </Label>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-xs text-fg-secondary">
                       Automatically search for new episodes as they become available
                     </p>
                   </div>
@@ -350,8 +350,8 @@ export function DownloadRequestModal({ item, open, onOpenChange, onRequestCreate
 
                 {formData.isOngoing ? (
                   /* Ongoing Request Fields */
-                  <div className="space-y-4 p-4 bg-muted/50 rounded-lg">
-                    <p className="text-sm text-muted-foreground">
+                  <div className="space-y-4 p-4 bg-white/[.05] rounded-lg">
+                    <p className="text-sm text-fg-secondary">
                       This will create an ongoing request that automatically searches for new episodes.
                     </p>
                     <div className="grid grid-cols-2 gap-4">
@@ -365,7 +365,7 @@ export function DownloadRequestModal({ item, open, onOpenChange, onRequestCreate
                           value={formData.totalSeasons}
                           onChange={(e) => setFormData(prev => ({ ...prev, totalSeasons: e.target.value }))}
                         />
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-xs text-fg-secondary">
                           If known, helps track completion
                         </p>
                       </div>
@@ -379,7 +379,7 @@ export function DownloadRequestModal({ item, open, onOpenChange, onRequestCreate
                           value={formData.totalEpisodes}
                           onChange={(e) => setFormData(prev => ({ ...prev, totalEpisodes: e.target.value }))}
                         />
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-xs text-fg-secondary">
                           If known, helps track completion
                         </p>
                       </div>
@@ -412,7 +412,7 @@ export function DownloadRequestModal({ item, open, onOpenChange, onRequestCreate
                     </div>
                   </div>
                 )}
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-fg-secondary">
                   Leave empty to download the entire series. Specify season only to download a full season.
                 </p>
               </div>
@@ -463,7 +463,7 @@ export function DownloadRequestModal({ item, open, onOpenChange, onRequestCreate
                     />
                   </div>
                 </div>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-fg-secondary">
                   Platform and genre help narrow down search results for better matches.
                 </p>
               </div>
@@ -532,7 +532,7 @@ export function DownloadRequestModal({ item, open, onOpenChange, onRequestCreate
                 </div>
               ))}
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-fg-secondary">
               Releases without a language tag are treated as English. Multi-language releases always match.
             </p>
           </div>

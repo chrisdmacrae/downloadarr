@@ -421,6 +421,25 @@ export const usePreviewOrganizationPath = () => {
 };
 
 // System hooks
+// Default torrent quality rules
+export const useTorrentPreferences = () => {
+  return useQuery({
+    queryKey: ['torrentPreferences'],
+    queryFn: apiService.getTorrentPreferences,
+    staleTime: 5 * 60 * 1000,
+  });
+};
+
+export const useUpdateTorrentPreferences = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: apiService.updateTorrentPreferences,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['torrentPreferences'] });
+    },
+  });
+};
+
 export const useUpdateCheck = () => {
   return useQuery({
     queryKey: queryKeys.updateCheck,

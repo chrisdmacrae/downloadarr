@@ -23,23 +23,23 @@ export default function ApiKeysStep({ data, onUpdate, onNext, onPrevious }: ApiK
     <div className="space-y-6">
       <div className="space-y-4">
         <div className="text-center">
-          <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center mx-auto mb-4">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-pill bg-[color:var(--accent-quiet)]">
             <span className="text-2xl">🔑</span>
           </div>
           <h3 className="text-lg font-semibold mb-2">External API Keys (Optional)</h3>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-fg-secondary">
             Configure API keys for enhanced movie, TV show, and game discovery. These are optional but recommended for the best experience.
           </p>
         </div>
 
-        <div className="bg-blue-50 dark:bg-blue-950/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
+        <div className="rounded-card border border-hairline bg-white/[.05] p-4">
           <div className="flex items-start space-x-3">
-            <AlertCircle className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-fg-secondary" />
             <div className="text-sm">
-              <p className="font-medium text-blue-900 dark:text-blue-100 mb-1">
+              <p className="mb-1 font-medium text-fg-primary">
                 Why configure API keys?
               </p>
-              <ul className="text-blue-700 dark:text-blue-300 space-y-1">
+              <ul className="space-y-1 text-fg-secondary">
                 <li>• Get detailed metadata, posters, and descriptions</li>
                 <li>• Enable movie and TV show discovery features</li>
                 <li>• Access game information and artwork</li>

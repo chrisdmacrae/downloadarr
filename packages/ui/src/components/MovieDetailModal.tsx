@@ -131,7 +131,7 @@ export function MovieDetailModal({ contentType, contentId, title, open, onOpenCh
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* Poster */}
           <div className="md:col-span-1">
-            <div className="aspect-[2/3] bg-muted rounded-lg overflow-hidden">
+            <div className="aspect-[2/3] bg-white/[.05] rounded-lg overflow-hidden">
               {movieDetails?.poster ? (
                 <img
                   src={movieDetails.poster}
@@ -139,7 +139,7 @@ export function MovieDetailModal({ contentType, contentId, title, open, onOpenCh
                   className="w-full h-full object-cover"
                 />
               ) : (
-                <div className="w-full h-full flex items-center justify-center text-muted-foreground">
+                <div className="w-full h-full flex items-center justify-center text-fg-secondary">
                   <Film className="h-16 w-16" />
                 </div>
               )}
@@ -163,19 +163,19 @@ export function MovieDetailModal({ contentType, contentId, title, open, onOpenCh
                     {contentType === 'tv' ? 'TV Show' : 'Movie'}
                   </Badge>
                   {movieDetails?.year && (
-                    <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                    <div className="flex items-center gap-1 text-sm text-fg-secondary">
                       <Calendar className="h-4 w-4" />
                       {movieDetails.year}
                     </div>
                   )}
                   {movieDetails?.runtime && (
-                    <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                    <div className="flex items-center gap-1 text-sm text-fg-secondary">
                       <Clock className="h-4 w-4" />
                       {movieDetails.runtime} min
                     </div>
                   )}
                   {movieDetails?.rating && (
-                    <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                    <div className="flex items-center gap-1 text-sm text-fg-secondary">
                       <Star className="h-4 w-4" />
                       {movieDetails.rating}/10
                     </div>
@@ -197,7 +197,7 @@ export function MovieDetailModal({ contentType, contentId, title, open, onOpenCh
                 {(movieDetails?.overview || movieDetails?.plot) && (
                   <div>
                     <h3 className="font-semibold mb-2">Overview</h3>
-                    <p className="text-sm text-muted-foreground leading-relaxed">
+                    <p className="text-sm text-fg-secondary leading-relaxed">
                       {movieDetails.overview || movieDetails.plot}
                     </p>
                   </div>
@@ -208,10 +208,10 @@ export function MovieDetailModal({ contentType, contentId, title, open, onOpenCh
                   <div className="space-y-2">
                     {movieDetails.director && (
                       <div className="flex items-start gap-2">
-                        <User className="h-4 w-4 mt-0.5 text-muted-foreground" />
+                        <User className="h-4 w-4 mt-0.5 text-fg-secondary" />
                         <div>
                           <span className="text-sm font-medium">Director: </span>
-                          <span className="text-sm text-muted-foreground">
+                          <span className="text-sm text-fg-secondary">
                             {movieDetails.director}
                           </span>
                         </div>
@@ -219,10 +219,10 @@ export function MovieDetailModal({ contentType, contentId, title, open, onOpenCh
                     )}
                     {movieDetails.actors && (
                       <div className="flex items-start gap-2">
-                        <User className="h-4 w-4 mt-0.5 text-muted-foreground" />
+                        <User className="h-4 w-4 mt-0.5 text-fg-secondary" />
                         <div>
                           <span className="text-sm font-medium">Cast: </span>
-                          <span className="text-sm text-muted-foreground">
+                          <span className="text-sm text-fg-secondary">
                             {movieDetails.actors}
                           </span>
                         </div>

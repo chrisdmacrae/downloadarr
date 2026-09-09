@@ -8,6 +8,8 @@ import { ExternalLink, Eye, EyeOff, Save, TestTube } from 'lucide-react'
 interface JackettData {
   jackettApiKey?: string
   jackettUrl?: string
+  /** FlareSolverr, for indexers behind Cloudflare. */
+  flaresolverrUrl?: string
 }
 
 interface JackettSettingsProps {
@@ -57,21 +59,19 @@ export default function JackettSettings({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Jackett Integration</CardTitle>
+        <CardTitle>Jackett</CardTitle>
         <CardDescription>
           Configure Jackett for torrent search across multiple indexers
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        <div className="bg-blue-50 dark:bg-blue-950/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
+        <div className="rounded-card border border-hairline bg-white/[.05] p-4">
           <div className="space-y-2">
-            <h4 className="font-medium text-blue-900 dark:text-blue-100">
-              How to get your Jackett API key:
-            </h4>
-            <ol className="text-sm text-blue-700 dark:text-blue-300 space-y-1 list-decimal list-inside">
-              <li>Click "Open Jackett" below to access the web interface</li>
-              <li>Look for the "API Key" section on the dashboard</li>
-              <li>Copy the API key and paste it in the field below</li>
+            <h4 className="text-sm font-bold text-fg-primary">How to get your Jackett API key</h4>
+            <ol className="list-inside list-decimal space-y-1 text-sm text-fg-secondary">
+              <li>Click "Open Jackett" below to reach its web interface</li>
+              <li>Find the "API Key" section on the dashboard</li>
+              <li>Copy the key and paste it into the field below</li>
             </ol>
           </div>
         </div>
@@ -84,9 +84,9 @@ export default function JackettSettings({
                 id="jackettUrl"
                 type="url"
                 placeholder="http://localhost:9117"
+                className="flex-1 font-mono"
                 value={data.jackettUrl || ''}
                 onChange={(e) => handleInputChange('jackettUrl', e.target.value)}
-                className="flex-1"
               />
               <Button
                 type="button"
@@ -99,12 +99,12 @@ export default function JackettSettings({
               </Button>
             </div>
             {data.jackettUrl && !isValidJackettUrl && (
-              <p className="text-sm text-destructive">Please enter a valid URL</p>
+              <p className="text-sm text-status-failed">Please enter a valid URL</p>
             )}
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="jackettApiKey">API Key</Label>
+            <Label htmlFor="jackettApiKey">API key</Label>
             <div className="relative">
               <Input
                 id="jackettApiKey"
@@ -129,26 +129,43 @@ export default function JackettSettings({
               </Button>
             </div>
             {data.jackettApiKey && !isValidApiKey && (
-              <p className="text-sm text-destructive">Please enter a valid API key</p>
+              <p className="text-sm text-status-failed">Please enter a valid API key</p>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="flaresolverrUrl">FlareSolverr URL</Label>
+            <Input
+              id="flaresolverrUrl"
+              type="url"
+              className="font-mono"
+              placeholder="http://flaresolverr:8191"
+              value={data.flaresolverrUrl || ''}
+              onChange={(e) => handleInputChange('flaresolverrUrl', e.target.value)}
+            />
+            <p className="text-xs text-fg-muted">
+              Optional. Indexers behind Cloudflare need FlareSolverr; leave empty to fall back to
+              the FLARESOLVERR_URL environment variable.
+            </p>
+            {data.flaresolverrUrl && !isValidUrl(data.flaresolverrUrl) && (
+              <p className="text-sm text-status-failed">Please enter a valid URL</p>
             )}
           </div>
         </div>
 
         {isValidApiKey && isValidJackettUrl && (
-          <div className="bg-green-50 dark:bg-green-950/20 p-4 rounded-lg border border-green-200 dark:border-green-800">
-            <div className="flex items-center space-x-2">
-              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-              <p className="text-sm font-medium text-green-900 dark:text-green-100">
-                Jackett configuration looks good!
-              </p>
+          <div className="rounded-card border border-hairline bg-white/[.08] p-4">
+            <div className="flex items-center gap-2.5">
+              <span className="h-1.5 w-1.5 rounded-pill bg-[color:var(--status-completed)]" />
+              <p className="text-sm font-medium text-fg-primary">Jackett configuration looks good</p>
             </div>
           </div>
         )}
 
-        <div className="bg-gray-50 dark:bg-gray-950/20 p-4 rounded-lg border">
-          <p className="text-sm text-muted-foreground">
-            <strong>Note:</strong> Jackett is required for torrent search functionality. 
-            Make sure Jackett is running and accessible at the configured URL.
+        <div className="rounded-card border border-hairline bg-white/[.05] p-4">
+          <p className="text-sm text-fg-secondary">
+            <strong className="text-fg-primary">Note:</strong> Jackett is required for torrent
+            search. Make sure it is running and reachable at the configured URL.
           </p>
         </div>
 
@@ -163,12 +180,12 @@ export default function JackettSettings({
                 {isTesting ? (
                   <>
                     <div className="w-4 h-4 mr-2 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                    Testing...
+                    Testing…
                   </>
                 ) : (
                   <>
                     <TestTube className="w-4 h-4 mr-2" />
-                    Test Connection
+                    Test connection
                   </>
                 )}
               </Button>
@@ -178,12 +195,12 @@ export default function JackettSettings({
                 {isLoading ? (
                   <>
                     <div className="w-4 h-4 mr-2 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                    Saving...
+                    Saving…
                   </>
                 ) : (
                   <>
                     <Save className="w-4 h-4 mr-2" />
-                    Save Configuration
+                    Save configuration
                   </>
                 )}
               </Button>

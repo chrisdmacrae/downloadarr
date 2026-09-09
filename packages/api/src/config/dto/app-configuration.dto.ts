@@ -23,8 +23,17 @@ export class UpdateAppConfigurationDto {
     example: 'http://jackett:9117',
   })
   @IsOptional()
-  @IsUrl()
+  // Container hostnames like http://jackett:9117 have no TLD.
+  @IsUrl({ require_tld: false })
   jackettUrl?: string;
+
+  @ApiPropertyOptional({
+    description: 'FlareSolverr URL, for indexers behind Cloudflare',
+    example: 'http://flaresolverr:8191',
+  })
+  @IsOptional()
+  @IsUrl({ require_tld: false })
+  flaresolverrUrl?: string;
 
   @ApiPropertyOptional({
     description: 'Whether file organization is enabled',

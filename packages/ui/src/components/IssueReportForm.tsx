@@ -182,7 +182,7 @@ export function IssueReportForm({ open, onOpenChange }: IssueReportFormProps) {
             </Label>
             <textarea
               id="description"
-              className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              className="flex min-h-[80px] w-full rounded-md border border-subtle bg-surface-app px-3 py-2 text-sm ring-offset-background placeholder:text-fg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               value={formData.description}
               onChange={(e) => updateField('description', e.target.value)}
               placeholder={formData.type === 'bug' ? 
@@ -198,7 +198,7 @@ export function IssueReportForm({ open, onOpenChange }: IssueReportFormProps) {
                 <Label htmlFor="steps">Steps to Reproduce *</Label>
                 <textarea
                   id="steps"
-                  className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  className="flex min-h-[80px] w-full rounded-md border border-subtle bg-surface-app px-3 py-2 text-sm ring-offset-background placeholder:text-fg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                   value={formData.stepsToReproduce}
                   onChange={(e) => updateField('stepsToReproduce', e.target.value)}
                   placeholder="1. Go to '...'&#10;2. Click on '...'&#10;3. See error"
@@ -210,7 +210,7 @@ export function IssueReportForm({ open, onOpenChange }: IssueReportFormProps) {
                 <Label htmlFor="expected">Expected Behavior *</Label>
                 <textarea
                   id="expected"
-                  className="flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  className="flex min-h-[60px] w-full rounded-md border border-subtle bg-surface-app px-3 py-2 text-sm ring-offset-background placeholder:text-fg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                   value={formData.expectedBehavior}
                   onChange={(e) => updateField('expectedBehavior', e.target.value)}
                   placeholder="What should have happened?"
@@ -222,7 +222,7 @@ export function IssueReportForm({ open, onOpenChange }: IssueReportFormProps) {
                 <Label htmlFor="actual">Actual Behavior</Label>
                 <textarea
                   id="actual"
-                  className="flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  className="flex min-h-[60px] w-full rounded-md border border-subtle bg-surface-app px-3 py-2 text-sm ring-offset-background placeholder:text-fg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                   value={formData.actualBehavior}
                   onChange={(e) => updateField('actualBehavior', e.target.value)}
                   placeholder="What actually happened? (optional but helpful)"
@@ -287,7 +287,7 @@ export function IssueReportForm({ open, onOpenChange }: IssueReportFormProps) {
                 <Label htmlFor="solution">Proposed Solution *</Label>
                 <textarea
                   id="solution"
-                  className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  className="flex min-h-[80px] w-full rounded-md border border-subtle bg-surface-app px-3 py-2 text-sm ring-offset-background placeholder:text-fg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                   value={formData.expectedBehavior}
                   onChange={(e) => updateField('expectedBehavior', e.target.value)}
                   placeholder="Describe the solution you'd like..."
@@ -299,7 +299,7 @@ export function IssueReportForm({ open, onOpenChange }: IssueReportFormProps) {
                 <Label htmlFor="usecase">Use Case</Label>
                 <textarea
                   id="usecase"
-                  className="flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  className="flex min-h-[60px] w-full rounded-md border border-subtle bg-surface-app px-3 py-2 text-sm ring-offset-background placeholder:text-fg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                   value={formData.stepsToReproduce}
                   onChange={(e) => updateField('stepsToReproduce', e.target.value)}
                   placeholder="How would you use this feature?"
@@ -351,7 +351,7 @@ export function IssueReportForm({ open, onOpenChange }: IssueReportFormProps) {
             <Label htmlFor="additional">Additional Context</Label>
             <textarea
               id="additional"
-              className="flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              className="flex min-h-[60px] w-full rounded-md border border-subtle bg-surface-app px-3 py-2 text-sm ring-offset-background placeholder:text-fg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               value={formData.additionalContext}
               onChange={(e) => updateField('additionalContext', e.target.value)}
               placeholder="Any additional information..."
@@ -395,7 +395,7 @@ export function IssueReportForm({ open, onOpenChange }: IssueReportFormProps) {
 
         <DialogFooter className="flex-col space-y-2">
           {!isFormValid() && (
-            <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md">
+            <div className="text-sm text-status-failed bg-destructive/10 p-3 rounded-md">
               <p className="font-medium">Please complete the following required fields:</p>
               <ul className="list-disc list-inside mt-1 space-y-1">
                 {getValidationErrors().map((error, index) => (

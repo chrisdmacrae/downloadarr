@@ -35,6 +35,7 @@ interface AppConfiguration {
   onboardingCompletedAt: string | null
   jackettApiKey: string | null
   jackettUrl: string
+  flaresolverrUrl: string | null
   organizationEnabled: boolean
   omdbApiKey: string | null
   tmdbApiKey: string | null
@@ -56,6 +57,7 @@ interface OnboardingData {
 interface JackettConfig {
   apiKey: string | null
   url: string
+  flaresolverrUrl: string | null
 }
 
 // Get app configuration

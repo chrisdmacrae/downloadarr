@@ -195,7 +195,7 @@ export function EditRequestModal({ request, open, onOpenChange, onRequestUpdated
           <DialogTitle className="flex items-center gap-2">
             <Edit className="h-5 w-5" />
             Edit Request: {request.title}
-            {request.year && <span className="text-muted-foreground">({request.year})</span>}
+            {request.year && <span className="text-fg-secondary">({request.year})</span>}
           </DialogTitle>
         </DialogHeader>
 
@@ -259,7 +259,7 @@ export function EditRequestModal({ request, open, onOpenChange, onRequestUpdated
                 </div>
               ))}
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-fg-secondary">
               Releases without a language tag are treated as English. Multi-language releases always match.
             </p>
           </div>

@@ -12,6 +12,19 @@ export interface SearchResult {
   poster?: string;
   overview?: string;
   type: 'movie' | 'tv' | 'game';
+  /**
+   * Enrichment used by the media-library UI: 16:9 artwork for heroes and stateful
+   * cards, and the facts the poster hover panel shows (rating chip, runtime,
+   * season count, platform, categories). All optional - a provider that cannot
+   * supply a field simply omits it and the UI drops that row.
+   */
+  backdrop?: string;
+  rating?: number;
+  genres?: string[];
+  runtime?: number;
+  seasons?: number;
+  episodeRuntime?: number;
+  platforms?: string[];
 }
 
 export interface MovieDetails extends SearchResult {

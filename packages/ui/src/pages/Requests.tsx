@@ -1,7 +1,22 @@
-import { useState } from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
+import { useMemo, useState } from 'react'
+import {
+  AlertCircle,
+  Download,
+  Edit,
+  ExternalLink,
+  Link as LinkIcon,
+  Loader2,
+  MoreVertical,
+  PlayCircle,
+  RefreshCw,
+  Search,
+  SearchIcon,
+  Trash2,
+  XCircle,
+} from 'lucide-react'
+
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
@@ -21,35 +36,67 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import {
-  Search,
-  MoreVertical,
-  Trash2,
-  XCircle,
-  RefreshCw,
-  Download,
-  Calendar,
-  AlertCircle,
-  Loader2,
-  SearchIcon,
-  PlayCircle,
-  Edit,
-  ExternalLink,
-  Link
-} from 'lucide-react'
-import { DownloadStatusBadge } from '@/components/DownloadStatusBadge'
+import { MediaCard, MediaCardSkeleton } from '@/components/ds/MediaCard'
+import { EmptyState, Page, PageHeader, PageSection } from '@/components/ds/Page'
+import { Rail } from '@/components/ds/Rail'
+import { StatusBadge } from '@/components/ds/StatusBadge'
 import { TorrentSelectionModal } from '@/components/TorrentSelectionModal'
 import { EditRequestModal } from '@/components/EditRequestModal'
 import { TvShowSeasonBadges } from '@/components/TvShowSeasonBadges'
 import { TvShowSeasonModal } from '@/components/TvShowSeasonModal'
 import { MovieDetailModal } from '@/components/MovieDetailModal'
 import { GameDetailModal } from '@/components/GameDetailModal'
+import { HttpDownloadRequestModal } from '@/components/HttpDownloadRequestModal'
 import { apiService, TorrentRequest, AggregatedRequest } from '@/services/api'
 import { useAggregatedRequests, useRequestStats } from '@/hooks/useApi'
-import { HttpDownloadRequestModal } from '@/components/HttpDownloadRequestModal'
 import { useToast } from '@/hooks/use-toast'
+import { contentTypeTone, formatRelativeTime, normalizeStatus } from '@/lib/status'
+
+const CARD_WIDTH = 320
 
 type StatusFilter = 'all' | TorrentRequest['status'] | 'PENDING_METADATA' | 'METADATA_MATCHED'
+
+/** The full RequestStatus set, plus the two HTTP-only states. */
+const STATUS_FILTERS: Array<{ value: StatusFilter; label: string }> = [
+  { value: 'all', label: 'All statuses' },
+  { value: 'PENDING', label: 'Pending' },
+  { value: 'SEARCHING', label: 'Searching' },
+  { value: 'FOUND', label: 'Found' },
+  { value: 'DOWNLOADING', label: 'Downloading' },
+  { value: 'COMPLETED', label: 'Completed' },
+  { value: 'FAILED', label: 'Failed' },
+  { value: 'CANCELLED', label: 'Cancelled' },
+  { value: 'EXPIRED', label: 'Expired' },
+  { value: 'PENDING_METADATA', label: 'Needs metadata' },
+  { value: 'METADATA_MATCHED', label: 'Metadata matched' },
+]
+
+/** Order the state groups follow the lifecycle, so a page reads left to right. */
+const GROUP_ORDER = [
+  'DOWNLOADING',
+  'FOUND',
+  'SEARCHING',
+  'METADATA_MATCHED',
+  'PENDING_METADATA',
+  'PENDING',
+  'COMPLETED',
+  'FAILED',
+  'CANCELLED',
+  'EXPIRED',
+] as const
+
+const GROUP_LABELS: Record<string, string> = {
+  DOWNLOADING: 'Downloading',
+  FOUND: 'Found',
+  SEARCHING: 'Searching',
+  METADATA_MATCHED: 'Metadata matched',
+  PENDING_METADATA: 'Needs metadata',
+  PENDING: 'Pending',
+  COMPLETED: 'Completed',
+  FAILED: 'Failed',
+  CANCELLED: 'Cancelled',
+  EXPIRED: 'Expired',
+}
 
 export default function Requests() {
   const [sortBy, setSortBy] = useState<'createdAt' | 'updatedAt' | 'priority'>('createdAt')
@@ -77,7 +124,6 @@ export default function Requests() {
   const [showDetailModal, setShowDetailModal] = useState(false)
   const [showHttpRequestModal, setShowHttpRequestModal] = useState(false)
 
-  // Use aggregated requests API
   const { data: requestsData, isLoading, error, refetch } = useAggregatedRequests({
     search: searchQuery || undefined,
     status: statusFilter !== 'all' ? statusFilter : undefined,
@@ -91,7 +137,8 @@ export default function Requests() {
 
   const requests = requestsData?.data || []
   const totalCount = requestsData?.total || 0
-  const statusCounts = statsData?.data?.total || {}
+  const statusCounts: Record<string, number> = statsData?.data?.total || {}
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
 
   const { toast } = useToast()
 
@@ -99,52 +146,43 @@ export default function Requests() {
     refetch()
   }
 
-  const goToPage = (page: number) => {
-    setCurrentPage(page)
-  }
-
   const changePageSize = (size: number) => {
     setPageSize(size)
     setCurrentPage(1)
   }
 
-  const isOngoingTvShow = (request: AggregatedRequest) => {
-    return request.type === 'torrent' && request.contentType === 'TV_SHOW'
-  }
+  const isOngoingTvShow = (request: AggregatedRequest) =>
+    request.type === 'torrent' && request.contentType === 'TV_SHOW'
 
-  // Note: Filtering and sorting is now handled server-side via pagination
-  // Client-side filtering conflicts with server-side pagination
-  const filteredRequests = requests
+  /** Grouped by state when no single status is selected. */
+  const groups = useMemo(() => {
+    if (statusFilter !== 'all') {
+      return [{ key: statusFilter, label: GROUP_LABELS[statusFilter] ?? 'Requests', items: requests }]
+    }
+    return GROUP_ORDER.map((key) => ({
+      key,
+      label: GROUP_LABELS[key],
+      items: requests.filter((r) => r.status === key),
+    })).filter((group) => group.items.length > 0)
+  }, [requests, statusFilter])
 
   const handleStartHttpDownload = async (request: AggregatedRequest) => {
-    if (request.type !== 'http' || request.status !== 'METADATA_MATCHED') {
-      return
-    }
-
+    if (request.type !== 'http' || request.status !== 'METADATA_MATCHED') return
     setIsStartingDownload(request.id)
-
     try {
       const response = await apiService.startHttpDownload(request.id)
-
       if (response.success) {
-        toast({
-          title: "Download Started",
-          description: `Started download for "${request.title}"`,
-        })
+        toast({ title: 'Download started', description: `${request.title} — transferring now.` })
         refreshRequests()
       } else {
-        toast({
-          title: "Start Failed",
-          description: "Failed to start download",
-          variant: "destructive",
-        })
+        toast({ title: 'Start failed', description: 'Failed to start download.', variant: 'destructive' })
       }
-    } catch (error) {
-      console.error('Error starting HTTP download:', error)
+    } catch (err) {
+      console.error('Error starting HTTP download:', err)
       toast({
-        title: "Start Failed",
-        description: "An error occurred while starting the download",
-        variant: "destructive",
+        title: 'Start failed',
+        description: 'An error occurred while starting the download.',
+        variant: 'destructive',
       })
     } finally {
       setIsStartingDownload(null)
@@ -153,32 +191,24 @@ export default function Requests() {
 
   const handleCancelRequest = async (request: AggregatedRequest) => {
     setIsCancelling(request.id)
-
     try {
-      let response
-      if (request.type === 'torrent') {
-        response = await apiService.cancelTorrentRequest(request.id)
-      } else {
-        response = await apiService.cancelHttpDownloadRequest(request.id)
-      }
+      const response =
+        request.type === 'torrent'
+          ? await apiService.cancelTorrentRequest(request.id)
+          : await apiService.cancelHttpDownloadRequest(request.id)
 
       if (response.success) {
-        toast({
-          title: "Request Cancelled",
-          description: `${request.title} has been cancelled`,
-        })
+        toast({ title: 'Request cancelled', description: `${request.title} has been cancelled.` })
         refreshRequests()
       } else {
-        toast({
-          title: "Cancel Failed",
-          description: "Failed to cancel request",
-        })
+        toast({ title: 'Cancel failed', description: 'Failed to cancel request.', variant: 'destructive' })
       }
-    } catch (error) {
-      console.error('Error cancelling request:', error)
+    } catch (err) {
+      console.error('Error cancelling request:', err)
       toast({
-        title: "Cancel Failed",
-        description: "An error occurred while cancelling the request",
+        title: 'Cancel failed',
+        description: 'An error occurred while cancelling the request.',
+        variant: 'destructive',
       })
     } finally {
       setIsCancelling(null)
@@ -187,35 +217,30 @@ export default function Requests() {
 
   const handleDeleteRequest = async (request: AggregatedRequest) => {
     setIsDeleting(request.id)
-
     try {
-      let response
-      if (request.type === 'torrent') {
-        response = await apiService.deleteTorrentRequest(request.id)
-      } else {
-        response = await apiService.deleteHttpDownloadRequest(request.id)
-      }
+      const response =
+        request.type === 'torrent'
+          ? await apiService.deleteTorrentRequest(request.id)
+          : await apiService.deleteHttpDownloadRequest(request.id)
 
       if (response.success) {
-        const isDownloading = request.status === 'DOWNLOADING'
         toast({
-          title: "Request Deleted",
-          description: isDownloading
-            ? `${request.title} has been removed and its download cancelled`
-            : `${request.title} has been removed`,
+          title: 'Request deleted',
+          description:
+            request.status === 'DOWNLOADING'
+              ? `${request.title} has been removed and its download cancelled.`
+              : `${request.title} has been removed.`,
         })
         refreshRequests()
       } else {
-        toast({
-          title: "Delete Failed",
-          description: "Failed to delete request",
-        })
+        toast({ title: 'Delete failed', description: 'Failed to delete request.', variant: 'destructive' })
       }
-    } catch (error) {
-      console.error('Error deleting request:', error)
+    } catch (err) {
+      console.error('Error deleting request:', err)
       toast({
-        title: "Delete Failed",
-        description: "An error occurred while deleting the request",
+        title: 'Delete failed',
+        description: 'An error occurred while deleting the request.',
+        variant: 'destructive',
       })
     } finally {
       setIsDeleting(null)
@@ -224,37 +249,33 @@ export default function Requests() {
 
   const handleSearchRequest = async (request: AggregatedRequest) => {
     if (request.type === 'http') {
-      // HTTP requests don't support re-searching after creation
       toast({
-        title: "Not Available",
-        description: "HTTP requests cannot be re-searched. Please create a new request if needed.",
-        variant: "destructive",
+        title: 'Not available',
+        description: 'HTTP requests cannot be re-searched. Create a new request instead.',
+        variant: 'destructive',
       })
       return
     }
 
     setIsSearching(request.id)
-
     try {
       const response = await apiService.triggerRequestSearch(request.id)
-
       if (response.success) {
-        toast({
-          title: "Search Triggered",
-          description: `Search started for ${request.title}`,
-        })
+        toast({ title: 'Search triggered', description: `${request.title} — searching indexers now.` })
         refreshRequests()
       } else {
         toast({
-          title: "Search Failed",
-          description: response.error || "Failed to trigger search",
+          title: 'Search failed',
+          description: response.error || 'Failed to trigger search.',
+          variant: 'destructive',
         })
       }
-    } catch (error) {
-      console.error('Error triggering search:', error)
+    } catch (err) {
+      console.error('Error triggering search:', err)
       toast({
-        title: "Search Failed",
-        description: "An error occurred while triggering the search",
+        title: 'Search failed',
+        description: 'An error occurred while triggering the search.',
+        variant: 'destructive',
       })
     } finally {
       setIsSearching(null)
@@ -263,27 +284,27 @@ export default function Requests() {
 
   const handleReSearch = async (id: string) => {
     setIsReSearching(id)
-
     try {
       const response = await apiService.reSearchCancelledRequest(id)
-
       if (response.success) {
         toast({
-          title: "Re-search Triggered",
-          description: response.message || "Cancelled request reset and search started",
+          title: 'Re-search triggered',
+          description: response.message || 'Cancelled request reset and search started.',
         })
         refreshRequests()
       } else {
         toast({
-          title: "Re-search Failed",
-          description: response.error || "Failed to re-search cancelled request",
+          title: 'Re-search failed',
+          description: response.error || 'Failed to re-search cancelled request.',
+          variant: 'destructive',
         })
       }
-    } catch (error) {
-      console.error('Error re-searching cancelled request:', error)
+    } catch (err) {
+      console.error('Error re-searching cancelled request:', err)
       toast({
-        title: "Re-search Failed",
-        description: "An error occurred while re-searching the cancelled request",
+        title: 'Re-search failed',
+        description: 'An error occurred while re-searching the cancelled request.',
+        variant: 'destructive',
       })
     } finally {
       setIsReSearching(null)
@@ -292,67 +313,53 @@ export default function Requests() {
 
   const handleSearchAll = async () => {
     setIsSearchingAll(true)
-
     try {
       const response = await apiService.triggerAllRequestsSearch()
-
       if (response.success) {
         toast({
-          title: "Batch Search Triggered",
-          description: `Search started for ${response.searchedCount || 0} requests`,
+          title: 'Batch search triggered',
+          description: `Search started for ${response.searchedCount || 0} requests.`,
         })
         refreshRequests()
       } else {
         toast({
-          title: "Search Failed",
-          description: response.error || "Failed to trigger batch search",
+          title: 'Search failed',
+          description: response.error || 'Failed to trigger batch search.',
+          variant: 'destructive',
         })
       }
-    } catch (error) {
-      console.error('Error triggering batch search:', error)
+    } catch (err) {
+      console.error('Error triggering batch search:', err)
       toast({
-        title: "Search Failed",
-        description: "An error occurred while triggering the batch search",
+        title: 'Search failed',
+        description: 'An error occurred while triggering the batch search.',
+        variant: 'destructive',
       })
     } finally {
       setIsSearchingAll(false)
     }
   }
 
-
-
-  const handleTorrentSelected = () => {
-    refreshRequests()
-  }
-
   const handleEditRequest = (request: AggregatedRequest) => {
     if (request.type === 'torrent' && request.contentType && request.title) {
-      // Convert AggregatedRequest to TorrentRequest for editing
       const torrentRequest: TorrentRequest = {
         ...request,
-        contentType: request.contentType, // Ensure non-null
-        title: request.title, // Ensure non-null
-        year: request.year || undefined, // Convert null to undefined
-        status: request.status as any, // Cast status to TorrentRequest status type
+        contentType: request.contentType,
+        title: request.title,
+        year: request.year || undefined,
+        status: request.status as TorrentRequest['status'],
         preferredQualities: [],
         preferredFormats: [],
         preferredLanguages: [],
         minSeeders: 0,
         maxSizeGB: 0,
-        isOngoing: false,
+        isOngoing: request.isOngoing ?? false,
         foundTorrentTitle: request.foundTorrentTitle || undefined,
         searchAttempts: 0,
         maxSearchAttempts: 5,
       }
       setEditRequest(torrentRequest)
     }
-    // HTTP requests don't support editing currently
-  }
-
-
-
-  const handleRequestUpdated = () => {
-    refreshRequests()
   }
 
   const handleSeasonClick = (request: TorrentRequest, seasonNumber: number) => {
@@ -366,686 +373,209 @@ export default function Requests() {
   }
 
   const handleItemClick = (request: AggregatedRequest) => {
-    // Determine the correct ID and type for fetching complete data
-    let id: string;
-    let type: 'movie' | 'tv' | 'game';
+    let id: string
+    let type: 'movie' | 'tv' | 'game'
 
     if (request.contentType === 'GAME' && request.igdbId) {
-      id = request.igdbId.toString();
-      type = 'game';
+      id = request.igdbId.toString()
+      type = 'game'
     } else if (request.contentType === 'MOVIE' && request.tmdbId) {
-      id = request.tmdbId.toString();
-      type = 'movie';
+      id = request.tmdbId.toString()
+      type = 'movie'
     } else if (request.contentType === 'TV_SHOW' && request.tmdbId) {
-      id = request.tmdbId.toString();
-      type = 'tv';
+      id = request.tmdbId.toString()
+      type = 'tv'
     } else {
-      // Fallback - this won't work for fetching external data
-      console.warn(`No external ID found for request: ${request.title}`, request);
-      id = request.id;
-      type = request.contentType === 'MOVIE' ? 'movie' :
-            request.contentType === 'TV_SHOW' ? 'tv' : 'game';
+      id = request.id
+      type =
+        request.contentType === 'MOVIE' ? 'movie' : request.contentType === 'TV_SHOW' ? 'tv' : 'game'
     }
 
-    setSelectedItem({
-      type,
-      id,
-      title: request.title || 'Unknown'
-    });
-    setShowDetailModal(true);
-  }
-
-  // Status counts are now fetched from the server via the hook
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    })
+    setSelectedItem({ type, id, title: request.title || 'Unknown' })
+    setShowDetailModal(true)
   }
 
   if (error) {
     return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="flex items-center justify-center min-h-[400px]">
-          <div className="text-center">
-            <AlertCircle className="h-12 w-12 text-destructive mx-auto mb-4" />
-            <h2 className="text-xl font-semibold mb-2">Error Loading Requests</h2>
-            <p className="text-muted-foreground mb-4">{error.message || 'An error occurred'}</p>
-            <Button onClick={refreshRequests}>
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Try Again
-            </Button>
-          </div>
-        </div>
-      </div>
+      <Page className="pt-8">
+        <PageSection>
+          <PageHeader title="Requests" description="Manage your torrent and HTTP download requests" />
+          <EmptyState
+            icon={<AlertCircle />}
+            title="Failed to load requests"
+            description={(error as Error).message || 'An error occurred.'}
+            action={
+              <Button onClick={refreshRequests}>
+                <RefreshCw className="h-4 w-4" />
+                Try again
+              </Button>
+            }
+          />
+        </PageSection>
+      </Page>
     )
   }
 
   return (
-    <div className="space-y-4 md:space-y-6">
-      <div className="flex flex-col gap-4 md:gap-6">
-        {/* Header */}
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between md:gap-4">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold">Download Requests</h1>
-            <p className="text-sm md:text-base text-muted-foreground">
-              Manage your torrent and HTTP download requests
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <Button
-              onClick={() => setShowHttpRequestModal(true)}
-              variant="default"
-              size="sm"
-              className="flex-1 md:flex-none"
-            >
-              <Link className="h-4 w-4 md:mr-2" />
-              <span className="hidden md:inline">Add HTTP Download</span>
-            </Button>
-            <Button
-              onClick={handleSearchAll}
-              disabled={isSearchingAll || isLoading}
-              variant="outline"
-              size="sm"
-              className="flex-1 md:flex-none"
-            >
-              <PlayCircle className={`h-4 w-4 md:mr-2 ${isSearchingAll ? 'animate-spin' : ''}`} />
-              <span className="hidden md:inline">{isSearchingAll ? 'Searching...' : 'Search All'}</span>
-            </Button>
-            <Button onClick={refreshRequests} disabled={isLoading} size="sm" className="flex-1 md:flex-none">
-              <RefreshCw className={`h-4 w-4 md:mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-              <span className="hidden md:inline">Refresh</span>
-            </Button>
-          </div>
+    <Page className="pt-8">
+      <PageSection bleedRails className="gap-6">
+        <PageHeader
+          eyebrow="Library"
+          title="Requests"
+          description="Manage your torrent and HTTP download requests"
+          actions={
+            <>
+              <Button onClick={() => setShowHttpRequestModal(true)}>
+                <LinkIcon className="h-4 w-4" />
+                Add via URL
+              </Button>
+              <Button variant="outline" onClick={handleSearchAll} disabled={isSearchingAll || isLoading}>
+                <PlayCircle className={`h-4 w-4 ${isSearchingAll ? 'animate-spin' : ''}`} />
+                {isSearchingAll ? 'Searching…' : 'Search all'}
+              </Button>
+              <Button variant="secondary" onClick={refreshRequests} disabled={isLoading}>
+                <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+                Refresh
+              </Button>
+            </>
+          }
+        />
+
+        {/* Status filter row, doubling as counts. */}
+        <div className="flex flex-wrap items-center gap-2">
+          {STATUS_FILTERS.map((filter) => {
+            const count =
+              filter.value === 'all'
+                ? Object.values(statusCounts).reduce((sum, n) => sum + n, 0)
+                : statusCounts[filter.value] || 0
+            const active = statusFilter === filter.value
+            return (
+              <button
+                key={filter.value}
+                type="button"
+                onClick={() => {
+                  setStatusFilter(filter.value)
+                  setCurrentPage(1)
+                }}
+                className={`inline-flex h-8 items-center gap-2 rounded-pill px-3 text-xs font-semibold transition-colors duration-fast ease-standard focus-visible:outline-none focus-visible:shadow-focus ${
+                  active
+                    ? 'bg-[color:var(--accent-quiet)] text-fg-primary'
+                    : 'bg-surface-input text-fg-secondary hover:bg-surface-input-hover hover:text-fg-primary'
+                }`}
+              >
+                {filter.label}
+                <span className="font-mono text-[10px] text-fg-muted">{count}</span>
+              </button>
+            )
+          })}
         </div>
 
-        {/* Stats Cards */}
-        <div className="hidden md:grid grid-cols-4 lg:grid-cols-8 gap-4">
-          <Card className="cursor-pointer hover:bg-accent" onClick={() => setStatusFilter('all')}>
-            <CardContent className="p-2 md:p-4 text-center">
-              <div className="text-lg md:text-2xl font-bold">{statusCounts.all || 0}</div>
-              <div className="text-xs text-muted-foreground">Total</div>
-            </CardContent>
-          </Card>
-          <Card className="cursor-pointer hover:bg-accent" onClick={() => setStatusFilter('PENDING')}>
-            <CardContent className="p-2 md:p-4 text-center">
-              <div className="text-lg md:text-2xl font-bold text-yellow-600">{statusCounts.PENDING || 0}</div>
-              <div className="text-xs text-muted-foreground">Pending</div>
-            </CardContent>
-          </Card>
-          <Card className="cursor-pointer hover:bg-accent" onClick={() => setStatusFilter('SEARCHING')}>
-            <CardContent className="p-2 md:p-4 text-center">
-              <div className="text-lg md:text-2xl font-bold text-blue-600">{statusCounts.SEARCHING || 0}</div>
-              <div className="text-xs text-muted-foreground">Searching</div>
-            </CardContent>
-          </Card>
-          <Card className="cursor-pointer hover:bg-accent" onClick={() => setStatusFilter('DOWNLOADING')}>
-            <CardContent className="p-2 md:p-4 text-center">
-              <div className="text-lg md:text-2xl font-bold text-blue-600">{statusCounts.DOWNLOADING || 0}</div>
-              <div className="text-xs text-muted-foreground">Downloading</div>
-            </CardContent>
-          </Card>
-          <Card className="cursor-pointer hover:bg-accent" onClick={() => setStatusFilter('COMPLETED')}>
-            <CardContent className="p-2 md:p-4 text-center">
-              <div className="text-lg md:text-2xl font-bold text-green-600">{statusCounts.COMPLETED || 0}</div>
-              <div className="text-xs text-muted-foreground">Completed</div>
-            </CardContent>
-          </Card>
-          <Card className="cursor-pointer hover:bg-accent" onClick={() => setStatusFilter('FAILED')}>
-            <CardContent className="p-2 md:p-4 text-center">
-              <div className="text-lg md:text-2xl font-bold text-red-600">{statusCounts.FAILED || 0}</div>
-              <div className="text-xs text-muted-foreground">Failed</div>
-            </CardContent>
-          </Card>
-          <Card className="cursor-pointer hover:bg-accent" onClick={() => setStatusFilter('CANCELLED')}>
-            <CardContent className="p-2 md:p-4 text-center">
-              <div className="text-lg md:text-2xl font-bold text-gray-600">{statusCounts.CANCELLED || 0}</div>
-              <div className="text-xs text-muted-foreground">Cancelled</div>
-            </CardContent>
-          </Card>
-          <Card className="cursor-pointer hover:bg-accent" onClick={() => setStatusFilter('EXPIRED')}>
-            <CardContent className="p-2 md:p-4 text-center">
-              <div className="text-lg md:text-2xl font-bold text-gray-600">{statusCounts.EXPIRED || 0}</div>
-              <div className="text-xs text-muted-foreground">Expired</div>
-            </CardContent>
-          </Card>
-          <Card className="cursor-pointer hover:bg-accent" onClick={() => setStatusFilter('PENDING_METADATA')}>
-            <CardContent className="p-2 md:p-4 text-center">
-              <div className="text-lg md:text-2xl font-bold text-orange-600">{statusCounts.PENDING_METADATA || 0}</div>
-              <div className="text-xs text-muted-foreground">Pending Metadata</div>
-            </CardContent>
-          </Card>
-          <Card className="cursor-pointer hover:bg-accent" onClick={() => setStatusFilter('METADATA_MATCHED')}>
-            <CardContent className="p-2 md:p-4 text-center">
-              <div className="text-lg md:text-2xl font-bold text-purple-600">{statusCounts.METADATA_MATCHED || 0}</div>
-              <div className="text-xs text-muted-foreground">Metadata Matched</div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Filters and Search */}
+        {/* Search and sort */}
         <div className="flex flex-col gap-3 md:flex-row md:gap-4">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-muted" />
             <Input
-              placeholder="Search requests by title..."
+              placeholder="Search requests by title…"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                setSearchQuery(e.target.value)
+                setCurrentPage(1)
+              }}
               className="pl-10"
             />
           </div>
-          <Select value={statusFilter} onValueChange={(value: StatusFilter) => setStatusFilter(value)}>
-            <SelectTrigger className="w-full md:w-48">
-              <SelectValue placeholder="Filter by status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Status</SelectItem>
-              <SelectItem value="PENDING">Pending</SelectItem>
-              <SelectItem value="SEARCHING">Searching</SelectItem>
-              <SelectItem value="FOUND">Found</SelectItem>
-              <SelectItem value="DOWNLOADING">Downloading</SelectItem>
-              <SelectItem value="COMPLETED">Completed</SelectItem>
-              <SelectItem value="FAILED">Failed</SelectItem>
-              <SelectItem value="CANCELLED">Cancelled</SelectItem>
-              <SelectItem value="EXPIRED">Expired</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={`${sortBy}-${sortOrder}`} onValueChange={(value) => {
-            const [field, order] = value.split('-')
-            setSortBy(field as typeof sortBy)
-            setSortOrder(order as typeof sortOrder)
-          }}>
-            <SelectTrigger className="w-full md:w-48">
+          <Select
+            value={`${sortBy}-${sortOrder}`}
+            onValueChange={(value) => {
+              const [field, order] = value.split('-')
+              setSortBy(field as typeof sortBy)
+              setSortOrder(order as typeof sortOrder)
+              setCurrentPage(1)
+            }}
+          >
+            <SelectTrigger className="w-full md:w-52">
               <SelectValue placeholder="Sort by" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="created-desc">Newest First</SelectItem>
-              <SelectItem value="created-asc">Oldest First</SelectItem>
-              <SelectItem value="updated-desc">Recently Updated</SelectItem>
-              <SelectItem value="priority-desc">High Priority</SelectItem>
-              <SelectItem value="priority-asc">Low Priority</SelectItem>
+              <SelectItem value="createdAt-desc">Newest first</SelectItem>
+              <SelectItem value="createdAt-asc">Oldest first</SelectItem>
+              <SelectItem value="updatedAt-desc">Recently updated</SelectItem>
+              <SelectItem value="priority-desc">High priority</SelectItem>
+              <SelectItem value="priority-asc">Low priority</SelectItem>
             </SelectContent>
           </Select>
         </div>
 
-        {/* Requests List */}
+        {/* Requests, grouped by state — one paged carousel per group. */}
         {isLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin" />
-          </div>
-        ) : filteredRequests.length === 0 ? (
-          <div className="text-center py-12">
-            <Download className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <h3 className="text-lg font-semibold mb-2">No requests found</h3>
-            <p className="text-muted-foreground">
-              {requests.length === 0
-                ? "You haven't made any download requests yet."
-                : "No requests match your current filters."
-              }
-            </p>
-          </div>
+          <Rail title="Loading requests">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <MediaCardSkeleton key={i} width={CARD_WIDTH} />
+            ))}
+          </Rail>
+        ) : requests.length === 0 ? (
+          <EmptyState
+            icon={<Download />}
+            title="No requests found"
+            description={
+              searchQuery || statusFilter !== 'all'
+                ? 'No requests match your current filters.'
+                : "You haven't made any download requests yet."
+            }
+            action={
+              <Button variant="secondary" onClick={() => setShowHttpRequestModal(true)}>
+                <LinkIcon className="h-4 w-4" />
+                Add via URL
+              </Button>
+            }
+          />
         ) : (
-          <div className="space-y-4">
-            {filteredRequests.map((request) => {
-              // Handle both torrent and HTTP request statuses
-              const canCancel = request.type === 'torrent'
-                ? ['PENDING', 'SEARCHING', 'DOWNLOADING'].includes(request.status)
-                : ['PENDING_METADATA', 'METADATA_MATCHED', 'DOWNLOADING'].includes(request.status)
-
-              const canDelete = request.type === 'torrent'
-                ? ['FAILED', 'CANCELLED', 'EXPIRED', 'COMPLETED'].includes(request.status)
-                : ['FAILED', 'CANCELLED', 'COMPLETED'].includes(request.status)
-
-              const canSearch = request.type === 'torrent'
-                ? ['PENDING', 'FAILED', 'EXPIRED'].includes(request.status)
-                : request.status === 'PENDING_METADATA' // For HTTP, "search" means metadata matching
-
-              const canReSearch = request.status === 'CANCELLED'
-              const canEdit = request.type === 'torrent'
-                ? ['PENDING', 'SEARCHING', 'FAILED', 'CANCELLED'].includes(request.status)
-                : false // HTTP requests don't support editing currently
-
-              const canStartDownload = request.type === 'http' && request.status === 'METADATA_MATCHED'
-
-              return (
-                <Card key={request.id} className="overflow-hidden">
-                  <CardHeader className="p-3 md:p-6 pb-2 md:pb-6">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-start gap-2 md:gap-3 flex-1 min-w-0">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-start justify-between gap-2">
-                            <CardTitle className="text-base md:text-lg line-clamp-2 md:line-clamp-1 flex-1">
-                              <div
-                                className="flex items-center gap-2 flex-wrap cursor-pointer hover:text-primary transition-colors group"
-                                onClick={() => handleItemClick(request)}
-                              >
-                                <span>
-                                  {request.title}
-                                  {request.year && (
-                                    <span className="text-muted-foreground font-normal ml-1 md:ml-2">
-                                      ({request.year})
-                                    </span>
-                                  )}
-                                </span>
-                                <ExternalLink className="h-3 w-3 text-muted-foreground group-hover:text-primary transition-colors" />
-                              </div>
-                            </CardTitle>
-                            {/* Mobile: Dropdown menu right of title */}
-                            <div className="md:hidden">
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="sm">
-                                    <MoreVertical className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  {canSearch && (
-                                    <DropdownMenuItem
-                                      onClick={() => handleSearchRequest(request)}
-                                      disabled={isSearching === request.id}
-                                    >
-                                      {isSearching === request.id ? (
-                                        <>
-                                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                          Searching...
-                                        </>
-                                      ) : (
-                                        <>
-                                          <SearchIcon className="h-4 w-4 mr-2" />
-                                          Search Now
-                                        </>
-                                      )}
-                                    </DropdownMenuItem>
-                                  )}
-                                  {canReSearch && (
-                                    <DropdownMenuItem
-                                      onClick={() => handleReSearch(request.id)}
-                                      disabled={isReSearching === request.id}
-                                    >
-                                      {isReSearching === request.id ? (
-                                        <>
-                                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                          Re-searching...
-                                        </>
-                                      ) : (
-                                        <>
-                                          <RefreshCw className="h-4 w-4 mr-2" />
-                                          Re-search
-                                        </>
-                                      )}
-                                    </DropdownMenuItem>
-                                  )}
-                                  {canStartDownload && (
-                                    <DropdownMenuItem
-                                      onClick={() => handleStartHttpDownload(request)}
-                                      disabled={isStartingDownload === request.id}
-                                    >
-                                      {isStartingDownload === request.id ? (
-                                        <>
-                                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                          Starting...
-                                        </>
-                                      ) : (
-                                        <>
-                                          <Download className="h-4 w-4 mr-2" />
-                                          Start Download
-                                        </>
-                                      )}
-                                    </DropdownMenuItem>
-                                  )}
-                                  {canEdit && (
-                                    <DropdownMenuItem
-                                      onClick={() => handleEditRequest(request)}
-                                    >
-                                      <Edit className="h-4 w-4 mr-2" />
-                                      Edit Request
-                                    </DropdownMenuItem>
-                                  )}
-                                  {canCancel && (
-                                    <AlertDialog>
-                                      <AlertDialogTrigger asChild>
-                                        <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                                          <XCircle className="h-4 w-4 mr-2" />
-                                          Cancel Request
-                                        </DropdownMenuItem>
-                                      </AlertDialogTrigger>
-                                      <AlertDialogContent>
-                                        <AlertDialogHeader>
-                                          <AlertDialogTitle>Cancel Request</AlertDialogTitle>
-                                          <AlertDialogDescription>
-                                            Are you sure you want to cancel the download request for "{request.title}"?
-                                            This action cannot be undone.
-                                          </AlertDialogDescription>
-                                        </AlertDialogHeader>
-                                        <AlertDialogFooter>
-                                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                          <AlertDialogAction
-                                            onClick={() => handleCancelRequest(request)}
-                                            disabled={isCancelling === request.id}
-                                          >
-                                            {isCancelling === request.id ? (
-                                              <>
-                                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                                Cancelling...
-                                              </>
-                                            ) : (
-                                              'Cancel Request'
-                                            )}
-                                          </AlertDialogAction>
-                                        </AlertDialogFooter>
-                                      </AlertDialogContent>
-                                    </AlertDialog>
-                                  )}
-                                  {canDelete && (
-                                    <AlertDialog>
-                                      <AlertDialogTrigger asChild>
-                                        <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                                          <Trash2 className="h-4 w-4 mr-2" />
-                                          Delete Request
-                                        </DropdownMenuItem>
-                                      </AlertDialogTrigger>
-                                      <AlertDialogContent>
-                                        <AlertDialogHeader>
-                                          <AlertDialogTitle>Delete Request</AlertDialogTitle>
-                                          <AlertDialogDescription>
-                                            Are you sure you want to permanently delete the request for{' '}
-                                            <span className="font-semibold">
-                                              "{request.title}"
-                                              {request.year && ` (${request.year})`}
-                                              {request.season && ` Season ${request.season}`}
-                                              {request.episode && ` Episode ${request.episode}`}
-                                            </span>
-                                            ?{' '}
-                                            {request.status === 'DOWNLOADING' && (
-                                              <span className="text-destructive font-medium">
-                                                This will also stop the active download.{' '}
-                                              </span>
-                                            )}
-                                            This action cannot be undone and will remove all associated data.
-                                          </AlertDialogDescription>
-                                        </AlertDialogHeader>
-                                        <AlertDialogFooter>
-                                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                          <AlertDialogAction
-                                            onClick={() => handleDeleteRequest(request)}
-                                            disabled={isDeleting === request.id}
-                                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                          >
-                                            {isDeleting === request.id ? (
-                                              <>
-                                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                                Deleting...
-                                              </>
-                                            ) : (
-                                              'Delete Request'
-                                            )}
-                                          </AlertDialogAction>
-                                        </AlertDialogFooter>
-                                      </AlertDialogContent>
-                                    </AlertDialog>
-                                  )}
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </div>
-                          </div>
-                          <CardDescription className="flex flex-col md:flex-row md:items-center gap-1 md:gap-4 mt-0.5 md:mt-1">
-                            <span className="flex items-center gap-1 text-xs">
-                              <Calendar className="h-3 w-3 flex-shrink-0" />
-                              <span>{formatDate(request.createdAt)}</span>
-                            </span>
-                            <div className="flex flex-wrap items-center gap-1 md:gap-2">
-                              {/* Mobile: Status badge as first badge */}
-                              <div className="md:hidden">
-                                {request.type === 'torrent' ? (
-                                  <DownloadStatusBadge request={request as any} />
-                                ) : (
-                                  <Badge variant={
-                                    request.status === 'COMPLETED' ? 'default' :
-                                    request.status === 'DOWNLOADING' ? 'secondary' :
-                                    request.status === 'FAILED' ? 'destructive' :
-                                    'outline'
-                                  }>
-                                    {request.status.replace('_', ' ')}
-                                  </Badge>
-                                )}
-                              </div>
-                              <Badge variant="outline" className="capitalize text-xs">
-                                {isOngoingTvShow(request)
-                                  ? 'Ongoing Series'
-                                  : request.contentType?.toLowerCase().replace('_', ' ') || 'Unknown'
-                                }
-                              </Badge>
-                              {request.platform && (
-                                <Badge variant="secondary" className="text-xs">
-                                  {request.platform}
-                                </Badge>
-                              )}
-                              {/* Quality and format preferences only available for torrent requests */}
-                              {request.type === 'torrent' && (request.contentType === 'MOVIE' || request.contentType === 'TV_SHOW') && (
-                                <div className="text-xs text-muted-foreground">
-                                  Torrent preferences configured
-                                </div>
-                              )}
-                            </div>
-                          </CardDescription>
-                        </div>
-                      </div>
-                      {/* Desktop: Status badge and menu on the right */}
-                      <div className="hidden md:flex items-center gap-2">
-                        {request.type === 'torrent' ? (
-                          <DownloadStatusBadge request={request as any} />
-                        ) : (
-                          <Badge variant={
-                            request.status === 'COMPLETED' ? 'default' :
-                            request.status === 'DOWNLOADING' ? 'secondary' :
-                            request.status === 'FAILED' ? 'destructive' :
-                            'outline'
-                          }>
-                            {request.status.replace('_', ' ')}
-                          </Badge>
-                        )}
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="sm">
-                              <MoreVertical className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            {canSearch && (
-                              <DropdownMenuItem
-                                onClick={() => handleSearchRequest(request)}
-                                disabled={isSearching === request.id}
-                              >
-                                {isSearching === request.id ? (
-                                  <>
-                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                    Searching...
-                                  </>
-                                ) : (
-                                  <>
-                                    <SearchIcon className="h-4 w-4 mr-2" />
-                                    Search Now
-                                  </>
-                                )}
-                              </DropdownMenuItem>
-                            )}
-                            {canReSearch && (
-                              <DropdownMenuItem
-                                onClick={() => handleReSearch(request.id)}
-                                disabled={isReSearching === request.id}
-                              >
-                                {isReSearching === request.id ? (
-                                  <>
-                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                    Re-searching...
-                                  </>
-                                ) : (
-                                  <>
-                                    <RefreshCw className="h-4 w-4 mr-2" />
-                                    Re-search
-                                  </>
-                                )}
-                              </DropdownMenuItem>
-                            )}
-                            {canStartDownload && (
-                              <DropdownMenuItem
-                                onClick={() => handleStartHttpDownload(request)}
-                                disabled={isStartingDownload === request.id}
-                              >
-                                {isStartingDownload === request.id ? (
-                                  <>
-                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                    Starting...
-                                  </>
-                                ) : (
-                                  <>
-                                    <Download className="h-4 w-4 mr-2" />
-                                    Start Download
-                                  </>
-                                )}
-                              </DropdownMenuItem>
-                            )}
-                            {canEdit && (
-                              <DropdownMenuItem
-                                onClick={() => handleEditRequest(request)}
-                              >
-                                <Edit className="h-4 w-4 mr-2" />
-                                Edit Request
-                              </DropdownMenuItem>
-                            )}
-                            {canCancel && (
-                              <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                  <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                                    <XCircle className="h-4 w-4 mr-2" />
-                                    Cancel Request
-                                  </DropdownMenuItem>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                  <AlertDialogHeader>
-                                    <AlertDialogTitle>Cancel Request</AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                      Are you sure you want to cancel the download request for "{request.title}"?
-                                      This action cannot be undone.
-                                    </AlertDialogDescription>
-                                  </AlertDialogHeader>
-                                  <AlertDialogFooter>
-                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                    <AlertDialogAction
-                                      onClick={() => handleCancelRequest(request)}
-                                      disabled={isCancelling === request.id}
-                                    >
-                                      {isCancelling === request.id ? (
-                                        <>
-                                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                          Cancelling...
-                                        </>
-                                      ) : (
-                                        'Cancel Request'
-                                      )}
-                                    </AlertDialogAction>
-                                  </AlertDialogFooter>
-                                </AlertDialogContent>
-                              </AlertDialog>
-                            )}
-                            {canDelete && (
-                              <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                  <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                                    <Trash2 className="h-4 w-4 mr-2" />
-                                    Delete Request
-                                  </DropdownMenuItem>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                  <AlertDialogHeader>
-                                    <AlertDialogTitle>Delete Request</AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                      Are you sure you want to permanently delete the download request for "{request.title}"?
-                                      {request.status === 'DOWNLOADING' && (
-                                        <span className="block mt-2 text-orange-600 font-medium">
-                                          ⚠️ This request has an active download that will be cancelled.
-                                        </span>
-                                      )}
-                                      This action cannot be undone and will remove all associated data.
-                                    </AlertDialogDescription>
-                                  </AlertDialogHeader>
-                                  <AlertDialogFooter>
-                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                    <AlertDialogAction
-                                      onClick={() => handleDeleteRequest(request)}
-                                      disabled={isDeleting === request.id}
-                                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                    >
-                                      {isDeleting === request.id ? (
-                                        <>
-                                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                          Deleting...
-                                        </>
-                                      ) : (
-                                        'Delete Request'
-                                      )}
-                                    </AlertDialogAction>
-                                  </AlertDialogFooter>
-                                </AlertDialogContent>
-                              </AlertDialog>
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                    </div>
-
-
-
-                  </CardHeader>
-
-                  {request.contentType === 'TV_SHOW' && request.type === 'torrent' && isOngoingTvShow(request) ? (
-                    <CardContent className="pt-0 px-3 md:px-6">
+          groups.map((group) => (
+            <Rail key={group.key} title={group.label} count={group.items.length}>
+              {group.items.map((request) => (
+                <RequestCard
+                  key={`${request.type}-${request.id}`}
+                  request={request}
+                  busy={{
+                    searching: isSearching === request.id,
+                    reSearching: isReSearching === request.id,
+                    cancelling: isCancelling === request.id,
+                    deleting: isDeleting === request.id,
+                    starting: isStartingDownload === request.id,
+                  }}
+                  onOpen={() => handleItemClick(request)}
+                  onSearch={() => handleSearchRequest(request)}
+                  onReSearch={() => handleReSearch(request.id)}
+                  onStartDownload={() => handleStartHttpDownload(request)}
+                  onEdit={() => handleEditRequest(request)}
+                  onCancel={() => handleCancelRequest(request)}
+                  onDelete={() => handleDeleteRequest(request)}
+                  seasonBadges={
+                    isOngoingTvShow(request) ? (
                       <TvShowSeasonBadges
-                        request={request as any}
-                        onSeasonClick={(seasonNumber) => handleSeasonClick(request as any, seasonNumber)}
-                        className="flex-wrap"
+                        request={request as unknown as TorrentRequest}
+                        onSeasonClick={(seasonNumber) =>
+                          handleSeasonClick(request as unknown as TorrentRequest, seasonNumber)
+                        }
                       />
-                    </CardContent>
-                  ) : (
-                    <CardContent className="pt-0 px-3 md:px-6">
-                      {request.season && (
-                        <span className="text-xs">Season {request.season}</span>
-                      )}
-                      {request.episode && (
-                        <span className="text-xs">Episode {request.episode}</span>
-                      )}
-                    </CardContent>
-                  )}
-
-                  {request.type === 'torrent' && request.foundTorrentTitle && (
-                    <CardContent className="pt-0 px-3 md:px-6">
-                      {request.foundTorrentTitle && (
-                        <div className="text-xs md:text-sm text-muted-foreground mb-2">
-                          <strong>Found:</strong> {request.foundTorrentTitle}
-                        </div>
-                      )}
-                    </CardContent>
-                  )}
-                </Card>
-              )
-            })}
-          </div>
+                    ) : null
+                  }
+                />
+              ))}
+            </Rail>
+          ))
         )}
 
-        {/* Pagination Controls */}
+        {/* Pagination */}
         {!isLoading && totalCount > 0 && (
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6 px-2">
-            <div className="text-sm text-muted-foreground">
-              Showing {(currentPage - 1) * pageSize + 1} to {Math.min(currentPage * pageSize, totalCount)} of {totalCount} requests
-            </div>
-
+          <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
+            <p className="font-mono text-xs text-fg-muted">
+              {(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, totalCount)} of{' '}
+              {totalCount} requests
+            </p>
             <div className="flex items-center gap-2">
               <Select value={pageSize.toString()} onValueChange={(value) => changePageSize(Number(value))}>
-                <SelectTrigger className="w-20">
+                <SelectTrigger className="w-[84px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -1055,52 +585,44 @@ export default function Requests() {
                   <SelectItem value="100">100</SelectItem>
                 </SelectContent>
               </Select>
-
-              <div className="flex items-center gap-1">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => goToPage(currentPage - 1)}
-                  disabled={currentPage === 1}
-                >
-                  Previous
-                </Button>
-
-                <span className="text-sm px-2">
-                  Page {currentPage} of {Math.ceil(totalCount / pageSize)}
-                </span>
-
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => goToPage(currentPage + 1)}
-                  disabled={currentPage >= Math.ceil(totalCount / pageSize)}
-                >
-                  Next
-                </Button>
-              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+              >
+                Previous
+              </Button>
+              <span className="px-1 font-mono text-xs text-fg-muted">
+                Page {currentPage} of {totalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage >= totalPages}
+              >
+                Next
+              </Button>
             </div>
           </div>
         )}
-      </div>
+      </PageSection>
 
-      {/* Torrent Selection Modal */}
       <TorrentSelectionModal
         isOpen={!!torrentSelectionRequest}
         onClose={() => setTorrentSelectionRequest(null)}
         request={torrentSelectionRequest}
-        onTorrentSelected={handleTorrentSelected}
+        onTorrentSelected={refreshRequests}
       />
 
-      {/* Edit Request Modal */}
       <EditRequestModal
         request={editRequest}
         open={!!editRequest}
         onOpenChange={(open) => !open && setEditRequest(null)}
-        onRequestUpdated={handleRequestUpdated}
+        onRequestUpdated={refreshRequests}
       />
 
-      {/* TV Show Season Modal */}
       <TvShowSeasonModal
         isOpen={!!seasonModalRequest}
         onClose={handleSeasonModalClose}
@@ -1108,10 +630,9 @@ export default function Requests() {
         seasonNumber={seasonModalSeasonNumber}
       />
 
-      {/* Detail Modals */}
       {selectedItem && selectedItem.type !== 'game' && (
         <MovieDetailModal
-          contentType={selectedItem.type as 'movie' | 'tv'}
+          contentType={selectedItem.type}
           contentId={selectedItem.id}
           title={selectedItem.title}
           open={showDetailModal}
@@ -1128,14 +649,239 @@ export default function Requests() {
         />
       )}
 
-      {/* HTTP Download Request Modals */}
       <HttpDownloadRequestModal
         open={showHttpRequestModal}
         onOpenChange={setShowHttpRequestModal}
-        onRequestCreated={() => {
-          refreshRequests()
-        }}
+        onRequestCreated={refreshRequests}
       />
+    </Page>
+  )
+}
+
+interface RequestCardProps {
+  request: AggregatedRequest
+  busy: {
+    searching: boolean
+    reSearching: boolean
+    cancelling: boolean
+    deleting: boolean
+    starting: boolean
+  }
+  onOpen: () => void
+  onSearch: () => void
+  onReSearch: () => void
+  onStartDownload: () => void
+  onEdit: () => void
+  onCancel: () => void
+  onDelete: () => void
+  seasonBadges: React.ReactNode
+}
+
+function RequestCard({
+  request,
+  busy,
+  onOpen,
+  onSearch,
+  onReSearch,
+  onStartDownload,
+  onEdit,
+  onCancel,
+  onDelete,
+  seasonBadges,
+}: RequestCardProps) {
+  const tone = contentTypeTone(request.contentType)
+  const status = normalizeStatus(request.status)
+
+  const canCancel =
+    request.type === 'torrent'
+      ? ['PENDING', 'SEARCHING', 'DOWNLOADING'].includes(request.status)
+      : ['PENDING_METADATA', 'METADATA_MATCHED', 'DOWNLOADING'].includes(request.status)
+
+  const canDelete =
+    request.type === 'torrent'
+      ? ['FAILED', 'CANCELLED', 'EXPIRED', 'COMPLETED'].includes(request.status)
+      : ['FAILED', 'CANCELLED', 'COMPLETED'].includes(request.status)
+
+  const canSearch =
+    request.type === 'torrent'
+      ? ['PENDING', 'FAILED', 'EXPIRED'].includes(request.status)
+      : request.status === 'PENDING_METADATA'
+
+  const canReSearch = request.status === 'CANCELLED'
+  const canEdit =
+    request.type === 'torrent' &&
+    ['PENDING', 'SEARCHING', 'FAILED', 'CANCELLED'].includes(request.status)
+  const canStartDownload = request.type === 'http' && request.status === 'METADATA_MATCHED'
+
+  const episodeLabel = [
+    request.season ? `S${String(request.season).padStart(2, '0')}` : null,
+    request.episode ? `E${String(request.episode).padStart(2, '0')}` : null,
+  ]
+    .filter(Boolean)
+    .join('')
+
+  return (
+    <div style={{ width: CARD_WIDTH }} className="flex flex-col gap-2">
+      <MediaCard
+        width="100%"
+        title={request.title || request.filename || 'Untitled request'}
+        backdrop={request.backdropUrl || request.posterUrl}
+        meta={[
+          request.year ?? '—',
+          tone.label,
+          request.type === 'http' ? 'Direct URL' : 'Torrent',
+          ...(episodeLabel ? [episodeLabel] : []),
+        ]}
+        subtitle={request.foundTorrentTitle || request.filename || request.url}
+        status={<StatusBadge status={request.status} onArtwork size="sm" />}
+        typeBadge={
+          <Badge variant="glass" size="sm">
+            {tone.short}
+          </Badge>
+        }
+        stats={[
+          `Priority ${request.priority}`,
+          `Updated ${formatRelativeTime(request.updatedAt)}`,
+        ]}
+        onClick={onOpen}
+        footer={
+          <>
+            <Button variant="ghost" size="sm" onClick={onOpen}>
+              <ExternalLink className="h-3.5 w-3.5" />
+              Details
+            </Button>
+            <div className="ml-auto">
+              {/* Radix renders this in a portal, so it escapes the rail's
+                  overflow and flips above the trigger when there's no room. */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon-sm" aria-label="Request actions">
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" collisionPadding={12}>
+                  {canSearch && (
+                    <DropdownMenuItem onClick={onSearch} disabled={busy.searching}>
+                      {busy.searching ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <SearchIcon className="h-3.5 w-3.5" />
+                      )}
+                      {busy.searching ? 'Searching…' : 'Search now'}
+                    </DropdownMenuItem>
+                  )}
+                  {canReSearch && (
+                    <DropdownMenuItem onClick={onReSearch} disabled={busy.reSearching}>
+                      {busy.reSearching ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <RefreshCw className="h-3.5 w-3.5" />
+                      )}
+                      {busy.reSearching ? 'Re-searching…' : 'Re-search'}
+                    </DropdownMenuItem>
+                  )}
+                  {canStartDownload && (
+                    <DropdownMenuItem onClick={onStartDownload} disabled={busy.starting}>
+                      {busy.starting ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Download className="h-3.5 w-3.5" />
+                      )}
+                      {busy.starting ? 'Starting…' : 'Start download'}
+                    </DropdownMenuItem>
+                  )}
+                  {canEdit && (
+                    <DropdownMenuItem onClick={onEdit}>
+                      <Edit className="h-3.5 w-3.5" />
+                      Edit request
+                    </DropdownMenuItem>
+                  )}
+                  {canCancel && (
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                          <XCircle className="h-3.5 w-3.5" />
+                          Cancel request
+                        </DropdownMenuItem>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Cancel request</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Cancel the download request for “{request.title}”? This cannot be undone.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Keep it</AlertDialogCancel>
+                          <AlertDialogAction onClick={onCancel} disabled={busy.cancelling}>
+                            {busy.cancelling ? (
+                              <>
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                Cancelling…
+                              </>
+                            ) : (
+                              'Cancel request'
+                            )}
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  )}
+                  {canDelete && (
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                          Delete request
+                        </DropdownMenuItem>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Delete request</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Permanently delete the request for{' '}
+                            <span className="font-semibold text-fg-primary">
+                              “{request.title}”
+                              {request.year ? ` (${request.year})` : ''}
+                              {request.season ? ` Season ${request.season}` : ''}
+                              {request.episode ? ` Episode ${request.episode}` : ''}
+                            </span>
+                            ?{' '}
+                            {status === 'DOWNLOADING' && (
+                              <span className="font-medium text-status-failed">
+                                This also stops the active download.{' '}
+                              </span>
+                            )}
+                            This removes all associated data.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Keep it</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={onDelete}
+                            disabled={busy.deleting}
+                            className="bg-brand-400 text-fg-accent hover:bg-brand-300"
+                          >
+                            {busy.deleting ? (
+                              <>
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                Deleting…
+                              </>
+                            ) : (
+                              'Delete request'
+                            )}
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </>
+        }
+      />
+      {seasonBadges}
     </div>
   )
 }

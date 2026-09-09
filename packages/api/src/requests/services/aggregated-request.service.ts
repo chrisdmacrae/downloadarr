@@ -27,6 +27,12 @@ export interface AggregatedRequest {
   platform?: string;
   season?: number;
   episode?: number;
+  // Artwork captured at request time, so the media-library UI can render a card
+  // without a round trip to the metadata provider per request.
+  posterUrl?: string;
+  backdropUrl?: string;
+  // TV-show requests that keep searching as new episodes air
+  isOngoing?: boolean;
 }
 
 export interface AggregatedRequestQuery {
@@ -139,6 +145,9 @@ export class AggregatedRequestService {
       platform: req.platform,
       season: req.season,
       episode: req.episode,
+      posterUrl: req.posterUrl,
+      backdropUrl: req.backdropUrl,
+      isOngoing: req.isOngoing,
     }));
 
     const aggregatedHttpRequests: AggregatedRequest[] = httpRequests.map(req => ({
@@ -161,6 +170,8 @@ export class AggregatedRequestService {
       platform: req.platform,
       season: req.season,
       episode: req.episode,
+      posterUrl: req.posterUrl,
+      backdropUrl: req.backdropUrl,
     }));
 
     // Merge and sort all requests
@@ -216,6 +227,9 @@ export class AggregatedRequestService {
           platform: req.platform,
           season: req.season,
           episode: req.episode,
+          posterUrl: req.posterUrl,
+          backdropUrl: req.backdropUrl,
+          isOngoing: req.isOngoing,
         };
       } catch (error) {
         return null;
@@ -243,6 +257,8 @@ export class AggregatedRequestService {
           platform: req.platform,
           season: req.season,
           episode: req.episode,
+          posterUrl: req.posterUrl,
+          backdropUrl: req.backdropUrl,
         };
       } catch (error) {
         return null;

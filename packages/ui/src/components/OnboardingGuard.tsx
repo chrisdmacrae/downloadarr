@@ -32,7 +32,7 @@ export default function OnboardingGuard({ children }: OnboardingGuardProps) {
   // Show loading skeleton while checking onboarding status
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background p-4">
+      <div className="min-h-screen bg-surface-app p-4">
         <div className="max-w-4xl mx-auto space-y-4">
           <Skeleton className="h-8 w-64" />
           <Skeleton className="h-32 w-full" />
@@ -46,10 +46,10 @@ export default function OnboardingGuard({ children }: OnboardingGuardProps) {
   // Show error state if there's an error checking onboarding status
   if (error) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+      <div className="min-h-screen bg-surface-app flex items-center justify-center p-4">
         <div className="text-center">
           <h1 className="text-2xl font-bold mb-2">Connection Error</h1>
-          <p className="text-muted-foreground mb-4">
+          <p className="text-fg-secondary mb-4">
             Unable to connect to the Downloadarr API. Please check that the server is running.
           </p>
           <button 

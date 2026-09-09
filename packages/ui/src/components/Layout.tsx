@@ -1,160 +1,37 @@
-import { Link, useLocation } from 'react-router-dom'
-import { cn } from '@/lib/utils'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
+import { useState, type ReactNode } from 'react'
+
+import { TopNav } from '@/components/ds/TopNav'
+import { SubnavProvider } from '@/components/ds/Subnav'
 import { IssueReportFab } from '@/components/IssueReportFab'
 import { UpdateCard } from '@/components/UpdateCard'
-import { useOrganizeQueueStats } from '@/hooks/useApi'
-import {
-  Download,
-  Search,
-  Settings,
-  Home,
-  Activity,
-  Film,
-  Tv,
-  Gamepad2,
-  List,
-  FolderTree
-} from 'lucide-react'
-
-const navigation = [
-  { name: 'Dashboard', href: '/', icon: Home },
-  { name: 'Requests', href: '/requests', icon: List },
-  { name: 'Downloads', href: '/downloads', icon: Download },
-]
-
-const findNavigation = [
-  { name: 'Search', href: '/search', icon: Search },
-  { name: 'Movies', href: '/movies', icon: Film },
-  { name: 'TV Shows', href: '/tv-shows', icon: Tv },
-  { name: 'Games', href: '/games', icon: Gamepad2 },
-]
-
-const settingsNavigation = [
-  { name: 'Organization', href: '/organization', icon: FolderTree },
-  { name: 'Settings', href: '/settings', icon: Settings },
-]
+import { HttpDownloadRequestModal } from '@/components/HttpDownloadRequestModal'
 
 interface LayoutProps {
-  children: React.ReactNode
+  children: ReactNode
 }
 
+/**
+ * The app chrome: a sticky glass top bar with artwork running full width
+ * beneath it, the update notice, the report FAB and the toast stack. Pages
+ * publish their context filters into the nav's second row via `useSubnav`.
+ */
 export default function Layout({ children }: LayoutProps) {
-  const location = useLocation()
-  const { data: queueStats } = useOrganizeQueueStats()
+  const [addUrlOpen, setAddUrlOpen] = useState(false)
+  const [subnav, setSubnav] = useState<ReactNode>(null)
 
   return (
-    <div className="flex h-screen bg-background">
-      {/* Sidebar */}
-      <div className="flex flex-col w-16 md:w-64 bg-card border-r">
-        <div className="flex items-center h-16 px-6 border-b">
-          <Activity className="w-8 h-8 text-primary" />
-          <span className="ml-2 text-xl font-bold hidden md:block">Downloadarr</span>
-        </div>
-        
-        <nav className="flex-1 flex flex-col px-2 md:px-4 py-6">
-          <div className="space-y-6">
-            {/* Main Navigation */}
-            <div className="space-y-2">
-              {navigation.map((item) => {
-                const Icon = item.icon
-                const isActive = location.pathname === item.href
+    <SubnavProvider value={setSubnav}>
+      <div className="flex min-h-screen flex-col bg-surface-app">
+        <TopNav subnav={subnav} onAddUrl={() => setAddUrlOpen(true)} />
 
-                return (
-                  <Link key={item.name} to={item.href}>
-                    <Button
-                      variant={isActive ? "default" : "ghost"}
-                      className={cn(
-                        "w-full justify-center md:justify-start",
-                        isActive && "bg-primary text-primary-foreground"
-                      )}
-                    >
-                      <Icon className="w-4 h-4 md:mr-2" />
-                      <span className="hidden md:inline">{item.name}</span>
-                    </Button>
-                  </Link>
-                )
-              })}
-            </div>
+        <main className="flex-1">{children}</main>
 
-            {/* Find Section */}
-            <div className="space-y-2">
-              <h3 className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 hidden md:block">
-                Find
-              </h3>
-              {findNavigation.map((item) => {
-                const Icon = item.icon
-                const isActive = location.pathname === item.href
+        {/* Available-update notice, above the report FAB. */}
+        <UpdateCard />
+        <IssueReportFab />
 
-                return (
-                  <Link key={item.name} to={item.href}>
-                    <Button
-                      variant={isActive ? "default" : "ghost"}
-                      className={cn(
-                        "w-full justify-center md:justify-start",
-                        isActive && "bg-primary text-primary-foreground"
-                      )}
-                    >
-                      <Icon className="w-4 h-4 md:mr-2" />
-                      <span className="hidden md:inline">{item.name}</span>
-                    </Button>
-                  </Link>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* Update Card above settings */}
-          <div className="mt-auto space-y-3">
-            <div className="px-2">
-              <UpdateCard />
-            </div>
-
-            {/* Settings */}
-            <div className="space-y-2">
-              {settingsNavigation.map((item) => {
-              const Icon = item.icon
-              const isActive = location.pathname === item.href
-              const showBadge = item.name === 'Organization' && queueStats && queueStats.pending > 0
-
-              return (
-                <Link key={item.name} to={item.href}>
-                  <Button
-                    variant={isActive ? "default" : "ghost"}
-                    className={cn(
-                      "w-full justify-center md:justify-start relative",
-                      isActive && "bg-primary text-primary-foreground"
-                    )}
-                  >
-                    <Icon className="w-4 h-4 md:mr-2" />
-                    <span className="hidden md:inline">{item.name}</span>
-                    {showBadge && (
-                      <Badge className="ml-auto h-5 w-5 rounded-full p-0 text-xs bg-red-500 text-white hidden md:flex items-center justify-center">
-                        {queueStats.pending}
-                      </Badge>
-                    )}
-                    {showBadge && (
-                      <div className="absolute -top-1 -right-1 h-3 w-3 bg-red-500 rounded-full md:hidden" />
-                    )}
-                  </Button>
-                </Link>
-              )
-            })}
-            </div>
-          </div>
-        </nav>
+        <HttpDownloadRequestModal open={addUrlOpen} onOpenChange={setAddUrlOpen} />
       </div>
-
-      {/* Main content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <main className="flex-1 overflow-auto p-3 md:p-6">
-          {children}
-        </main>
-      </div>
-
-      {/* Floating Action Button for Issue Reporting */}
-      <IssueReportFab />
-    </div>
+    </SubnavProvider>
   )
 }
