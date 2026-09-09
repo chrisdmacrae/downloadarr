@@ -45,22 +45,50 @@ After setup, visit http://localhost:3000 to complete the onboarding wizard where
 
 ### Upgrading from a Jackett install
 
-Downloadarr now indexes through [Prowlarr](https://prowlarr.com) instead of Jackett. Pulling this
-version replaces the `jackett` container with `prowlarr` on port 9696, and a database migration
-clears the stored indexer API key — a Jackett key does not authenticate against Prowlarr.
+Downloadarr now indexes through [Prowlarr](https://prowlarr.com) instead of Jackett. The `jackett`
+service is replaced by `prowlarr` on port 9696, so this upgrade needs a **new
+`docker-compose.yml`** — the usual `docker compose pull && docker compose up -d` only refreshes
+images and would leave you running Jackett with an API that no longer talks to it.
 
-After upgrading:
+> **Do not re-run `setup.sh` to upgrade.** It overwrites `.env` with the defaults, which would
+> reset your `POSTGRES_PASSWORD` and lock the API out of your existing database. Nothing in `.env`
+> needs to change for this upgrade.
 
-1. Open Prowlarr at http://localhost:9696 and finish its first-run setup
-2. Add your indexers there (Prowlarr ships the same indexer definitions Jackett did)
+From the directory holding your `docker-compose.yml`:
+
+```bash
+docker compose down
+curl -fsSL https://raw.githubusercontent.com/chrisdmacrae/downloadarr/main/docker-compose.yml -o docker-compose.yml
+docker compose pull
+docker compose up -d --remove-orphans
+```
+
+VPN users should re-download `docker-compose.vpn.yml` the same way, and add
+`-f docker-compose.vpn.yml` to the last two commands.
+
+`--remove-orphans` is what clears out the old `jackett` container, which would otherwise keep
+running as a leftover.
+
+The API applies the database migration on boot. It renames the stored indexer settings and
+**clears the saved API key** — a Jackett key does not authenticate against Prowlarr, and leaving it
+in place would look configured while every search returned 401. So finish in the UI:
+
+1. Open Prowlarr at http://localhost:9696 and complete its first-run setup (it requires you to set
+   up authentication, which Jackett did not)
+2. Add your indexers there — Prowlarr ships the same indexer definitions Jackett did, but they do
+   not carry over automatically
 3. Copy the API key from Prowlarr's **Settings → General**
-4. Paste it into Downloadarr under **Settings → Indexing**, and use **Test connection**
+4. Paste it into Downloadarr under **Settings → Indexing**, then hit **Test connection**
+
+Until step 4 is done every search comes back empty. Existing requests are not lost: the search loop
+retries requests in the pending, failed and expired states alike, so anything outstanding picks back
+up on its own once the key is in place.
 
 For indexers behind Cloudflare, see [docs/FLARESOLVERR_SETUP.md](docs/FLARESOLVERR_SETUP.md) — in
 Prowlarr, FlareSolverr is applied per indexer via a tag rather than globally.
 
-The old `jackett_config` Docker volume is left untouched, so nothing is deleted; remove it with
-`docker volume rm downloadarr_jackett_config` once you are happy with the switch.
+Your Jackett config is untouched by all of this. Once you are happy with the switch, reclaim the
+space with `docker volume rm downloadarr_jackett_config`.
 
 ### Development
 
