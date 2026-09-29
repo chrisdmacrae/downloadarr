@@ -26,6 +26,8 @@ export class DownloadProgressTrackerService {
   @Cron(CronExpression.EVERY_30_SECONDS)
   async trackDownloadStatus(): Promise<void> {
     try {
+      await this.recoverStrandedFoundRequests();
+
       // Get all downloading requests
       const downloadingRequests = await this.requestedTorrentsService.getRequestsByStatus(RequestStatus.DOWNLOADING);
 
@@ -42,6 +44,66 @@ export class DownloadProgressTrackerService {
       }
     } catch (error) {
       this.logger.error('Error tracking download status:', error);
+    }
+  }
+
+  /**
+   * Downloads are started in aria2 before the request transitions FOUND → DOWNLOADING.
+   * If anything fails in between, the request is left in FOUND while aria2 keeps
+   * downloading, and nothing would ever organize or complete it. Move such requests
+   * on to DOWNLOADING so the normal tracking below picks them up.
+   */
+  private async recoverStrandedFoundRequests(): Promise<void> {
+    // Give in-flight initiations time to finish their own transition
+    const settledBefore = new Date(Date.now() - 2 * 60 * 1000);
+
+    const stranded = await this.prisma.requestedTorrent.findMany({
+      where: {
+        status: RequestStatus.FOUND,
+        torrentDownloads: {
+          some: {
+            status: 'DOWNLOADING',
+            aria2Gid: { not: null },
+            createdAt: { lt: settledBefore },
+          },
+        },
+      },
+      include: {
+        torrentDownloads: {
+          where: { status: 'DOWNLOADING', aria2Gid: { not: null } },
+          orderBy: { createdAt: 'desc' },
+        },
+      },
+    });
+
+    for (const request of stranded) {
+      for (const torrentDownload of request.torrentDownloads) {
+        try {
+          // Only adopt downloads aria2 still knows about
+          await this.aria2Service.getStatus(torrentDownload.aria2Gid!);
+        } catch {
+          continue;
+        }
+
+        try {
+          await this.orchestrator.startDownload(request.id, {
+            downloadJobId: torrentDownload.downloadJobId || '',
+            aria2Gid: torrentDownload.aria2Gid!,
+            torrentInfo: {
+              title: torrentDownload.torrentTitle,
+              link: torrentDownload.torrentLink || '',
+              magnetUri: torrentDownload.magnetUri || undefined,
+              size: torrentDownload.torrentSize || 'Unknown',
+              seeders: torrentDownload.seeders || 0,
+              indexer: torrentDownload.indexer || 'Unknown',
+            },
+          });
+          this.logger.warn(`Recovered request ${request.id} (${request.title}) stuck in FOUND with active download ${torrentDownload.aria2Gid}`);
+        } catch (error) {
+          this.logger.error(`Error recovering stranded request ${request.id}:`, error);
+        }
+        break;
+      }
     }
   }
 

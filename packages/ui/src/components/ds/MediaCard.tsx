@@ -143,7 +143,17 @@ export function MediaCard({
               ))}
             </span>
           )}
-          {footer && <div className="flex items-center gap-2 pt-0.5">{footer}</div>}
+          {footer && (
+            // React events bubble through portals, so menus/dialogs opened from
+            // footer controls would otherwise also trigger the card's onClick.
+            <div
+              className="flex items-center gap-2 pt-0.5"
+              onClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => e.stopPropagation()}
+            >
+              {footer}
+            </div>
+          )}
         </div>
       )}
     </div>

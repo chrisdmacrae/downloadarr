@@ -39,7 +39,7 @@ export class RequestStateMachine {
   private readonly validTransitions: Map<RequestStatus, RequestStatus[]> = new Map([
     [RequestStatus.PENDING, [RequestStatus.SEARCHING, RequestStatus.CANCELLED, RequestStatus.EXPIRED]],
     [RequestStatus.SEARCHING, [RequestStatus.FOUND, RequestStatus.PENDING, RequestStatus.CANCELLED, RequestStatus.EXPIRED]],
-    [RequestStatus.FOUND, [RequestStatus.DOWNLOADING, RequestStatus.SEARCHING, RequestStatus.CANCELLED, RequestStatus.EXPIRED]],
+    [RequestStatus.FOUND, [RequestStatus.DOWNLOADING, RequestStatus.SEARCHING, RequestStatus.FAILED, RequestStatus.CANCELLED, RequestStatus.EXPIRED]],
     [RequestStatus.DOWNLOADING, [RequestStatus.COMPLETED, RequestStatus.FAILED, RequestStatus.CANCELLED, RequestStatus.PENDING]],
     [RequestStatus.FAILED, [RequestStatus.SEARCHING, RequestStatus.CANCELLED, RequestStatus.EXPIRED]],
     [RequestStatus.CANCELLED, [RequestStatus.PENDING, RequestStatus.SEARCHING]],

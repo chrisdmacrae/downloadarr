@@ -7,6 +7,7 @@ import { ProwlarrService } from '../../discovery/services/prowlarr.service';
 import { TorrentFilterService, FilterCriteria } from '../../discovery/services/torrent-filter.service';
 import { RequestLifecycleOrchestrator } from './request-lifecycle-orchestrator.service';
 import { DownloadService } from '../../download/download.service';
+import { Aria2Service } from '../../download/aria2.service';
 import { DownloadType } from '../../download/dto/create-download.dto';
 import { PrismaService } from '../../database/prisma.service';
 import { RequestedTorrent, ContentType, RequestStatus } from '../../../generated/prisma';
@@ -31,6 +32,7 @@ export class TorrentCheckerService {
     private readonly prisma: PrismaService,
     private readonly tvShowTorrentSelection: TvShowTorrentSelectionService,
     private readonly tvShowGapAnalysis: TvShowGapAnalysisService,
+    private readonly aria2Service: Aria2Service,
   ) {}
 
   @Cron(CronExpression.EVERY_30_SECONDS)
@@ -343,6 +345,9 @@ export class TorrentCheckerService {
   }
 
   private async initiateTorrentDownload(request: RequestedTorrent, torrent: TorrentResult): Promise<void> {
+    let aria2Gid: string | undefined;
+    let tracked = false;
+
     try {
       this.logger.log(`Initiating download for: ${torrent.title} (${torrent.seeders} seeders)`);
 
@@ -368,7 +373,7 @@ export class TorrentCheckerService {
       });
 
       const downloadJobId = downloadJob.id.toString();
-      const aria2Gid = downloadJob.aria2Gid;
+      aria2Gid = downloadJob.aria2Gid;
 
       // Create a torrent download record for tracking
       await this.prisma.torrentDownload.create({
@@ -385,6 +390,7 @@ export class TorrentCheckerService {
           status: 'DOWNLOADING',
         },
       });
+      tracked = true;
 
       // Mark request as downloading via orchestrator
       await this.orchestrator.startDownload(request.id, {
@@ -404,6 +410,20 @@ export class TorrentCheckerService {
 
     } catch (error) {
       this.logger.error(`Error initiating download for ${request.title}:`, error);
+
+      if (tracked) {
+        // aria2 is downloading and a TorrentDownload tracks it; the progress tracker
+        // will move the request on from FOUND once it notices.
+        this.logger.warn(`Leaving ${request.title} in FOUND for the progress tracker to recover`);
+        return;
+      }
+
+      if (aria2Gid) {
+        // Nothing tracks this download, so don't let it run orphaned
+        await this.aria2Service.remove(aria2Gid).catch(removeError =>
+          this.logger.warn(`Could not remove untracked download ${aria2Gid}: ${removeError.message}`),
+        );
+      }
 
       // Mark request as failed via orchestrator
       await this.orchestrator.markAsFailed(request.id, `Download initiation failed: ${error.message}`);
