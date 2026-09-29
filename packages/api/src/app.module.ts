@@ -14,6 +14,7 @@ import { InitializationModule } from './initialization/initialization.module';
 import { SystemModule } from './system/system.module';
 import { HttpDownloadsModule } from './http-downloads/http-downloads.module';
 import { RequestsModule } from './requests/requests.module';
+import { LanDiscoveryModule } from './lan-discovery/lan-discovery.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { RequestsModule } from './requests/requests.module';
     SystemModule,
     HttpDownloadsModule,
     RequestsModule,
+    LanDiscoveryModule,
   ],
   controllers: [AppController],
   providers: [AppService],

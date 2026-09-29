@@ -62,6 +62,16 @@ Prowlarr, FlareSolverr is applied per indexer via a tag rather than globally.
 The old `jackett_config` Docker volume is left untouched, so nothing is deleted; remove it with
 `docker volume rm downloadarr_jackett_config` once you are happy with the switch.
 
+### LAN discovery
+
+The API answers `who is Downloadarr?` UDP broadcasts on port **7360** (one above Jellyfin's 7359), so
+clients on your network, like the TV and J Fire TV app, can find it without typing an address. The reply
+is JSON: `{ Id, Name, Version, Port }`. Clients combine `Port` with the address the reply came from.
+
+- `docker-compose.yml` publishes `7360:7360/udp`; keep it published or broadcasts won't reach the container.
+- `LAN_DISCOVERY_ENABLED=false` turns it off.
+- `LAN_DISCOVERY_ADVERTISED_URL` advertises a full API URL instead (for example behind a reverse proxy).
+
 ### Development
 
 To spin up a dockerized development environment, run:

@@ -35,8 +35,11 @@ services:
     restart: unless-stopped
     ports:
       - "3001:3001"
+      - "7360:7360/udp" # LAN discovery (lets TV apps find downloadarr)
     environment:
       NODE_ENV: production
+      LAN_DISCOVERY_ENABLED: ${LAN_DISCOVERY_ENABLED:-true}
+      LAN_DISCOVERY_ADVERTISED_URL: ${LAN_DISCOVERY_ADVERTISED_URL:-}
       PORT: 3001
       REDIS_HOST: redis
       REDIS_PORT: 6379
