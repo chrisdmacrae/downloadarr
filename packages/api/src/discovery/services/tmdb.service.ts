@@ -5,7 +5,7 @@ import { AxiosRequestConfig, AxiosResponse } from 'axios';
 import { firstValueFrom, timeout, retry, catchError } from 'rxjs';
 import { BaseExternalApiService } from './base-external-api.service';
 import { AppConfigurationService } from '../../config/services/app-configuration.service';
-import { ExternalApiConfig, ExternalApiResponse, TvShowDetails, SearchResult, MovieDetails } from '../interfaces/external-api.interface';
+import { ExternalApiConfig, ExternalApiResponse, TvShowDetails, SearchResult, MovieDetails, CreditPerson, PersonDetails } from '../interfaces/external-api.interface';
 
 interface TmdbSearchResponse {
   page: number;
@@ -63,6 +63,45 @@ interface TmdbMovieItem {
   adult: boolean;
 }
 
+interface TmdbCastCredit {
+  id: number;
+  name: string;
+  character?: string;
+  profile_path: string | null;
+  order?: number;
+}
+
+interface TmdbCrewCredit {
+  id: number;
+  name: string;
+  job: string;
+  profile_path: string | null;
+}
+
+/** TV cast across every season, with the roles each actor played. */
+interface TmdbAggregateCastCredit {
+  id: number;
+  name: string;
+  profile_path: string | null;
+  roles?: Array<{ character: string; episode_count: number }>;
+  total_episode_count?: number;
+}
+
+interface TmdbPersonDetails {
+  id: number;
+  name: string;
+  biography: string;
+  birthday: string | null;
+  deathday: string | null;
+  place_of_birth: string | null;
+  profile_path: string | null;
+  known_for_department?: string;
+  combined_credits?: {
+    cast: Array<(TmdbMovieItem & { media_type: 'movie' }) | (TmdbTvShowItem & { media_type: 'tv' })>;
+    crew: Array<((TmdbMovieItem & { media_type: 'movie' }) | (TmdbTvShowItem & { media_type: 'tv' })) & { job: string }>;
+  };
+}
+
 interface TmdbTvShowDetails {
   id: number;
   name: string;
@@ -73,7 +112,7 @@ interface TmdbTvShowDetails {
   first_air_date: string;
   last_air_date: string;
   genres: Array<{ id: number; name: string }>;
-  created_by: Array<{ id: number; name: string }>;
+  created_by: Array<{ id: number; name: string; profile_path?: string | null }>;
   networks: Array<{ id: number; name: string; logo_path: string | null }>;
   number_of_episodes: number;
   number_of_seasons: number;
@@ -86,6 +125,8 @@ interface TmdbTvShowDetails {
     imdb_id: string | null;
     tvdb_id: number | null;
   };
+  aggregate_credits?: { cast: TmdbAggregateCastCredit[] };
+  recommendations?: { results: TmdbTvShowItem[] };
 }
 
 interface TmdbMovieDetails {
@@ -105,15 +146,25 @@ interface TmdbMovieDetails {
     imdb_id: string | null;
   };
   credits?: {
-    cast: Array<{ id: number; name: string; character: string }>;
-    crew: Array<{ id: number; name: string; job: string }>;
+    cast: TmdbCastCredit[];
+    crew: TmdbCrewCredit[];
   };
+  recommendations?: { results: TmdbMovieItem[] };
 }
 
 @Injectable()
 export class TmdbService extends BaseExternalApiService {
   private readonly imageBaseUrl = 'https://image.tmdb.org/t/p/w500';
   private readonly backdropBaseUrl = 'https://image.tmdb.org/t/p/w780';
+  private readonly profileBaseUrl = 'https://image.tmdb.org/t/p/w185';
+
+  /** How many cast members and recommendations a details response carries. */
+  private static readonly CAST_LIMIT = 20;
+  private static readonly RECOMMENDATION_LIMIT = 16;
+  /** A person's credits: enough for a page of posters. */
+  private static readonly PERSON_CREDIT_LIMIT = 60;
+  /** TMDB TV genres for talk shows and news; guest appearances there crowd out a person's real work. */
+  private static readonly APPEARANCE_GENRES = [10767, 10763];
 
   /**
    * Genre id -> name, cached per kind. List endpoints return `genre_ids` only, but the
@@ -317,7 +368,7 @@ export class TmdbService extends BaseExternalApiService {
       }
 
       const params = {
-        append_to_response: 'external_ids',
+        append_to_response: 'external_ids,aggregate_credits,recommendations',
       };
 
       const response = await this.makeRequest<TmdbTvShowDetails>(`/tv/${id}`, params);
@@ -350,6 +401,15 @@ export class TmdbService extends BaseExternalApiService {
         status: response.data.status,
         firstAirDate: response.data.first_air_date || undefined,
         lastAirDate: response.data.last_air_date || undefined,
+        cast: [
+          ...(response.data.aggregate_credits?.cast ?? [])
+            .slice(0, TmdbService.CAST_LIMIT)
+            .map(c => this.mapCastPerson({ id: c.id, name: c.name, profile_path: c.profile_path, character: c.roles?.[0]?.character })),
+          ...(response.data.created_by ?? []).map(c =>
+            this.mapCrewPerson({ id: c.id, name: c.name, profile_path: c.profile_path ?? null, job: 'Creator' }),
+          ),
+        ],
+        recommendations: await this.mapRecommendations('tv', response.data.recommendations?.results),
       };
 
       return {
@@ -845,7 +905,7 @@ export class TmdbService extends BaseExternalApiService {
       }
 
       const params = {
-        append_to_response: 'external_ids',
+        append_to_response: 'external_ids,credits,recommendations',
       };
 
       const response = await this.makeRequest<TmdbMovieDetails>(`/movie/${id}`, params);
@@ -874,6 +934,11 @@ export class TmdbService extends BaseExternalApiService {
         actors: response.data.credits?.cast?.slice(0, 5).map(a => a.name).join(', ') || undefined,
         rating: response.data.vote_average,
         released: response.data.release_date,
+        cast: [
+          ...(response.data.credits?.cast ?? []).slice(0, TmdbService.CAST_LIMIT).map(c => this.mapCastPerson(c)),
+          ...(response.data.credits?.crew ?? []).filter(c => c.job === 'Director').map(c => this.mapCrewPerson(c)),
+        ],
+        recommendations: await this.mapRecommendations('movie', response.data.recommendations?.results),
       };
 
       return {
@@ -886,6 +951,99 @@ export class TmdbService extends BaseExternalApiService {
         success: false,
         error: error.message,
       };
+    }
+  }
+  private mapCastPerson(c: { id: number; name: string; profile_path: string | null; character?: string }): CreditPerson {
+    return {
+      id: c.id.toString(),
+      name: c.name,
+      role: c.character || undefined,
+      photo: c.profile_path ? `${this.profileBaseUrl}${c.profile_path}` : undefined,
+      department: 'cast',
+    };
+  }
+
+  private mapCrewPerson(c: { id: number; name: string; profile_path: string | null; job: string }): CreditPerson {
+    return {
+      id: c.id.toString(),
+      name: c.name,
+      role: c.job,
+      photo: c.profile_path ? `${this.profileBaseUrl}${c.profile_path}` : undefined,
+      department: 'crew',
+    };
+  }
+
+  /** "More like this" for a details response. Failures just mean no recommendations. */
+  private async mapRecommendations(kind: 'movie', items?: TmdbMovieItem[]): Promise<SearchResult[] | undefined>;
+  private async mapRecommendations(kind: 'tv', items?: TmdbTvShowItem[]): Promise<SearchResult[] | undefined>;
+  private async mapRecommendations(kind: 'movie' | 'tv', items?: Array<TmdbMovieItem | TmdbTvShowItem>): Promise<SearchResult[] | undefined> {
+    if (!items?.length) return undefined;
+    const genreNames = await this.getGenreNameMap(kind);
+    return items
+      .slice(0, TmdbService.RECOMMENDATION_LIMIT)
+      .map(item =>
+        kind === 'movie'
+          ? this.mapMovieItem(item as TmdbMovieItem, genreNames)
+          : this.mapTvItem(item as TmdbTvShowItem, genreNames),
+      );
+  }
+
+  /**
+   * A person and their movies and shows, for a person page. Credits are merged
+   * across acting and directing/creating, de-duplicated, stripped of talk-show
+   * and news appearances, and ordered most popular first.
+   */
+  async getPersonDetails(tmdbId: string): Promise<ExternalApiResponse<PersonDetails>> {
+    try {
+      const id = parseInt(tmdbId);
+      if (isNaN(id)) {
+        return { success: false, error: 'Invalid TMDB ID' };
+      }
+
+      const response = await this.makeRequest<TmdbPersonDetails>(`/person/${id}`, { append_to_response: 'combined_credits' });
+      if (!response.success || !response.data) {
+        return { success: false, error: response.error };
+      }
+
+      const person = response.data;
+      const [movieGenres, tvGenres] = await Promise.all([this.getGenreNameMap('movie'), this.getGenreNameMap('tv')]);
+      const credits = [...(person.combined_credits?.cast ?? []), ...(person.combined_credits?.crew ?? [])];
+      const seen = new Set<string>();
+      const results: SearchResult[] = credits
+        .filter(c => c.media_type === 'movie' || c.media_type === 'tv')
+        .filter(c => c.poster_path)
+        .filter(c => !(c.genre_ids ?? []).some(g => TmdbService.APPEARANCE_GENRES.includes(g)))
+        .sort((a, b) => (b.popularity ?? 0) - (a.popularity ?? 0))
+        .filter(c => {
+          const key = `${c.media_type}:${c.id}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        })
+        .slice(0, TmdbService.PERSON_CREDIT_LIMIT)
+        .map(c =>
+          c.media_type === 'movie'
+            ? this.mapMovieItem(c as TmdbMovieItem, movieGenres)
+            : this.mapTvItem(c as TmdbTvShowItem, tvGenres),
+        );
+
+      return {
+        success: true,
+        data: {
+          id: person.id.toString(),
+          name: person.name,
+          photo: person.profile_path ? `${this.imageBaseUrl}${person.profile_path}` : undefined,
+          biography: person.biography || undefined,
+          birthday: person.birthday || undefined,
+          deathday: person.deathday || undefined,
+          placeOfBirth: person.place_of_birth || undefined,
+          knownFor: person.known_for_department || undefined,
+          credits: results,
+        },
+      };
+    } catch (error) {
+      this.logger.error(`Error getting person details: ${error.message}`, error.stack);
+      return { success: false, error: error.message };
     }
   }
 }

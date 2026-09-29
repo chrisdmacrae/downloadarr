@@ -27,6 +27,29 @@ export interface SearchResult {
   platforms?: string[];
 }
 
+/** A cast or crew member on a title, for "Cast & crew" rows. `id` is the TMDB person id. */
+export interface CreditPerson {
+  id: string;
+  name: string;
+  /** Character played, or job (Director, Creator). */
+  role?: string;
+  photo?: string;
+  department: 'cast' | 'crew';
+}
+
+/** A person's page: who they are and what they've been in, most popular first. */
+export interface PersonDetails {
+  id: string;
+  name: string;
+  photo?: string;
+  biography?: string;
+  birthday?: string;
+  deathday?: string;
+  placeOfBirth?: string;
+  knownFor?: string;
+  credits: SearchResult[];
+}
+
 export interface MovieDetails extends SearchResult {
   type: 'movie';
   imdbId?: string;
@@ -38,6 +61,8 @@ export interface MovieDetails extends SearchResult {
   plot?: string;
   rating?: number;
   released?: string;
+  cast?: CreditPerson[];
+  recommendations?: SearchResult[];
 }
 
 export interface TvShowDetails extends SearchResult {
@@ -52,6 +77,8 @@ export interface TvShowDetails extends SearchResult {
   status?: string;
   firstAirDate?: string;
   lastAirDate?: string;
+  cast?: CreditPerson[];
+  recommendations?: SearchResult[];
 }
 
 export interface GameDetails extends SearchResult {

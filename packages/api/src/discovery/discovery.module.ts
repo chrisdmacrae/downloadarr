@@ -19,6 +19,7 @@ import { AnimeController } from './controllers/anime.controller';
 import { GamesController } from './controllers/games.controller';
 import { TorrentsController } from './controllers/torrents.controller';
 import { TorrentPreferencesController } from './controllers/torrent-preferences.controller';
+import { PeopleController } from './controllers/people.controller';
 
 @Module({
   imports: [
@@ -45,6 +46,7 @@ import { TorrentPreferencesController } from './controllers/torrent-preferences.
     GamesController,
     TorrentsController,
     TorrentPreferencesController,
+    PeopleController,
   ],
   exports: [
     OmdbService,
