@@ -16,15 +16,15 @@ DB_PORT=${DB_PORT:-5432}
 
 # Give up rather than hang forever if the database never appears.
 attempt=0
-max_attempts=60
+max_attempts=300
 until nc -z "$DB_HOST" "$DB_PORT" 2>/dev/null; do
   attempt=$((attempt + 1))
   if [ "$attempt" -ge "$max_attempts" ]; then
-    echo "❌ Database at $DB_HOST:$DB_PORT unreachable after $((max_attempts * 5))s"
+    echo "❌ Database at $DB_HOST:$DB_PORT unreachable after ${max_attempts}s"
     exit 1
   fi
-  echo "Database not ready at $DB_HOST:$DB_PORT, waiting 5 seconds..."
-  sleep 5
+  echo "Database not ready at $DB_HOST:$DB_PORT, waiting..."
+  sleep 1
 done
 
 echo "✅ Database connection established ($DB_HOST:$DB_PORT)"

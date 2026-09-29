@@ -33,6 +33,9 @@ services:
     image: ghcr.io/chrisdmacrae/downloadarr/api:${APP_VERSION:-latest}
     container_name: downloadarr-api
     restart: unless-stopped
+    # Run tini as PID 1 so SIGTERM reaches node; otherwise every recreate waits
+    # out the 10s stop timeout before Docker SIGKILLs the API.
+    init: true
     ports:
       - "3001:3001"
       - "7360:7360/udp" # LAN discovery (lets TV apps find downloadarr)
