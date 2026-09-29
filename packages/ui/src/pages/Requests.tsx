@@ -694,12 +694,12 @@ function RequestCard({
 
   const canCancel =
     request.type === 'torrent'
-      ? ['PENDING', 'SEARCHING', 'DOWNLOADING'].includes(request.status)
+      ? ['PENDING', 'SEARCHING', 'FOUND', 'DOWNLOADING'].includes(request.status)
       : ['PENDING_METADATA', 'METADATA_MATCHED', 'DOWNLOADING'].includes(request.status)
 
   const canDelete =
     request.type === 'torrent'
-      ? ['FAILED', 'CANCELLED', 'EXPIRED', 'COMPLETED'].includes(request.status)
+      ? ['FOUND', 'FAILED', 'CANCELLED', 'EXPIRED', 'COMPLETED'].includes(request.status)
       : ['FAILED', 'CANCELLED', 'COMPLETED'].includes(request.status)
 
   const canSearch =

@@ -448,8 +448,8 @@ export class RequestedTorrentsService {
     // Get the request to check if it has an active download
     const request = await this.getRequestById(id);
 
-    // If the request has an active download, cancel it first via orchestrator
-    if (request.status === RequestStatus.DOWNLOADING) {
+    // If the request has (or is about to start) a download, cancel it first via orchestrator
+    if (request.status === RequestStatus.DOWNLOADING || request.status === RequestStatus.FOUND) {
       this.logger.log(`Cancelling active download for request ${id}`);
       try {
         await this.orchestrator.cancelRequest(id);
