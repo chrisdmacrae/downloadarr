@@ -29,17 +29,17 @@ export class IgdbAuthService implements OnModuleInit {
     private readonly appConfigService: AppConfigurationService,
   ) {}
 
-  async onModuleInit() {
+  onModuleInit() {
     this.logger.log('Initializing IGDB authentication service...');
-    
-    try {
-      // Try to get a fresh token on startup
-      await this.refreshToken();
-      this.logger.log('✅ IGDB authentication service initialized successfully');
-    } catch (error) {
-      this.logger.error('❌ Failed to initialize IGDB authentication service:', error.message);
-      // Don't throw here - let the service continue and retry later
-    }
+
+    // Fetch the token in the background: awaiting a round trip to Twitch here
+    // would hold the HTTP port closed on every boot. getAccessToken() refreshes
+    // on demand if a request arrives first.
+    this.refreshToken()
+      .then(() => this.logger.log('✅ IGDB authentication service initialized successfully'))
+      .catch((error) => {
+        this.logger.error('❌ Failed to initialize IGDB authentication service:', error.message);
+      });
   }
 
   /**

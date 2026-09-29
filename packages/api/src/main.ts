@@ -6,6 +6,10 @@ import { AppModule } from './app.module';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+  // Exit on SIGTERM so `docker compose up` doesn't wait out the stop timeout
+  // and SIGKILL us, and so onModuleDestroy hooks run.
+  app.enableShutdownHooks();
+
   // Enable CORS for frontend
   const corsOrigins = process.env.FRONTEND_URL
     ? process.env.FRONTEND_URL.split(',').map(origin => origin.trim())
