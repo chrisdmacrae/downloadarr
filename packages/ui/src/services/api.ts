@@ -422,6 +422,16 @@ export interface AggregatedRequest {
   posterUrl?: string;
   backdropUrl?: string;
   isOngoing?: boolean;
+  // Per-season / per-episode progress, present on TV-show torrent requests
+  tvShowSeasons?: AggregatedTvShowSeason[];
+}
+
+export interface AggregatedTvShowSeason {
+  id: string;
+  seasonNumber: number;
+  totalEpisodes?: number | null;
+  status: TvShowSeason['status'];
+  episodes?: Array<Pick<TvShowEpisode, 'id' | 'episodeNumber' | 'status'>>;
 }
 
 // TV Show Season Management Types

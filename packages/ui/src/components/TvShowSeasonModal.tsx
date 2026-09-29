@@ -18,7 +18,8 @@ import {
   XCircle,
   Calendar,
   Play,
-  RefreshCw
+  RefreshCw,
+  Download
 } from 'lucide-react'
 import { apiService, TorrentRequest, TvShowSeason, TvShowEpisode } from '@/services/api'
 import { useToast } from '@/hooks/use-toast'
@@ -74,6 +75,7 @@ export function TvShowSeasonModal({ isOpen, onClose, request, seasonNumber }: Tv
       case 'COMPLETED': return CheckCircle
       case 'SEARCHING': return Search
       case 'FOUND': return AlertCircle
+      case 'DOWNLOADING': return Download
       case 'FAILED': return XCircle
       default: return Clock
     }

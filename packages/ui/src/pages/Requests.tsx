@@ -357,6 +357,8 @@ export default function Requests() {
         foundTorrentTitle: request.foundTorrentTitle || undefined,
         searchAttempts: 0,
         maxSearchAttempts: 5,
+        // The aggregated season summary is a slimmer shape; the edit modal doesn't need it
+        tvShowSeasons: undefined,
       }
       setEditRequest(torrentRequest)
     }
@@ -553,7 +555,7 @@ export default function Requests() {
                   seasonBadges={
                     isOngoingTvShow(request) ? (
                       <TvShowSeasonBadges
-                        request={request as unknown as TorrentRequest}
+                        request={request}
                         onSeasonClick={(seasonNumber) =>
                           handleSeasonClick(request as unknown as TorrentRequest, seasonNumber)
                         }

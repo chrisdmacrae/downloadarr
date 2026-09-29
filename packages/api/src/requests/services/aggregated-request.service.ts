@@ -33,7 +33,34 @@ export interface AggregatedRequest {
   backdropUrl?: string;
   // TV-show requests that keep searching as new episodes air
   isOngoing?: boolean;
+  // Per-season / per-episode progress for TV-show torrent requests
+  tvShowSeasons?: AggregatedTvShowSeason[];
 }
+
+export interface AggregatedTvShowSeason {
+  id: string;
+  seasonNumber: number;
+  totalEpisodes: number | null;
+  status: string;
+  episodes: { id: string; episodeNumber: number; status: string }[];
+}
+
+// Just enough of each season to render per-season / per-episode progress.
+const TV_SHOW_SEASONS_INCLUDE = {
+  tvShowSeasons: {
+    orderBy: { seasonNumber: 'asc' as const },
+    select: {
+      id: true,
+      seasonNumber: true,
+      totalEpisodes: true,
+      status: true,
+      episodes: {
+        orderBy: { episodeNumber: 'asc' as const },
+        select: { id: true, episodeNumber: true, status: true },
+      },
+    },
+  },
+};
 
 export interface AggregatedRequestQuery {
   status?: string;
@@ -111,6 +138,7 @@ export class AggregatedRequestService {
     const [torrentRequests, httpRequests, torrentTotal, httpTotal] = await Promise.all([
       this.prisma.requestedTorrent.findMany({
         where: torrentWhere,
+        include: TV_SHOW_SEASONS_INCLUDE,
         orderBy: { [sortBy]: sortOrder },
         take: limit * 2, // Get more to ensure we have enough after merging
         skip: 0, // We'll handle pagination after merging
@@ -148,6 +176,7 @@ export class AggregatedRequestService {
       posterUrl: req.posterUrl,
       backdropUrl: req.backdropUrl,
       isOngoing: req.isOngoing,
+      tvShowSeasons: req.contentType === ContentType.TV_SHOW ? req.tvShowSeasons : undefined,
     }));
 
     const aggregatedHttpRequests: AggregatedRequest[] = httpRequests.map(req => ({
@@ -205,6 +234,7 @@ export class AggregatedRequestService {
         // Use prisma directly since RequestedTorrentsService doesn't have findOne method
         const req = await this.prisma.requestedTorrent.findUnique({
           where: { id },
+          include: TV_SHOW_SEASONS_INCLUDE,
         });
 
         if (!req) return null;
@@ -230,6 +260,7 @@ export class AggregatedRequestService {
           posterUrl: req.posterUrl,
           backdropUrl: req.backdropUrl,
           isOngoing: req.isOngoing,
+          tvShowSeasons: req.contentType === ContentType.TV_SHOW ? req.tvShowSeasons : undefined,
         };
       } catch (error) {
         return null;

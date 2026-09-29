@@ -2,6 +2,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import {
+  AlertCircle,
   CheckCircle,
   Download,
   Clock,
@@ -9,12 +10,15 @@ import {
   XCircle,
   RefreshCw
 } from 'lucide-react'
-import { TorrentRequest, apiService } from '@/services/api'
+import { AggregatedTvShowSeason, TorrentRequest, apiService } from '@/services/api'
 import { useToast } from '@/hooks/use-toast'
 import { useState } from 'react'
 
 interface TvShowSeasonBadgesProps {
-  request: TorrentRequest
+  request: Pick<TorrentRequest, 'id' | 'isOngoing'> & {
+    contentType: TorrentRequest['contentType'] | null
+    tvShowSeasons?: AggregatedTvShowSeason[]
+  }
   onSeasonClick?: (seasonNumber: number) => void
   className?: string
 }
@@ -23,6 +27,8 @@ interface SeasonSummary {
   seasonNumber: number
   totalEpisodes: number
   completedEpisodes: number
+  // Episode counts by status, for the hover breakdown
+  episodeCounts: Record<string, number>
   status: string
 }
 
@@ -96,31 +102,48 @@ export function TvShowSeasonBadges({ request, onSeasonClick, className }: TvShow
     return null
   }
 
-  const seasons: SeasonSummary[] = request.tvShowSeasons.map(season => ({
-    seasonNumber: season.seasonNumber,
-    totalEpisodes: season.totalEpisodes || 0,
-    completedEpisodes: season.episodes?.filter(ep => ep.status === 'COMPLETED').length || 0,
-    status: season.status,
-  })).sort((a, b) => a.seasonNumber - b.seasonNumber)
+  const seasons: SeasonSummary[] = request.tvShowSeasons.map(season => {
+    const episodes = season.episodes ?? []
+    const episodeCounts: Record<string, number> = {}
+    for (const ep of episodes) {
+      episodeCounts[ep.status] = (episodeCounts[ep.status] || 0) + 1
+    }
+    return {
+      seasonNumber: season.seasonNumber,
+      // Episodes are only tracked once discovered, so the season total may be larger
+      totalEpisodes: Math.max(season.totalEpisodes || 0, episodes.length),
+      completedEpisodes: episodeCounts.COMPLETED || 0,
+      episodeCounts,
+      status: season.status,
+    }
+  }).sort((a, b) => a.seasonNumber - b.seasonNumber)
 
   const getSeasonIcon = (season: SeasonSummary) => {
     if (season.completedEpisodes === season.totalEpisodes && season.totalEpisodes > 0) {
       return CheckCircle
     }
-    if (season.completedEpisodes > 0 && season.completedEpisodes < season.totalEpisodes) {
-      return Download // Partially completed - same icon but different color
+    switch (season.status) {
+      case 'COMPLETED': return CheckCircle
+      case 'DOWNLOADING': return Download
+      case 'FOUND': return AlertCircle
+      case 'SEARCHING': return Search
+      case 'FAILED': return XCircle
     }
-    if (season.status === 'SEARCHING') {
-      return Search
-    }
-    if (season.status === 'FAILED') {
-      return XCircle
+    if (season.completedEpisodes > 0) {
+      return Download // Partially completed
     }
     return Clock
   }
 
+  const getSeasonTooltip = (season: SeasonSummary): string => {
+    const breakdown = Object.entries(season.episodeCounts)
+      .map(([status, count]) => `${count} ${status.toLowerCase()}`)
+      .join(', ')
+    return `Season ${season.seasonNumber}: ${season.status.toLowerCase()}${breakdown ? ` — ${breakdown}` : ''}`
+  }
+
   const getSeasonVariant = (season: SeasonSummary): "default" | "secondary" | "destructive" | "outline" => {
-    if (season.completedEpisodes === season.totalEpisodes && season.totalEpisodes > 0) {
+    if (season.status === 'COMPLETED' || (season.completedEpisodes === season.totalEpisodes && season.totalEpisodes > 0)) {
       return 'default' // Green for fully completed
     }
     if (season.completedEpisodes > 0 && season.completedEpisodes < season.totalEpisodes) {
@@ -177,6 +200,7 @@ export function TvShowSeasonBadges({ request, onSeasonClick, className }: TvShow
                 variant="ghost"
                 size="sm"
                 className="h-auto p-1 hover:bg-white/[.05]"
+                title={getSeasonTooltip(season)}
                 onClick={() => onSeasonClick?.(season.seasonNumber)}
               >
                 <Badge 
