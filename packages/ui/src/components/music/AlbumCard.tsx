@@ -11,11 +11,17 @@ import {
 import { StatusBadge } from '@/components/ds/StatusBadge'
 import { cn } from '@/lib/utils'
 import type { TorrentRequest } from '@/services/api'
-import type { MusicRecommendation } from '@/services/music'
 import { usePreviewPlayer } from './PreviewPlayer'
 
+/** The fields a tile shows: a recommendation, or an album heard on a radio station. */
+export interface AlbumTile {
+  artistName: string
+  albumTitle: string
+  coverUrl?: string | null
+}
+
 interface AlbumCardProps {
-  album: MusicRecommendation
+  album: AlbumTile
   /** One line under the artist: why it's here, or when it came out. */
   caption?: string
   onDismiss: (scope: 'album' | 'artist') => void
@@ -23,6 +29,8 @@ interface AlbumCardProps {
   request?: TorrentRequest
   onRequest?: () => void
   requesting?: boolean
+  /** Starts a radio station seeded by the album's artist. */
+  onRadio?: () => void
 }
 
 /** Missing artwork: the title's first two letters at 14% white on ink. */
@@ -37,15 +45,17 @@ function CoverPlaceholder({ title }: { title: string }) {
 }
 
 /**
- * A square album tile. The cover plays a preview; the menu dismisses the album
- * or the whole artist from future lists.
+ * A square album tile. The cover plays a preview; the menu starts the artist's
+ * radio, or dismisses the album or the whole artist from future lists.
  */
-export function AlbumCard({ album, caption, onDismiss, request, onRequest, requesting }: AlbumCardProps) {
+export function AlbumCard({ album, caption, onDismiss, request, onRequest, requesting, onRadio }: AlbumCardProps) {
   const player = usePreviewPlayer()
   // Cover Art Archive has gaps; a broken cover falls back to the placeholder.
   const [coverFailed, setCoverFailed] = useState(false)
   const isCurrent =
-    player.current?.artistName === album.artistName && player.current?.albumTitle === album.albumTitle
+    player.current?.kind === 'album' &&
+    player.current.artistName === album.artistName &&
+    player.current.albumTitle === album.albumTitle
   const isPlaying = isCurrent && player.playing
   const isLoading = isCurrent && player.loading
 
@@ -118,6 +128,7 @@ export function AlbumCard({ album, caption, onDismiss, request, onRequest, reque
                 Request this album
               </DropdownMenuItem>
             )}
+            {onRadio && <DropdownMenuItem onSelect={onRadio}>Start {album.artistName} radio</DropdownMenuItem>}
             <DropdownMenuItem onSelect={() => onDismiss('album')}>Not interested in this album</DropdownMenuItem>
             <DropdownMenuItem onSelect={() => onDismiss('artist')}>
               Not interested in {album.artistName}

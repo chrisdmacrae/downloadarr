@@ -5,6 +5,8 @@ export type MusicList =
   | 'NEW_ARTISTS'
   | 'FRESH_RELEASES'
   | 'WEEKLY_PICKS'
+  | 'WEEKLY_JAMS'
+  | 'DAILY_JAMS'
   | 'FLOW'
   | 'MOST_PLAYED'
   | 'SAVED_ALBUMS'
@@ -71,6 +73,34 @@ export interface AlbumPreview {
   tracks: PreviewTrack[]
 }
 
+export interface RadioTrack {
+  id: string
+  title: string
+  artistName: string
+  albumTitle?: string
+  coverUrl?: string
+  durationSeconds: number
+  previewUrl: string
+  source: 'deezer' | 'listenbrainz'
+}
+
+export interface RadioAlbum {
+  id: string
+  artistName: string
+  albumTitle: string
+  coverUrl?: string
+  sources: string[]
+}
+
+export interface ArtistRadio {
+  artistName: string
+  sources: string[]
+  /** Playable tracks, in play order. */
+  tracks: RadioTrack[]
+  /** The albums the station's tracks come from, first heard first. */
+  albums: RadioAlbum[]
+}
+
 export interface MusicDismissal {
   id: string
   key: string
@@ -108,6 +138,10 @@ export const musicApi = {
 
   getPreview: async (artist: string, album: string): Promise<AlbumPreview> =>
     (await api.get('/music/preview', { params: { artist, album }, timeout: 15000 })).data.data,
+
+  /** Matching ListenBrainz tracks on Deezer takes a few seconds. */
+  getArtistRadio: async (artist: string): Promise<ArtistRadio> =>
+    (await api.get('/music/radio', { params: { artist }, timeout: 30000 })).data.data,
 
   getDismissals: async (): Promise<MusicDismissal[]> => (await api.get('/music/dismissals')).data.data,
 

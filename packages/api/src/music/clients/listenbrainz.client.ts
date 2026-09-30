@@ -142,35 +142,72 @@ export class ListenBrainzClient {
   }
 
   /**
-   * Tracks from the newest "Weekly Exploration" playlist ListenBrainz generated
-   * for the user, reduced to the albums they come from.
+   * Tracks from the newest playlist ListenBrainz generated for the user whose
+   * title starts with `titlePrefix` ("Weekly Exploration", "Weekly Jams",
+   * "Daily Jams"), reduced to the albums they come from.
    */
-  async weeklyExplorationAlbums(username: string): Promise<LbAlbum[]> {
+  async createdForAlbums(username: string, titlePrefix: string): Promise<LbAlbum[]> {
     const list = await this.client.get<any>(
       `${API}/user/${encodeURIComponent(username)}/playlists/createdfor`,
       { count: 25 },
     );
+    // Newest first, so the first match is the current one.
     const playlist = (list?.playlists ?? [])
       .map((p: any) => p.playlist)
-      .find((p: any) => typeof p?.title === 'string' && p.title.startsWith('Weekly Exploration'));
+      .find((p: any) => typeof p?.title === 'string' && p.title.startsWith(titlePrefix));
     if (!playlist?.identifier) return [];
 
     const id = String(playlist.identifier).split('/').filter(Boolean).pop();
     const full = await this.client.get<any>(`${API}/playlist/${id}`);
     const albums = new Map<string, LbAlbum>();
-    for (const track of full?.playlist?.track ?? []) {
-      const meta = track.extension?.['https://musicbrainz.org/doc/jspf#track']?.additional_metadata ?? {};
-      const artistName = meta.artists?.[0]?.artist_credit_name ?? track.creator;
-      if (!track.album || !artistName) continue;
-      const key = `${artistName}::${track.album}`;
+    for (const track of (full?.playlist?.track ?? []).map(toRadioTrack)) {
+      if (!track?.albumTitle) continue;
+      const key = `${track.artistName}::${track.albumTitle}`;
       if (albums.has(key)) continue;
       albums.set(key, {
-        artistName,
-        artistMbid: meta.artists?.[0]?.artist_mbid,
-        title: track.album,
-        caaReleaseMbid: meta.caa_release_mbid ?? undefined,
+        artistName: track.artistName,
+        artistMbid: track.artistMbid,
+        title: track.albumTitle,
+        caaReleaseMbid: track.caaReleaseMbid,
       });
     }
     return [...albums.values()];
   }
+
+  /**
+   * An LB Radio playlist for a prompt such as `artist:(Radiohead)` or
+   * `tag:(shoegaze)`. ListenBrainz requires a user token for this endpoint.
+   */
+  async radio(prompt: string, mode: 'easy' | 'medium' | 'hard', token: string): Promise<LbRadioTrack[]> {
+    const data = await this.client.get<any>(
+      `${API}/explore/lb-radio`,
+      { prompt, mode },
+      { Authorization: `Token ${token}` },
+    );
+    return (data?.payload?.jspf?.playlist?.track ?? []).map(toRadioTrack).filter(Boolean) as LbRadioTrack[];
+  }
+}
+
+export interface LbRadioTrack {
+  title: string;
+  artistName: string;
+  artistMbid?: string;
+  albumTitle?: string;
+  caaReleaseMbid?: string;
+}
+
+const JSPF_TRACK = 'https://musicbrainz.org/doc/jspf#track';
+
+/** A JSPF track from a ListenBrainz playlist, or null for unusable ones. */
+export function toRadioTrack(track: any): LbRadioTrack | null {
+  const meta = track?.extension?.[JSPF_TRACK]?.additional_metadata ?? {};
+  const artistName: string | undefined = meta.artists?.[0]?.artist_credit_name ?? track?.creator;
+  if (!track?.title || !artistName || IGNORED_ARTISTS.has(artistName.toLowerCase())) return null;
+  return {
+    title: track.title,
+    artistName,
+    artistMbid: meta.artists?.[0]?.artist_mbid ?? undefined,
+    albumTitle: track.album || meta.release_name || undefined,
+    caaReleaseMbid: meta.caa_release_mbid ?? undefined,
+  };
 }

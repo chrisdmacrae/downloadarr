@@ -1,12 +1,12 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Loader2, Music, RefreshCw, Settings as SettingsIcon } from 'lucide-react'
+import { Loader2, Music, Radio, RefreshCw, Settings as SettingsIcon, X } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { EmptyState, Page, PageHeader, PageSection } from '@/components/ds/Page'
 import { Rail } from '@/components/ds/Rail'
-import { AlbumCard, AlbumCardSkeleton } from '@/components/music/AlbumCard'
-import { PreviewPlayerProvider } from '@/components/music/PreviewPlayer'
+import { AlbumCard, AlbumCardSkeleton, type AlbumTile } from '@/components/music/AlbumCard'
+import { PreviewPlayerProvider, usePreviewPlayer } from '@/components/music/PreviewPlayer'
 import { useToast } from '@/hooks/use-toast'
 import {
   useDismissMusic,
@@ -17,7 +17,7 @@ import {
 } from '@/hooks/useMusic'
 import { useTorrentRequests } from '@/hooks/useTorrentRequests'
 import { apiService } from '@/services/api'
-import type { MusicList, MusicRecommendation } from '@/services/music'
+import { musicApi, type ArtistRadio, type MusicList, type MusicRecommendation } from '@/services/music'
 
 const RAILS: Array<{ list: MusicList; title: string; caption: (album: MusicRecommendation) => string | undefined }> = [
   {
@@ -36,6 +36,16 @@ const RAILS: Array<{ list: MusicList; title: string; caption: (album: MusicRecom
     caption: () => 'From ListenBrainz',
   },
   {
+    list: 'WEEKLY_JAMS',
+    title: 'Your weekly jams',
+    caption: () => 'From ListenBrainz',
+  },
+  {
+    list: 'DAILY_JAMS',
+    title: 'Today’s jams',
+    caption: () => 'From ListenBrainz',
+  },
+  {
     list: 'FLOW',
     title: 'From your Deezer Flow',
     caption: () => 'From Deezer',
@@ -51,6 +61,11 @@ const RAILS: Array<{ list: MusicList; title: string; caption: (album: MusicRecom
     caption: (album) => (album.releaseDate ? album.releaseDate.slice(0, 4) : undefined),
   },
 ]
+
+/** An album to request: a recommendation, or one heard on a radio station. */
+type RequestableAlbum = AlbumTile & { id: string; releaseGroupMbid?: string | null; releaseDate?: string | null }
+
+const SOURCE_NAMES: Record<string, string> = { deezer: 'Deezer', listenbrainz: 'ListenBrainz' }
 
 function joinNames(names: string[]) {
   if (names.length <= 1) return names[0] ?? ''
@@ -91,8 +106,38 @@ function MusicDiscoveryContent() {
   const dismiss = useDismissMusic()
   const { getRequestForAlbum, refreshRequests } = useTorrentRequests()
   const [requesting, setRequesting] = useState<string | null>(null)
+  const player = usePreviewPlayer()
+  const [radio, setRadio] = useState<ArtistRadio | null>(null)
+  const [tuningTo, setTuningTo] = useState<string | null>(null)
+  const radioRef = useRef<HTMLDivElement>(null)
 
-  const onRequest = async (album: MusicRecommendation) => {
+  // Bring the station into view once its rail has rendered.
+  useEffect(() => {
+    if (tuningTo) radioRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [tuningTo])
+
+  const startRadio = async (artistName: string) => {
+    setTuningTo(artistName)
+    setRadio(null)
+    try {
+      const station = await musicApi.getArtistRadio(artistName)
+      setRadio(station)
+      player.playRadio(station)
+    } catch (error: any) {
+      toast({
+        title: `Couldn’t start ${artistName} radio`,
+        description:
+          error?.response?.status === 404
+            ? 'Deezer and ListenBrainz have nothing to play for this artist.'
+            : error?.response?.data?.message ?? error?.message,
+        variant: 'destructive',
+      })
+    } finally {
+      setTuningTo((current) => (current === artistName ? null : current))
+    }
+  }
+
+  const onRequest = async (album: RequestableAlbum) => {
     setRequesting(album.id)
     try {
       await apiService.requestMusicDownload({
@@ -124,7 +169,16 @@ function MusicDiscoveryContent() {
     .pop()
   const hasAny = RAILS.some(({ list }) => (discover?.lists[list]?.length ?? 0) > 0)
 
-  const onDismiss = (album: MusicRecommendation, scope: 'album' | 'artist') => {
+  const onDismiss = (album: AlbumTile, scope: 'album' | 'artist') => {
+    // The station isn't stored, so drop the album from it here.
+    setRadio((station) =>
+      station && {
+        ...station,
+        albums: station.albums.filter(
+          (a) => a.artistName !== album.artistName || (scope === 'album' && a.albumTitle !== album.albumTitle)
+        ),
+      }
+    )
     dismiss.mutate(
       { artistName: album.artistName, albumTitle: scope === 'album' ? album.albumTitle : undefined },
       {
@@ -212,25 +266,99 @@ function MusicDiscoveryContent() {
             }
           />
         ) : (
-          RAILS.map(({ list, title, caption }) => {
-            const albums = discover?.lists[list] ?? []
-            if (albums.length === 0) return null
-            return (
-              <Rail key={list} title={title} count={albums.length}>
-                {albums.map((album) => (
-                  <AlbumCard
-                    key={album.id}
-                    album={album}
-                    caption={caption(album)}
-                    onDismiss={(scope) => onDismiss(album, scope)}
-                    request={getRequestForAlbum(album.artistName, album.albumTitle)}
-                    onRequest={() => onRequest(album)}
-                    requesting={requesting === album.id}
-                  />
+          <>
+            {(discover?.topArtists.length ?? 0) > 0 && (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="flex items-center gap-1.5 text-xs font-semibold text-fg-muted">
+                  <Radio className="h-3.5 w-3.5" />
+                  Artist radio
+                </span>
+                {discover!.topArtists.slice(0, 8).map((artist) => (
+                  <Button
+                    key={artist.name}
+                    variant="outline"
+                    size="sm"
+                    className="h-8 rounded-pill"
+                    disabled={tuningTo === artist.name}
+                    onClick={() => startRadio(artist.name)}
+                  >
+                    {tuningTo === artist.name && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                    {artist.name}
+                  </Button>
                 ))}
-              </Rail>
-            )
-          })
+              </div>
+            )}
+
+            <div ref={radioRef} className="scroll-mt-24 empty:hidden">
+              {tuningTo ? (
+                <Rail title={`Tuning in to ${tuningTo} radio…`}>
+                  {Array.from({ length: 8 }).map((_, i) => (
+                    <AlbumCardSkeleton key={i} />
+                  ))}
+                </Rail>
+              ) : (
+                radio && (
+                  <Rail
+                    title={`${radio.artistName} radio`}
+                    count={radio.albums.length}
+                    action={
+                      <>
+                        <span className="hidden font-mono text-xs text-fg-muted sm:inline">
+                          {radio.tracks.length} tracks from {joinNames(radio.sources.map((s) => SOURCE_NAMES[s] ?? s))}
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={!radio.tracks.length}
+                          onClick={() => player.playRadio(radio)}
+                        >
+                          <Radio className="h-4 w-4" />
+                          Play
+                        </Button>
+                        <Button variant="ghost" size="icon-sm" aria-label="Close radio" onClick={() => setRadio(null)}>
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </>
+                    }
+                  >
+                    {radio.albums.map((album) => (
+                      <AlbumCard
+                        key={album.id}
+                        album={album}
+                        caption={`Heard on ${album.sources.map((s) => SOURCE_NAMES[s] ?? s).join(' and ')}`}
+                        onDismiss={(scope) => onDismiss(album, scope)}
+                        request={getRequestForAlbum(album.artistName, album.albumTitle)}
+                        onRequest={() => onRequest(album)}
+                        requesting={requesting === album.id}
+                        onRadio={() => startRadio(album.artistName)}
+                      />
+                    ))}
+                  </Rail>
+                )
+              )}
+            </div>
+
+            {RAILS.map(({ list, title, caption }) => {
+              const albums = discover?.lists[list] ?? []
+              if (albums.length === 0) return null
+              return (
+                <Rail key={list} title={title} count={albums.length}>
+                  {albums.map((album) => (
+                    <AlbumCard
+                      key={album.id}
+                      album={album}
+                      caption={caption(album)}
+                      onDismiss={(scope) => onDismiss(album, scope)}
+                      request={getRequestForAlbum(album.artistName, album.albumTitle)}
+                      onRequest={() => onRequest(album)}
+                      requesting={requesting === album.id}
+                      onRadio={() => startRadio(album.artistName)}
+                    />
+                  ))}
+                </Rail>
+              )
+            })}
+          </>
         )}
 
         {/* Room for the preview player docked at the bottom. */}

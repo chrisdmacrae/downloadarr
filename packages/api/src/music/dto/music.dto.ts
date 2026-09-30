@@ -72,3 +72,11 @@ export class AlbumPreviewQueryDto {
   @MinLength(1)
   album: string;
 }
+
+export class ArtistRadioQueryDto {
+  @ApiProperty({ example: 'Radiohead' })
+  @IsString()
+  @MinLength(1)
+  @MaxLength(300)
+  artist: string;
+}

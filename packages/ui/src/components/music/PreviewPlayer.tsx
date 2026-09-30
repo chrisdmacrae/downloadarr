@@ -3,7 +3,7 @@ import { ListMusic, Loader2, Pause, Play, SkipBack, SkipForward, X } from 'lucid
 
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { musicApi, type AlbumPreview } from '@/services/music'
+import { musicApi, type ArtistRadio } from '@/services/music'
 
 interface PlayRequest {
   artistName: string
@@ -11,12 +11,31 @@ interface PlayRequest {
   coverUrl?: string | null
 }
 
+/** What's in the player: one album's previews, or an artist radio station. */
+export type NowPlaying = ({ kind: 'album' } & PlayRequest) | { kind: 'radio'; artistName: string; coverUrl?: string | null }
+
+interface QueueTrack {
+  id: string | number
+  title: string
+  artistName: string
+  albumTitle?: string
+  coverUrl?: string
+  durationSeconds: number
+  previewUrl?: string
+}
+
+interface Queue {
+  coverUrl?: string
+  tracks: QueueTrack[]
+}
+
 interface PreviewPlayerState {
-  /** The album loaded, or loading, in the player. */
-  current: PlayRequest | null
+  /** The album or station loaded, or loading, in the player. */
+  current: NowPlaying | null
   playing: boolean
   loading: boolean
   play: (album: PlayRequest) => void
+  playRadio: (radio: ArtistRadio) => void
   toggle: () => void
 }
 
@@ -28,8 +47,8 @@ export function usePreviewPlayer() {
   return context
 }
 
-const isSameAlbum = (a: PlayRequest | null, b: PlayRequest) =>
-  a?.artistName === b.artistName && a?.albumTitle === b.albumTitle
+const isSameAlbum = (a: NowPlaying | null, b: PlayRequest) =>
+  a?.kind === 'album' && a.artistName === b.artistName && a.albumTitle === b.albumTitle
 
 function formatClock(seconds: number) {
   const s = Math.max(0, Math.floor(seconds))
@@ -38,13 +57,13 @@ function formatClock(seconds: number) {
 
 /**
  * One audio element for the page, playing Deezer's 30-second previews of an
- * album track by track. Preview URLs expire, so the tracklist is fetched each
- * time an album is played.
+ * album, or of an artist radio station, track by track. Preview URLs expire,
+ * so the tracklist is fetched each time an album is played.
  */
 export function PreviewPlayerProvider({ children }: { children: React.ReactNode }) {
   const audioRef = React.useRef<HTMLAudioElement>(null)
-  const [current, setCurrent] = React.useState<PlayRequest | null>(null)
-  const [preview, setPreview] = React.useState<AlbumPreview | null>(null)
+  const [current, setCurrent] = React.useState<NowPlaying | null>(null)
+  const [preview, setPreview] = React.useState<Queue | null>(null)
   const [trackIndex, setTrackIndex] = React.useState(0)
   const [playing, setPlaying] = React.useState(false)
   const [loading, setLoading] = React.useState(false)
@@ -77,7 +96,7 @@ export function PreviewPlayerProvider({ children }: { children: React.ReactNode 
       }
       const id = ++requestId.current
       audioRef.current?.pause()
-      setCurrent(album)
+      setCurrent({ kind: 'album', ...album })
       setPreview(null)
       setError(null)
       setLoading(true)
@@ -94,6 +113,26 @@ export function PreviewPlayerProvider({ children }: { children: React.ReactNode 
       }
     },
     [current, preview, startTrack]
+  )
+
+  /** Radio tracks arrive with their previews, so there's nothing to fetch. */
+  const playRadio = React.useCallback(
+    (radio: ArtistRadio) => {
+      requestId.current++
+      audioRef.current?.pause()
+      setCurrent({ kind: 'radio', artistName: radio.artistName, coverUrl: radio.tracks[0]?.coverUrl })
+      setLoading(false)
+      setShowTracks(false)
+      if (!radio.tracks.length) {
+        setPreview(null)
+        setError('No previews on this station')
+        return
+      }
+      setError(null)
+      setPreview({ tracks: radio.tracks })
+      startTrack(0)
+    },
+    [startTrack]
   )
 
   const toggle = React.useCallback(() => {
@@ -113,8 +152,8 @@ export function PreviewPlayerProvider({ children }: { children: React.ReactNode 
   }
 
   const value = React.useMemo(
-    () => ({ current, playing, loading, play, toggle }),
-    [current, playing, loading, play, toggle]
+    () => ({ current, playing, loading, play, playRadio, toggle }),
+    [current, playing, loading, play, playRadio, toggle]
   )
 
   return (
@@ -152,7 +191,10 @@ export function PreviewPlayerProvider({ children }: { children: React.ReactNode 
                     )}
                   >
                     <span className="w-6 shrink-0 text-right font-mono text-xs text-fg-muted">{i + 1}</span>
-                    <span className="min-w-0 flex-1 truncate">{t.title}</span>
+                    <span className="min-w-0 flex-1 truncate">
+                      {t.title}
+                      {current.kind === 'radio' && <span className="text-fg-muted"> · {t.artistName}</span>}
+                    </span>
                     <span className="shrink-0 font-mono text-xs text-fg-muted">{formatClock(t.durationSeconds)}</span>
                   </button>
                 </li>
@@ -163,17 +205,26 @@ export function PreviewPlayerProvider({ children }: { children: React.ReactNode 
           {/* Right padding clears the report FAB, which floats over this bar. */}
           <div className="flex items-center gap-3 py-2.5 pl-gutter pr-[76px] sm:pr-[88px]">
             <div className="h-10 w-10 shrink-0 overflow-hidden rounded-md bg-ink-800 sm:h-12 sm:w-12">
-              {(preview?.coverUrl || current.coverUrl) && (
-                <img src={preview?.coverUrl || current.coverUrl || undefined} alt="" className="h-full w-full object-cover" />
+              {(track?.coverUrl || preview?.coverUrl || current.coverUrl) && (
+                <img
+                  src={track?.coverUrl || preview?.coverUrl || current.coverUrl || undefined}
+                  alt=""
+                  className="h-full w-full object-cover"
+                />
               )}
             </div>
 
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-semibold text-fg-primary">
-                {track?.title ?? current.albumTitle}
+                {track?.title ?? (current.kind === 'album' ? current.albumTitle : `${current.artistName} radio`)}
               </p>
               <p className="truncate text-xs text-fg-muted">
-                {error ?? (loading ? 'Loading preview…' : `${current.artistName} · ${current.albumTitle}`)}
+                {error ??
+                  (loading
+                    ? 'Loading preview…'
+                    : current.kind === 'album'
+                      ? `${current.artistName} · ${current.albumTitle}`
+                      : `${track?.artistName ?? ''} · ${current.artistName} radio`)}
               </p>
               {track && (
                 <div className="mt-1.5 flex items-center gap-2">

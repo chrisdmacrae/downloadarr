@@ -186,6 +186,24 @@ export class DeezerClient {
     return (data?.data ?? []).map((a: any) => ({ id: a.id, name: a.name }));
   }
 
+  /** Deezer's radio for an artist: their tracks mixed with similar artists'. */
+  async artistRadio(artistId: number, limit = 50): Promise<DeezerTrack[]> {
+    const data = await this.get(`/artist/${artistId}/radio`, { limit });
+    return (data?.data ?? []).map(toTrack);
+  }
+
+  /** Finds a track by artist and title, for its album and preview. */
+  async findTrack(artistName: string, title: string): Promise<DeezerTrack | null> {
+    // Unlike albums, the strict artist:"" track:"" form finds nothing for tracks.
+    const data = await this.get('/search/track', { q: `${artistName} ${title}`, limit: 10 });
+    const results: any[] = data?.data ?? [];
+    const sameArtist = results.filter((t) => nameKey(t.artist?.name ?? '') === nameKey(artistName));
+    const match =
+      sameArtist.find((t) => albumKey(t.title) === albumKey(title)) ??
+      sameArtist.find((t) => albumKey(t.title).startsWith(albumKey(title)));
+    return match ? toTrack(match) : null;
+  }
+
   async artistAlbums(artistId: number): Promise<DeezerAlbum[]> {
     const data = await this.get(`/artist/${artistId}/albums`, { limit: 100 });
     return (data?.data ?? []).map(toAlbum);

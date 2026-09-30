@@ -10,13 +10,14 @@ import { TasteProfileService } from './services/taste-profile.service';
 import { MusicRecommenderService } from './services/music-recommender.service';
 import { MusicSyncService } from './services/music-sync.service';
 import { MusicPreviewService } from './services/music-preview.service';
+import { MusicRadioService } from './services/music-radio.service';
 import { SpotifyAuthService } from './services/spotify-auth.service';
 import { MusicController } from './music.controller';
 
 /**
  * Music discovery: listening history from ListenBrainz, Last.fm, a public
  * Deezer profile and a Spotify account becomes recommendation lists. Deezer's public API also
- * supplies related artists and previews.
+ * supplies related artists, previews and artist radio.
  * The nightly sync's @Cron relies on ScheduleModule.forRoot() registered by
  * TorrentsModule.
  */
@@ -33,6 +34,7 @@ import { MusicController } from './music.controller';
     MusicRecommenderService,
     MusicSyncService,
     MusicPreviewService,
+    MusicRadioService,
   ],
   controllers: [MusicController],
 })

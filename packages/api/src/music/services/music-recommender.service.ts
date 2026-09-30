@@ -31,7 +31,7 @@ const FRESH_RELEASE_DAYS = 90;
 const LIST_LIMIT = 40;
 
 /**
- * Builds the four music lists from a taste profile. Every provider call is
+ * Builds the music lists from a taste profile. Every provider call is
  * best-effort: a failed lookup drops one candidate or one list, never the sync.
  */
 @Injectable()
@@ -66,7 +66,9 @@ export class MusicRecommenderService {
     const lists = await Promise.all([
       this.newArtists(profile, seeds, deezerIds, dismissed, lb?.username, lbToken, lfKey),
       this.freshReleases(profile, seeds, deezerIds, lb?.username),
-      lb ? this.weeklyPicks(lb.username) : Promise.resolve([]),
+      lb ? this.createdFor(lb.username, 'Weekly Exploration', MusicRecommendationList.WEEKLY_PICKS) : Promise.resolve([]),
+      lb ? this.createdFor(lb.username, 'Weekly Jams', MusicRecommendationList.WEEKLY_JAMS) : Promise.resolve([]),
+      lb ? this.createdFor(lb.username, 'Daily Jams', MusicRecommendationList.DAILY_JAMS) : Promise.resolve([]),
       this.mostPlayed(lb?.username, lf?.username, lfKey, deezerUserId),
       deezerUserId ? this.flow(deezerUserId) : Promise.resolve([]),
       this.savedAlbums(deezerUserId, sp),
@@ -246,10 +248,11 @@ export class MusicRecommenderService {
     );
   }
 
-  private async weeklyPicks(lbUser: string): Promise<RecommendedAlbum[]> {
-    const albums = (await this.attempt('LB weekly exploration', () => this.listenBrainz.weeklyExplorationAlbums(lbUser))) ?? [];
+  /** Albums from one of the playlists ListenBrainz generates for the user. */
+  private async createdFor(lbUser: string, titlePrefix: string, list: MusicRecommendationList): Promise<RecommendedAlbum[]> {
+    const albums = (await this.attempt(`LB ${titlePrefix}`, () => this.listenBrainz.createdForAlbums(lbUser, titlePrefix))) ?? [];
     return albums.map((a, i) => ({
-      list: MusicRecommendationList.WEEKLY_PICKS,
+      list,
       artistName: a.artistName,
       artistMbid: a.artistMbid,
       albumTitle: a.title,

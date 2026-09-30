@@ -4,9 +4,11 @@ import { MusicSourceProvider } from '../../generated/prisma';
 import { MusicSourcesService } from './services/music-sources.service';
 import { MusicSyncService } from './services/music-sync.service';
 import { MusicPreviewService } from './services/music-preview.service';
+import { MusicRadioService } from './services/music-radio.service';
 import { SpotifyAuthService } from './services/spotify-auth.service';
 import {
   AlbumPreviewQueryDto,
+  ArtistRadioQueryDto,
   DismissMusicDto,
   SpotifyCallbackQueryDto,
   StartSpotifyAuthDto,
@@ -20,6 +22,7 @@ export class MusicController {
     private readonly sources: MusicSourcesService,
     private readonly syncService: MusicSyncService,
     private readonly preview: MusicPreviewService,
+    private readonly radio: MusicRadioService,
     private readonly spotifyAuth: SpotifyAuthService,
   ) {}
 
@@ -91,6 +94,14 @@ export class MusicController {
     const preview = await this.preview.albumPreview(query.artist, query.album);
     if (!preview) throw new NotFoundException('No preview found for this album');
     return { success: true, data: preview };
+  }
+
+  @Get('radio')
+  @ApiOperation({ summary: 'Artist radio: Deezer\'s artist mix, plus LB Radio when a ListenBrainz token is set' })
+  async artistRadio(@Query() query: ArtistRadioQueryDto) {
+    const radio = await this.radio.artistRadio(query.artist);
+    if (!radio) throw new NotFoundException(`No radio found for ${query.artist}`);
+    return { success: true, data: radio };
   }
 
   @Get('dismissals')

@@ -512,6 +512,8 @@ enum MusicRecommendationList {
   NEW_ARTISTS     // Artists similar to your taste that you have not played
   FRESH_RELEASES  // Recent albums from artists you listen to
   WEEKLY_PICKS    // Albums from ListenBrainz's Weekly Exploration playlist
+  WEEKLY_JAMS     // Albums from ListenBrainz's Weekly Jams playlist
+  DAILY_JAMS      // Albums from ListenBrainz's Daily Jams playlist
   MOST_PLAYED     // Your most played albums
   FLOW            // Albums from your Deezer Flow mix
   SAVED_ALBUMS    // Albums you saved on Deezer or Spotify, newest first
