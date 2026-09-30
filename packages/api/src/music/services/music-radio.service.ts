@@ -1,9 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { PrismaService } from '../../database/prisma.service';
-import { MusicSourceProvider } from '../../../generated/prisma';
+import { RecommendationProfile, RecommendationSourceProvider } from '../../../generated/prisma';
 import { DeezerClient, DeezerTrack } from '../clients/deezer.client';
 import { ListenBrainzClient, LbRadioTrack } from '../clients/listenbrainz.client';
-import { MusicSourcesService } from './music-sources.service';
+import { RecommendationSourcesService } from '../../recommendations/services/sources.service';
+import { MusicListsService } from './music-lists.service';
 import { albumDismissalKey, albumKey, artistDismissalKey, coverArtUrl, nameKey } from '../music-keys';
 
 export interface RadioTrack {
@@ -59,20 +59,27 @@ export class MusicRadioService {
   private readonly logger = new Logger(MusicRadioService.name);
 
   constructor(
-    private readonly prisma: PrismaService,
     private readonly deezer: DeezerClient,
     private readonly listenBrainz: ListenBrainzClient,
-    private readonly sources: MusicSourcesService,
+    private readonly sources: RecommendationSourcesService,
+    private readonly lists: MusicListsService,
   ) {}
 
-  async artistRadio(artistName: string): Promise<ArtistRadio | null> {
-    const lb = (await this.sources.listEnabled()).find((s) => s.provider === MusicSourceProvider.LISTENBRAINZ);
+  /**
+   * `profiles` picks whose ListenBrainz token powers LB Radio (the first that
+   * has one) and whose dismissals to respect.
+   */
+  async artistRadio(artistName: string, profiles: RecommendationProfile[]): Promise<ArtistRadio | null> {
+    const profileIds = new Set(profiles.map((p) => p.id));
+    const lb = (await this.sources.listEnabled()).find(
+      (s) => s.provider === RecommendationSourceProvider.LISTENBRAINZ && s.apiKey && profileIds.has(s.profileId),
+    );
     const [deezer, listenBrainz] = await Promise.all([
       this.fromDeezer(artistName),
       lb?.apiKey ? this.fromListenBrainz(artistName, lb.apiKey) : Promise.resolve([]),
     ]);
 
-    const dismissed = new Set((await this.prisma.musicDismissal.findMany()).map((d) => d.key));
+    const dismissed = await this.lists.dismissedKeys(profiles);
     const tracks = mergeStations(deezer, listenBrainz).filter(
       (t) =>
         !dismissed.has(artistDismissalKey(t.artistName)) &&

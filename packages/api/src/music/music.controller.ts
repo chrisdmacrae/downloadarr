@@ -1,91 +1,48 @@
-import { Body, Controller, Delete, Get, HttpCode, NotFoundException, Param, ParseEnumPipe, Post, Put, Query, Redirect } from '@nestjs/common';
+import { Body, Controller, Delete, Get, NotFoundException, Param, Post, Query, Redirect } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
-import { MusicSourceProvider } from '../../generated/prisma';
-import { MusicSourcesService } from './services/music-sources.service';
-import { MusicSyncService } from './services/music-sync.service';
+import { MusicListsService } from './services/music-lists.service';
 import { MusicPreviewService } from './services/music-preview.service';
 import { MusicRadioService } from './services/music-radio.service';
 import { SpotifyAuthService } from './services/spotify-auth.service';
-import {
-  AlbumPreviewQueryDto,
-  ArtistRadioQueryDto,
-  DismissMusicDto,
-  SpotifyCallbackQueryDto,
-  StartSpotifyAuthDto,
-  UpsertMusicSourceDto,
-} from './dto/music.dto';
+import { RecommendationProfilesService } from '../recommendations/services/profiles.service';
+import { RecommendationSyncService } from '../recommendations/services/recommendation-sync.service';
+import { ProfileScopeQueryDto } from '../recommendations/dto/recommendations.dto';
+import { AlbumPreviewQueryDto, ArtistRadioQueryDto, DismissMusicDto, SpotifyCallbackQueryDto } from './dto/music.dto';
 
+/**
+ * The Music page. Every read takes an optional `profileId`; without one it
+ * covers every profile, merged. Accounts, profiles and syncing live under
+ * /recommendations.
+ */
 @ApiTags('music')
 @Controller('music')
 export class MusicController {
   constructor(
-    private readonly sources: MusicSourcesService,
-    private readonly syncService: MusicSyncService,
+    private readonly lists: MusicListsService,
+    private readonly profiles: RecommendationProfilesService,
+    private readonly syncService: RecommendationSyncService,
     private readonly preview: MusicPreviewService,
     private readonly radio: MusicRadioService,
     private readonly spotifyAuth: SpotifyAuthService,
   ) {}
 
-  @Get('sources')
-  @ApiOperation({ summary: 'List connected listening-history sources' })
-  async listSources() {
-    const sources = await this.sources.list();
-    return { success: true, data: sources.map((s) => this.sources.toView(s)) };
-  }
-
-  @Put('sources/:provider')
-  @ApiOperation({ summary: 'Connect or update a ListenBrainz, Last.fm or Deezer account' })
-  async upsertSource(
-    @Param('provider', new ParseEnumPipe(MusicSourceProvider)) provider: MusicSourceProvider,
-    @Body() dto: UpsertMusicSourceDto,
-  ) {
-    const source = await this.sources.upsert(provider, dto);
-    // Build lists straight away so the Music page isn't empty until 4am.
-    void this.syncService.sync();
-    return { success: true, data: this.sources.toView(source) };
-  }
-
-  @Delete('sources/:provider')
-  @ApiOperation({ summary: 'Disconnect a source' })
-  async removeSource(@Param('provider', new ParseEnumPipe(MusicSourceProvider)) provider: MusicSourceProvider) {
-    await this.sources.remove(provider);
-    return { success: true };
-  }
-
-  @Post('spotify/authorize')
-  @ApiOperation({ summary: 'Start a Spotify login; returns the Spotify address to open' })
-  startSpotifyAuth(@Body() dto: StartSpotifyAuthDto) {
-    return { success: true, data: this.spotifyAuth.start(dto) };
-  }
-
+  // Stays here, not under /recommendations: it's the address registered in
+  // people's Spotify apps.
   @Get('spotify/callback')
   @Redirect()
   @ApiOperation({ summary: 'Where Spotify sends you after signing in; redirects back to Settings' })
   async spotifyCallback(@Query() query: SpotifyCallbackQueryDto) {
-    const { url, connected } = await this.spotifyAuth.handleCallback(query);
-    if (connected) void this.syncService.sync();
+    const { url, connected, profileId } = await this.spotifyAuth.handleCallback(query);
+    if (connected) void this.syncService.sync(profileId);
     return { url, statusCode: 302 };
   }
 
-  @Post('sync')
-  @HttpCode(202)
-  @ApiOperation({ summary: 'Rebuild recommendations now; poll sync/status for completion' })
-  startSync() {
-    void this.syncService.sync();
-    return { success: true, data: { ...this.syncService.getStatus(), running: true } };
-  }
-
-  @Get('sync/status')
-  @ApiOperation({ summary: 'Whether a sync is running, and how the last one went' })
-  syncStatus() {
-    return { success: true, data: this.syncService.getStatus() };
-  }
-
   @Get('discover')
-  @ApiOperation({ summary: 'Recommendation lists and your top artists' })
-  async discover() {
-    const [lists, topArtists] = await Promise.all([this.syncService.lists(), this.syncService.topArtists(12)]);
-    return { success: true, data: { lists, topArtists } };
+  @ApiOperation({ summary: 'Album lists and top artists for a profile, or for everyone' })
+  async discover(@Query() query: ProfileScopeQueryDto) {
+    const profiles = await this.profiles.scope(query.profileId);
+    const lists = await this.lists.lists(profiles);
+    return { success: true, data: { lists, topArtists: this.lists.topArtists(profiles, 12) } };
   }
 
   @Get('preview')
@@ -99,27 +56,32 @@ export class MusicController {
   @Get('radio')
   @ApiOperation({ summary: 'Artist radio: Deezer\'s artist mix, plus LB Radio when a ListenBrainz token is set' })
   async artistRadio(@Query() query: ArtistRadioQueryDto) {
-    const radio = await this.radio.artistRadio(query.artist);
+    const radio = await this.radio.artistRadio(query.artist, await this.profiles.scope(query.profileId));
     if (!radio) throw new NotFoundException(`No radio found for ${query.artist}`);
     return { success: true, data: radio };
   }
 
   @Get('dismissals')
   @ApiOperation({ summary: 'Artists and albums marked not interested' })
-  async listDismissals() {
-    return { success: true, data: await this.syncService.listDismissals() };
+  async listDismissals(@Query() query: ProfileScopeQueryDto) {
+    const rows = await this.lists.listDismissals(await this.profiles.scope(query.profileId));
+    return {
+      success: true,
+      data: rows.map(({ profile, ...row }) => ({ ...row, profileName: profile.name })),
+    };
   }
 
   @Post('dismissals')
-  @ApiOperation({ summary: 'Mark an artist or album not interested' })
+  @ApiOperation({ summary: 'Mark an artist or album not interested, for one profile or every profile' })
   async dismiss(@Body() dto: DismissMusicDto) {
-    return { success: true, data: await this.syncService.dismiss(dto.artistName, dto.albumTitle) };
+    const profiles = await this.profiles.scope(dto.profileId);
+    return { success: true, data: await this.lists.dismiss(profiles, dto.artistName, dto.albumTitle) };
   }
 
   @Delete('dismissals/:id')
   @ApiOperation({ summary: 'Undo a dismissal' })
   async undoDismissal(@Param('id') id: string) {
-    await this.syncService.undoDismissal(id);
+    await this.lists.undoDismissal(id);
     return { success: true };
   }
 }

@@ -1,12 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
-import { MusicRecommendationList, MusicSource, MusicSourceProvider } from '../../../generated/prisma';
+import { MusicRecommendationList, RecommendationSource, RecommendationSourceProvider } from '../../../generated/prisma';
 import { ListenBrainzClient } from '../clients/listenbrainz.client';
 import { LastFmClient } from '../clients/lastfm.client';
 import { DeezerClient } from '../clients/deezer.client';
 import { SpotifyClient } from '../clients/spotify.client';
 import { SpotifyAuthService } from './spotify-auth.service';
-import { MusicSourcesService } from './music-sources.service';
+import { RecommendationSourcesService } from '../../recommendations/services/sources.service';
 import { TasteProfile, TasteProfileArtist } from './taste-profile.service';
 import { albumDismissalKey, albumKey, artistDismissalKey, coverArtUrl, nameKey } from '../music-keys';
 import { normalizeByMax, rankSimilarity, scoreCandidates, SimilarityEdge } from '../music-scoring';
@@ -45,17 +45,17 @@ export class MusicRecommenderService {
     private readonly deezer: DeezerClient,
     private readonly spotify: SpotifyClient,
     private readonly spotifyAuth: SpotifyAuthService,
-    private readonly sourcesService: MusicSourcesService,
+    private readonly sourcesService: RecommendationSourcesService,
   ) {}
 
-  async build(profile: TasteProfile, sources: MusicSource[], dismissed: Set<string>): Promise<RecommendedAlbum[]> {
-    const lb = sources.find((s) => s.provider === MusicSourceProvider.LISTENBRAINZ && profile.synced.includes(s.provider));
-    const lf = sources.find((s) => s.provider === MusicSourceProvider.LASTFM && profile.synced.includes(s.provider));
+  async build(profile: TasteProfile, sources: RecommendationSource[], dismissed: Set<string>): Promise<RecommendedAlbum[]> {
+    const lb = sources.find((s) => s.provider === RecommendationSourceProvider.LISTENBRAINZ && profile.synced.includes(s.id));
+    const lf = sources.find((s) => s.provider === RecommendationSourceProvider.LASTFM && profile.synced.includes(s.id));
     const lfKey = lf ? this.sourcesService.lastFmApiKey(lf) : null;
     const lbToken = lb?.apiKey ?? null;
-    const dz = sources.find((s) => s.provider === MusicSourceProvider.DEEZER && profile.synced.includes(s.provider));
+    const dz = sources.find((s) => s.provider === RecommendationSourceProvider.DEEZER && profile.synced.includes(s.id));
     const deezerUserId = dz ? Number(dz.username) : null;
-    const sp = sources.find((s) => s.provider === MusicSourceProvider.SPOTIFY && profile.synced.includes(s.provider));
+    const sp = sources.find((s) => s.provider === RecommendationSourceProvider.SPOTIFY && profile.synced.includes(s.id));
 
     const seeds = profile.artists.slice(0, SEED_COUNT);
     const deezerIds = await this.resolveDeezerIds(seeds);
@@ -286,7 +286,7 @@ export class MusicRecommenderService {
    * Albums saved on Deezer and Spotify, most recently saved first. Each list
    * is ranked on its own and then interleaved, so neither buries the other.
    */
-  private async savedAlbums(deezerUserId: number | null, spotifySource?: MusicSource): Promise<RecommendedAlbum[]> {
+  private async savedAlbums(deezerUserId: number | null, spotifySource?: RecommendationSource): Promise<RecommendedAlbum[]> {
     const lists: Array<{ source: string; albums: Array<{ artistName?: string; title: string; releaseDate?: string; coverUrl?: string }> }> = [];
     if (deezerUserId) {
       const albums = await this.attempt('Deezer saved albums', () => this.deezer.userFavoriteAlbums(deezerUserId));

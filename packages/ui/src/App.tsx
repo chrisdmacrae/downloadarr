@@ -13,6 +13,7 @@ import GamesDiscovery from '@/pages/GamesDiscovery'
 import MusicDiscovery from '@/pages/MusicDiscovery'
 import Settings from '@/pages/Settings'
 import Onboarding from '@/pages/Onboarding'
+import { ProfileProvider } from '@/contexts/ProfileContext'
 
 function App() {
   return (
@@ -23,28 +24,35 @@ function App() {
           <Route
             path="/*"
             element={
-              <Layout>
-                <Routes>
-                  <Route path="/" element={<Dashboard />} />
-                  <Route path="/downloads" element={<Downloads />} />
-                  <Route path="/requests" element={<Requests />} />
-                  <Route path="/search" element={<Search />} />
-                  <Route path="/movies" element={<MoviesDiscovery />} />
-                  <Route path="/tv-shows" element={<TvShowsDiscovery />} />
-                  <Route path="/anime" element={<AnimeDiscovery />} />
-                  <Route path="/games" element={<GamesDiscovery />} />
-                  <Route path="/music" element={<MusicDiscovery />} />
-                  {/* Organization lives inside Settings now; the old route
-                      still resolves so existing links and the queue badge
-                      keep working. */}
-                  <Route
-                    path="/organization"
-                    element={<Navigate to="/settings/organization" replace />}
-                  />
-                  <Route path="/settings" element={<Settings />} />
-                  <Route path="/settings/:section" element={<Settings />} />
-                </Routes>
-              </Layout>
+              <ProfileProvider>
+                <Layout>
+                  <Routes>
+                    <Route path="/" element={<Dashboard />} />
+                    <Route path="/downloads" element={<Downloads />} />
+                    <Route path="/requests" element={<Requests />} />
+                    <Route path="/search" element={<Search />} />
+                    <Route path="/movies" element={<MoviesDiscovery />} />
+                    <Route path="/tv-shows" element={<TvShowsDiscovery />} />
+                    <Route path="/anime" element={<AnimeDiscovery />} />
+                    <Route path="/games" element={<GamesDiscovery />} />
+                    <Route path="/music" element={<MusicDiscovery />} />
+                    {/* Organization lives inside Settings now; the old route
+                        still resolves so existing links and the queue badge
+                        keep working. */}
+                    <Route
+                      path="/organization"
+                      element={<Navigate to="/settings/organization" replace />}
+                    />
+                    {/* Settings › Music became Settings › Recommendations. */}
+                    <Route
+                      path="/settings/music"
+                      element={<Navigate to="/settings/recommendations" replace />}
+                    />
+                    <Route path="/settings" element={<Settings />} />
+                    <Route path="/settings/:section" element={<Settings />} />
+                  </Routes>
+                </Layout>
+              </ProfileProvider>
             }
           />
         </Routes>

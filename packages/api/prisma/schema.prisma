@@ -473,6 +473,13 @@ model AppConfiguration {
   igdbClientId          String?  // IGDB Client ID for game metadata
   igdbClientSecret      String?  // IGDB Client Secret for game metadata
 
+  // Recommendation apps, shared by every profile. Spotify uses PKCE, so it has
+  // no secret; Trakt's device login needs one.
+  spotifyClientId       String?
+  spotifyRedirectUri    String?
+  traktClientId         String?
+  traktClientSecret     String?
+
   // Organization preferences
   organizationEnabled   Boolean  @default(true)
 
@@ -497,15 +504,61 @@ model AppConfiguration {
 }
 
 // ---------------------------------------------------------------------------
-// Music discovery. Listening history from scrobbling services becomes a taste
-// profile, which feeds cached recommendation lists on the Music page.
+// Recommendations. Each profile (a person in the household) connects its own
+// accounts; syncs turn them into cached recommendation lists per profile —
+// albums on the Music page, movies and shows on the Movies and TV pages.
 // ---------------------------------------------------------------------------
 
-enum MusicSourceProvider {
+model RecommendationProfile {
+  id              String   @id @default(cuid())
+  name            String
+  // The profile's top artists from the last sync, strongest first:
+  // [{ name, mbid?, weight }]. Drives the Music page header and radio chips.
+  musicTopArtists Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  sources              RecommendationSource[]
+  musicRecommendations MusicRecommendation[]
+  musicDismissals      MusicDismissal[]
+  videoRecommendations VideoRecommendation[]
+  videoDismissals      VideoDismissal[]
+
+  @@map("recommendation_profiles")
+}
+
+enum RecommendationSourceProvider {
   LISTENBRAINZ
   LASTFM
   DEEZER
   SPOTIFY
+  TRAKT
+}
+
+// One connected account per provider per profile.
+model RecommendationSource {
+  id            String                       @id @default(cuid())
+  profileId     String
+  profile       RecommendationProfile        @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  provider      RecommendationSourceProvider
+  username      String   // Deezer: numeric user ID. Spotify: user ID. Trakt: user slug
+  displayName   String?  // Deezer, Spotify or Trakt profile name, for display
+  // Last.fm: API key, falling back to LASTFM_API_KEY. ListenBrainz: optional
+  // user token, needed for popularity lookups and LB Radio.
+  apiKey        String?
+  // OAuth tokens for Spotify and Trakt. The app credentials they were issued
+  // to live on AppConfiguration.
+  accessToken    String?
+  refreshToken   String?
+  tokenExpiresAt DateTime?
+  enabled       Boolean  @default(true)
+  lastSyncedAt  DateTime?
+  lastSyncError String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([profileId, provider])
+  @@map("recommendation_sources")
 }
 
 enum MusicRecommendationList {
@@ -519,39 +572,14 @@ enum MusicRecommendationList {
   SAVED_ALBUMS    // Albums you saved on Deezer or Spotify, newest first
 }
 
-// One connected account per provider: this is a single-user app.
-model MusicSource {
-  id            String              @id @default(cuid())
-  provider      MusicSourceProvider @unique
-  username      String              // Deezer: numeric user ID. Spotify: user ID
-  displayName   String?             // Deezer or Spotify profile name, for display
-  // Last.fm: API key, falling back to LASTFM_API_KEY. ListenBrainz: optional
-  // user token, needed only for picking a new artist's best-known album.
-  apiKey        String?
-  // Spotify OAuth (Authorization Code with PKCE, so no client secret).
-  clientId       String?
-  redirectUri    String?
-  accessToken    String?
-  refreshToken   String?
-  tokenExpiresAt DateTime?
-  enabled       Boolean             @default(true)
-  lastSyncedAt  DateTime?
-  lastSyncError String?
-  createdAt     DateTime            @default(now())
-  updatedAt     DateTime            @updatedAt
-
-  @@map("music_sources")
-}
-
 // Artists seen while syncing, keyed by a normalized name so the same artist
-// from different providers merges. tasteWeight > 0 means you listen to them.
+// from different providers merges. A cache of provider IDs, shared by profiles.
 model MusicArtist {
   id          String   @id @default(cuid())
   nameKey     String   @unique
   name        String
   mbid        String?
   deezerId    Int?
-  tasteWeight Float    @default(0)
   updatedAt   DateTime @updatedAt
 
   @@map("music_artists")
@@ -559,6 +587,8 @@ model MusicArtist {
 
 model MusicRecommendation {
   id               String                  @id @default(cuid())
+  profileId        String
+  profile          RecommendationProfile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
   list             MusicRecommendationList
   rank             Int
   artistName       String
@@ -572,16 +602,68 @@ model MusicRecommendation {
   sources          String[]                @default([])
   generatedAt      DateTime                @default(now())
 
-  @@index([list, rank])
+  @@index([profileId, list, rank])
   @@map("music_recommendations")
 }
 
 // "Not interested". key is `artist:<nameKey>` or `album:<nameKey>::<albumKey>`.
 model MusicDismissal {
-  id        String   @id @default(cuid())
-  key       String   @unique
+  id        String                @id @default(cuid())
+  profileId String
+  profile   RecommendationProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  key       String
   label     String
-  createdAt DateTime @default(now())
+  createdAt DateTime              @default(now())
 
+  @@unique([profileId, key])
   @@map("music_dismissals")
+}
+
+enum VideoKind {
+  MOVIE
+  TV
+}
+
+enum VideoRecommendationList {
+  RECOMMENDED // Trakt's personal recommendations
+  WATCHLIST   // The profile's Trakt watchlist
+}
+
+// Movies and shows from Trakt, with artwork and facts from TMDB (Trakt
+// forbids hotlinking its images). tmdbId is what the request flow uses.
+model VideoRecommendation {
+  id          String                  @id @default(cuid())
+  profileId   String
+  profile     RecommendationProfile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  kind        VideoKind
+  list        VideoRecommendationList
+  rank        Int
+  score       Float                   @default(0)
+  tmdbId      Int
+  traktId     Int?
+  imdbId      String?
+  title       String
+  year        Int?
+  poster      String?
+  backdrop    String?
+  overview    String?
+  rating      Float?
+  genres      String[]                @default([])
+  generatedAt DateTime                @default(now())
+
+  @@index([profileId, kind, list, rank])
+  @@map("video_recommendations")
+}
+
+model VideoDismissal {
+  id        String                @id @default(cuid())
+  profileId String
+  profile   RecommendationProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  kind      VideoKind
+  tmdbId    Int
+  title     String
+  createdAt DateTime              @default(now())
+
+  @@unique([profileId, kind, tmdbId])
+  @@map("video_dismissals")
 }

@@ -15,7 +15,7 @@ import { SystemModule } from './system/system.module';
 import { HttpDownloadsModule } from './http-downloads/http-downloads.module';
 import { RequestsModule } from './requests/requests.module';
 import { LanDiscoveryModule } from './lan-discovery/lan-discovery.module';
-import { MusicModule } from './music/music.module';
+import { RecommendationsModule } from './recommendations/recommendations.module';
 
 @Module({
   imports: [
@@ -36,7 +36,7 @@ import { MusicModule } from './music/music.module';
     HttpDownloadsModule,
     RequestsModule,
     LanDiscoveryModule,
-    MusicModule,
+    RecommendationsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

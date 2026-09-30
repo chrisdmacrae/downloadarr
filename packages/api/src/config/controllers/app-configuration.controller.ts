@@ -17,7 +17,9 @@ export class AppConfigurationController {
   @ApiOperation({ summary: 'Get app configuration' })
   @ApiResponse({ status: 200, description: 'App configuration retrieved' })
   async getConfiguration() {
-    return this.appConfigService.getConfiguration();
+    // The Trakt secret is write-only; /recommendations/apps reports whether it's set.
+    const { traktClientSecret: _secret, ...config } = await this.appConfigService.getConfiguration();
+    return config;
   }
 
   @Put()

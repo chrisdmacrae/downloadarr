@@ -1,47 +1,5 @@
-import { IsBoolean, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-
-export class UpsertMusicSourceDto {
-  @ApiProperty({
-    description: 'Username; for Deezer, a profile link or numeric user ID',
-    example: 'rob',
-  })
-  @IsString()
-  @MinLength(1)
-  @MaxLength(300)
-  username: string;
-
-  @ApiPropertyOptional({
-    description:
-      'Last.fm API key, or ListenBrainz user token. Omit to keep the saved value, send "" to clear it.',
-  })
-  @IsOptional()
-  @IsString()
-  @MaxLength(100)
-  apiKey?: string;
-
-  @ApiPropertyOptional({ description: 'Whether syncs read this source', default: true })
-  @IsOptional()
-  @IsBoolean()
-  enabled?: boolean;
-}
-
-export class StartSpotifyAuthDto {
-  @ApiProperty({ description: 'Client ID of your Spotify app', example: '0123456789abcdef0123456789abcdef' })
-  @IsString()
-  clientId: string;
-
-  @ApiProperty({
-    description: 'HTTPS address of this API\'s callback, as registered in the Spotify app',
-    example: 'https://media.example.com/api/music/spotify/callback',
-  })
-  @IsString()
-  redirectUri: string;
-
-  @ApiProperty({ description: 'Settings page to return to; must be an allowed CORS origin' })
-  @IsString()
-  returnTo: string;
-}
 
 export class SpotifyCallbackQueryDto {
   @ApiPropertyOptional() @IsOptional() @IsString() code?: string;
@@ -59,6 +17,11 @@ export class DismissMusicDto {
   @IsOptional()
   @IsString()
   albumTitle?: string;
+
+  @ApiPropertyOptional({ description: 'Dismiss for this profile only; omit to dismiss for every profile' })
+  @IsOptional()
+  @IsString()
+  profileId?: string;
 }
 
 export class AlbumPreviewQueryDto {
@@ -79,4 +42,9 @@ export class ArtistRadioQueryDto {
   @MinLength(1)
   @MaxLength(300)
   artist: string;
+
+  @ApiPropertyOptional({ description: 'Whose ListenBrainz token and dismissals to use; omit for any profile' })
+  @IsOptional()
+  @IsString()
+  profileId?: string;
 }
