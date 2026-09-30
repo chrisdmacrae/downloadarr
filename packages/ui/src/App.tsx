@@ -10,6 +10,7 @@ import MoviesDiscovery from '@/pages/MoviesDiscovery'
 import TvShowsDiscovery from '@/pages/TvShowsDiscovery'
 import AnimeDiscovery from '@/pages/AnimeDiscovery'
 import GamesDiscovery from '@/pages/GamesDiscovery'
+import MusicDiscovery from '@/pages/MusicDiscovery'
 import Settings from '@/pages/Settings'
 import Onboarding from '@/pages/Onboarding'
 
@@ -32,6 +33,7 @@ function App() {
                   <Route path="/tv-shows" element={<TvShowsDiscovery />} />
                   <Route path="/anime" element={<AnimeDiscovery />} />
                   <Route path="/games" element={<GamesDiscovery />} />
+                  <Route path="/music" element={<MusicDiscovery />} />
                   {/* Organization lives inside Settings now; the old route
                       still resolves so existing links and the queue badge
                       keep working. */}

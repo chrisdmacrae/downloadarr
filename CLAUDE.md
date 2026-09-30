@@ -58,6 +58,7 @@ Background work is **cron-driven via @nestjs/schedule**, not BullMQ (despite REA
 - `tv-show-search-loop.service.ts` — every 5min, TV-show season/episode search loop
 - `download-progress-tracker.service.ts` — every 30s, polls aria2 and updates request status
 - `organization/services/reverse-indexing.service.ts` — hourly, indexes existing library files
+- `music/services/music-sync.service.ts` — daily at 4am, rebuilds music recommendations
 
 ### Module map (packages/api/src)
 
@@ -70,6 +71,7 @@ Background work is **cron-driven via @nestjs/schedule**, not BullMQ (despite REA
 - `initialization/` — creates `movies/`, `tv-shows/`, `games/`, `other/` subdirs under downloads and library paths on boot
 - `vpn/`, `docker/`, `system/` — VPN connectivity checks, Docker container control, health/version endpoints
 - `requests/` — aggregated request views for the UI
+- `music/` — music discovery: ListenBrainz/Last.fm listening history and a public Deezer profile (read by user ID, no OAuth) → taste profile → cached recommendation lists (`MusicRecommendation`), rebuilt nightly by `music-sync.service.ts`; Deezer's public API supplies related artists and 30s previews. Discovery only — there is no music request type yet
 
 Swagger docs are served at `/api` on the API (port 3001). Global `ValidationPipe` with `whitelist: true, forbidNonWhitelisted: true` — DTO properties must be declared or requests 400.
 

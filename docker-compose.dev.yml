@@ -16,6 +16,9 @@ services:
 
   # Development-specific overrides for API
   api:
+    # A local tag, so the dev build is what runs. Without it the base file's
+    # ghcr.io/...:latest tag wins and a pulled release image runs instead.
+    image: downloadarr-api:dev
     build:
       dockerfile: packages/api/Dockerfile.dev
       args:
@@ -35,6 +38,7 @@ services:
 
   # Development-specific overrides for Frontend
   frontend:
+    image: downloadarr-ui:dev
     build:
       dockerfile: packages/ui/Dockerfile.dev
       args:
