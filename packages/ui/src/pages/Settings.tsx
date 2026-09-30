@@ -5,6 +5,7 @@ import {
   Gauge,
   HardDrive,
   KeyRound,
+  Music,
   Radar,
   ShieldCheck,
   SlidersHorizontal,
@@ -27,6 +28,7 @@ import ProwlarrSettings from '@/components/settings/ProwlarrSettings'
 import { OrganizationSection } from '@/components/settings/OrganizationSection'
 import { QualityRulesSettings } from '@/components/settings/QualityRulesSettings'
 import { ServiceLinks } from '@/components/settings/ServiceLinks'
+import { MusicSourcesSettings } from '@/components/settings/MusicSourcesSettings'
 import { useToast } from '@/hooks/use-toast'
 import {
   useOrganizationSettings,
@@ -48,6 +50,7 @@ type SectionId =
   | 'general'
   | 'indexing'
   | 'discovery'
+  | 'music'
   | 'quality'
   | 'organization'
   | 'paths'
@@ -58,6 +61,7 @@ const SECTION_TITLES: Record<SectionId, { title: string; description: string }> 
   general: { title: 'General', description: 'How this instance is configured and what version it runs' },
   indexing: { title: 'Indexing', description: 'Prowlarr and the Cloudflare bypass your indexers need' },
   discovery: { title: 'Discovery keys', description: 'API keys for movie, TV and game metadata' },
+  music: { title: 'Music', description: 'Listening history that powers music recommendations' },
   quality: { title: 'Quality rules', description: 'Defaults applied to every new request' },
   organization: {
     title: 'Organization',
@@ -126,6 +130,7 @@ export default function Settings() {
           { id: 'general', label: 'General', icon: SlidersHorizontal },
           { id: 'indexing', label: 'Indexing', icon: Radar },
           { id: 'discovery', label: 'Discovery keys', icon: KeyRound },
+          { id: 'music', label: 'Music', icon: Music },
           { id: 'quality', label: 'Quality rules', icon: Gauge },
         ],
       },
@@ -410,6 +415,8 @@ export default function Settings() {
                     <ServiceLinks variant="providers" />
                   </div>
                 )}
+
+                {activeSection === 'music' && <MusicSourcesSettings />}
 
                 {activeSection === 'quality' && <QualityRulesSettings />}
 

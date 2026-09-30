@@ -7,6 +7,7 @@ import {
   Home,
   Link as LinkIcon,
   List,
+  Music,
   Search,
   Settings as SettingsIcon,
   Sparkles,
@@ -36,6 +37,7 @@ const DISCOVERY: NavItem[] = [
   { name: 'TV shows', href: '/tv-shows', icon: Tv },
   { name: 'Anime', href: '/anime', icon: Sparkles },
   { name: 'Games', href: '/games', icon: Gamepad2 },
+  { name: 'Music', href: '/music', icon: Music },
 ]
 
 const MANAGEMENT: NavItem[] = [

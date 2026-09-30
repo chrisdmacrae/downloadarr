@@ -490,3 +490,84 @@ model AppConfiguration {
 
   @@map("app_configuration")
 }
+
+// ---------------------------------------------------------------------------
+// Music discovery. Listening history from scrobbling services becomes a taste
+// profile, which feeds cached recommendation lists on the Music page.
+// ---------------------------------------------------------------------------
+
+enum MusicSourceProvider {
+  LISTENBRAINZ
+  LASTFM
+  DEEZER
+}
+
+enum MusicRecommendationList {
+  NEW_ARTISTS     // Artists similar to your taste that you have not played
+  FRESH_RELEASES  // Recent albums from artists you listen to
+  WEEKLY_PICKS    // Albums from ListenBrainz's Weekly Exploration playlist
+  MOST_PLAYED     // Your most played albums
+  FLOW            // Albums from your Deezer Flow mix
+  SAVED_ALBUMS    // Albums you saved on Deezer, newest first
+}
+
+// One connected account per provider: this is a single-user app.
+model MusicSource {
+  id            String              @id @default(cuid())
+  provider      MusicSourceProvider @unique
+  username      String              // Deezer: the numeric user ID
+  displayName   String?             // Deezer profile name, for display
+  // Last.fm: API key, falling back to LASTFM_API_KEY. ListenBrainz: optional
+  // user token, needed only for picking a new artist's best-known album.
+  apiKey        String?
+  enabled       Boolean             @default(true)
+  lastSyncedAt  DateTime?
+  lastSyncError String?
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  @@map("music_sources")
+}
+
+// Artists seen while syncing, keyed by a normalized name so the same artist
+// from different providers merges. tasteWeight > 0 means you listen to them.
+model MusicArtist {
+  id          String   @id @default(cuid())
+  nameKey     String   @unique
+  name        String
+  mbid        String?
+  deezerId    Int?
+  tasteWeight Float    @default(0)
+  updatedAt   DateTime @updatedAt
+
+  @@map("music_artists")
+}
+
+model MusicRecommendation {
+  id               String                  @id @default(cuid())
+  list             MusicRecommendationList
+  rank             Int
+  artistName       String
+  artistMbid       String?
+  albumTitle       String
+  releaseGroupMbid String?
+  releaseDate      String?
+  coverUrl         String?
+  score            Float                   @default(0)
+  reasons          String[]                @default([])
+  sources          String[]                @default([])
+  generatedAt      DateTime                @default(now())
+
+  @@index([list, rank])
+  @@map("music_recommendations")
+}
+
+// "Not interested". key is `artist:<nameKey>` or `album:<nameKey>::<albumKey>`.
+model MusicDismissal {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  label     String
+  createdAt DateTime @default(now())
+
+  @@map("music_dismissals")
+}
