@@ -63,6 +63,8 @@ export interface MovieDetails extends SearchResult {
   released?: string;
   cast?: CreditPerson[];
   recommendations?: SearchResult[];
+  /** YouTube video key of the best trailer, e.g. for https://www.youtube.com/watch?v=<key>. */
+  trailer?: string;
 }
 
 export interface TvShowDetails extends SearchResult {
@@ -79,6 +81,8 @@ export interface TvShowDetails extends SearchResult {
   lastAirDate?: string;
   cast?: CreditPerson[];
   recommendations?: SearchResult[];
+  /** YouTube video key of the best trailer. */
+  trailer?: string;
 }
 
 export interface GameDetails extends SearchResult {

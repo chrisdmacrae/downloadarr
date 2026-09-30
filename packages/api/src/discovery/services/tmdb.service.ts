@@ -87,6 +87,15 @@ interface TmdbAggregateCastCredit {
   total_episode_count?: number;
 }
 
+interface TmdbVideo {
+  key: string;
+  site: string;
+  type: string;
+  official?: boolean;
+  iso_639_1?: string | null;
+  published_at?: string;
+}
+
 interface TmdbPersonDetails {
   id: number;
   name: string;
@@ -127,6 +136,7 @@ interface TmdbTvShowDetails {
   };
   aggregate_credits?: { cast: TmdbAggregateCastCredit[] };
   recommendations?: { results: TmdbTvShowItem[] };
+  videos?: { results: TmdbVideo[] };
 }
 
 interface TmdbMovieDetails {
@@ -150,6 +160,7 @@ interface TmdbMovieDetails {
     crew: TmdbCrewCredit[];
   };
   recommendations?: { results: TmdbMovieItem[] };
+  videos?: { results: TmdbVideo[] };
 }
 
 @Injectable()
@@ -368,7 +379,9 @@ export class TmdbService extends BaseExternalApiService {
       }
 
       const params = {
-        append_to_response: 'external_ids,aggregate_credits,recommendations',
+        append_to_response: 'external_ids,aggregate_credits,recommendations,videos',
+        // Videos otherwise follow the request language only; English and language-less cover most trailers.
+        include_video_language: 'en,null',
       };
 
       const response = await this.makeRequest<TmdbTvShowDetails>(`/tv/${id}`, params);
@@ -410,6 +423,7 @@ export class TmdbService extends BaseExternalApiService {
           ),
         ],
         recommendations: await this.mapRecommendations('tv', response.data.recommendations?.results),
+        trailer: this.pickTrailer(response.data.videos?.results),
       };
 
       return {
@@ -905,7 +919,8 @@ export class TmdbService extends BaseExternalApiService {
       }
 
       const params = {
-        append_to_response: 'external_ids,credits,recommendations',
+        append_to_response: 'external_ids,credits,recommendations,videos',
+        include_video_language: 'en,null',
       };
 
       const response = await this.makeRequest<TmdbMovieDetails>(`/movie/${id}`, params);
@@ -939,6 +954,7 @@ export class TmdbService extends BaseExternalApiService {
           ...(response.data.credits?.crew ?? []).filter(c => c.job === 'Director').map(c => this.mapCrewPerson(c)),
         ],
         recommendations: await this.mapRecommendations('movie', response.data.recommendations?.results),
+        trailer: this.pickTrailer(response.data.videos?.results),
       };
 
       return {
@@ -971,6 +987,24 @@ export class TmdbService extends BaseExternalApiService {
       photo: c.profile_path ? `${this.profileBaseUrl}${c.profile_path}` : undefined,
       department: 'crew',
     };
+  }
+
+  /**
+   * The YouTube trailer to show for a title: an official trailer beats an
+   * unofficial one, a trailer beats a teaser, English beats other languages,
+   * and newer beats older (later trailers tend to be the main one).
+   */
+  private pickTrailer(videos?: TmdbVideo[]): string | undefined {
+    const typeRank: Record<string, number> = { Trailer: 0, Teaser: 1 };
+    const candidates = (videos ?? []).filter(v => v.site === 'YouTube' && v.key && v.type in typeRank);
+    candidates.sort(
+      (a, b) =>
+        typeRank[a.type] - typeRank[b.type] ||
+        Number(!!b.official) - Number(!!a.official) ||
+        Number(b.iso_639_1 === 'en') - Number(a.iso_639_1 === 'en') ||
+        (b.published_at ?? '').localeCompare(a.published_at ?? ''),
+    );
+    return candidates[0]?.key;
   }
 
   /** "More like this" for a details response. Failures just mean no recommendations. */

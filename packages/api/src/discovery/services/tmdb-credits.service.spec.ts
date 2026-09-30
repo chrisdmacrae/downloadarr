@@ -86,7 +86,22 @@ describe('TmdbService — credits', () => {
           ],
         },
         recommendations: { results: [movie(604, 'The Matrix Reloaded', 60)] },
+        videos: {
+          results: [
+            { key: 'clip', site: 'YouTube', type: 'Clip', official: true, iso_639_1: 'en' },
+            { key: 'teaser', site: 'YouTube', type: 'Teaser', official: true, iso_639_1: 'en' },
+            { key: 'fan-trailer', site: 'YouTube', type: 'Trailer', official: false, iso_639_1: 'en' },
+            { key: 'vimeo-trailer', site: 'Vimeo', type: 'Trailer', official: true, iso_639_1: 'en' },
+            { key: 'old-trailer', site: 'YouTube', type: 'Trailer', official: true, iso_639_1: 'en', published_at: '1999-01-01' },
+            { key: 'final-trailer', site: 'YouTube', type: 'Trailer', official: true, iso_639_1: 'en', published_at: '1999-03-01' },
+          ],
+        },
       };
+    });
+
+    it('picks the newest official YouTube trailer', async () => {
+      const { data } = await service.getMovieDetails('603');
+      expect(data?.trailer).toBe('final-trailer');
     });
 
     it('lists the cast with their characters, then the director', async () => {
@@ -130,6 +145,20 @@ describe('TmdbService — credits', () => {
         ['Vince Gilligan', 'Creator'],
       ]);
       expect(data?.recommendations).toBeUndefined();
+      expect(data?.trailer).toBeUndefined();
+    });
+
+    it('falls back to a teaser when there is no trailer', async () => {
+      responses['/tv/1'] = {
+        ...show(1, 'New Show', 10),
+        genres: [],
+        created_by: [],
+        networks: [],
+        external_ids: { imdb_id: null, tvdb_id: null },
+        videos: { results: [{ key: 'teaser', site: 'YouTube', type: 'Teaser', official: true, iso_639_1: 'en' }] },
+      };
+      const { data } = await service.getTvShowDetails('1');
+      expect(data?.trailer).toBe('teaser');
     });
   });
 
