@@ -192,6 +192,12 @@ export class SpotifyClient {
     return items.filter((i) => i.track).map((i) => toTrack(i.track));
   }
 
+  /** Album search. Development-mode apps get at most 10 results. */
+  async searchAlbums(accessToken: string, query: string, limit = 10): Promise<SpotifyAlbum[]> {
+    const data = await this.get<any>(accessToken, '/search', { q: query, type: 'album', limit });
+    return (data?.albums?.items ?? []).filter(Boolean).map(toAlbum);
+  }
+
   /** Tracks across the user's own playlists, capped per playlist and overall. */
   async playlistTracks(accessToken: string, userId: string, maxPlaylists = 30, maxTracks = 1500): Promise<SpotifyTrack[]> {
     const playlists = (await this.paged(accessToken, '/me/playlists', 200))

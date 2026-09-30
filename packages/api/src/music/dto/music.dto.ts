@@ -30,6 +30,14 @@ export class AlbumPreviewQueryDto {
   album: string;
 }
 
+export class MusicSearchQueryDto {
+  @ApiProperty({ description: 'Album or artist name', example: 'In Rainbows' })
+  @IsString()
+  @MinLength(1)
+  @MaxLength(300)
+  q: string;
+}
+
 export class ArtistRadioQueryDto {
   @ApiProperty({ example: 'Radiohead' })
   @IsString()

@@ -79,6 +79,18 @@ export interface ArtistRadio {
   albums: RadioAlbum[]
 }
 
+/** An album from Deezer's catalog: a search result or a chart entry. */
+export interface MusicSearchAlbum {
+  id: string
+  artistName: string
+  albumTitle: string
+  coverUrl?: string
+  recordType?: string
+  releaseDate?: string
+  /** Deezer albums have previews; Spotify-only ones usually don't. */
+  source: 'deezer' | 'spotify'
+}
+
 export interface MusicDismissal {
   id: string
   profileId: string
@@ -92,6 +104,11 @@ export const musicApi = {
   /** Omit `profileId` for every profile, merged. */
   getDiscover: async (profileId?: string): Promise<MusicDiscoverData> =>
     (await api.get('/music/discover', { params: { profileId } })).data.data,
+
+  searchAlbums: async (query: string): Promise<MusicSearchAlbum[]> =>
+    (await api.get('/music/search', { params: { q: query } })).data.data,
+
+  getChartAlbums: async (): Promise<MusicSearchAlbum[]> => (await api.get('/music/charts')).data.data,
 
   getPreview: async (artist: string, album: string): Promise<AlbumPreview> =>
     (await api.get('/music/preview', { params: { artist, album }, timeout: 15000 })).data.data,

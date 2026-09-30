@@ -13,6 +13,7 @@ import { MusicRecommenderService } from '../music/services/music-recommender.ser
 import { MusicListsService } from '../music/services/music-lists.service';
 import { MusicPreviewService } from '../music/services/music-preview.service';
 import { MusicRadioService } from '../music/services/music-radio.service';
+import { MusicSearchService } from '../music/services/music-search.service';
 import { MusicController } from '../music/music.controller';
 import { RecommendationProfilesService } from './services/profiles.service';
 import { RecommendationSourcesService } from './services/sources.service';
@@ -43,6 +44,7 @@ import { RecommendationsController } from './recommendations.controller';
     MusicListsService,
     MusicPreviewService,
     MusicRadioService,
+    MusicSearchService,
     RecommendationProfilesService,
     RecommendationSourcesService,
     RecommendationAppsService,

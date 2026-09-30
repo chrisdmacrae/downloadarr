@@ -3,11 +3,12 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { MusicListsService } from './services/music-lists.service';
 import { MusicPreviewService } from './services/music-preview.service';
 import { MusicRadioService } from './services/music-radio.service';
+import { MusicSearchService } from './services/music-search.service';
 import { SpotifyAuthService } from './services/spotify-auth.service';
 import { RecommendationProfilesService } from '../recommendations/services/profiles.service';
 import { RecommendationSyncService } from '../recommendations/services/recommendation-sync.service';
 import { ProfileScopeQueryDto } from '../recommendations/dto/recommendations.dto';
-import { AlbumPreviewQueryDto, ArtistRadioQueryDto, DismissMusicDto } from './dto/music.dto';
+import { AlbumPreviewQueryDto, ArtistRadioQueryDto, DismissMusicDto, MusicSearchQueryDto } from './dto/music.dto';
 
 /**
  * The Music page. Every read takes an optional `profileId`; without one it
@@ -23,6 +24,7 @@ export class MusicController {
     private readonly syncService: RecommendationSyncService,
     private readonly preview: MusicPreviewService,
     private readonly radio: MusicRadioService,
+    private readonly searchService: MusicSearchService,
     private readonly spotifyAuth: SpotifyAuthService,
   ) {}
 
@@ -49,6 +51,18 @@ export class MusicController {
     const profiles = await this.profiles.scope(query.profileId);
     const lists = await this.lists.lists(profiles);
     return { success: true, data: { lists, topArtists: this.lists.topArtists(profiles, 12) } };
+  }
+
+  @Get('search')
+  @ApiOperation({ summary: 'Search albums by title or artist, from Deezer' })
+  async search(@Query() query: MusicSearchQueryDto) {
+    return { success: true, data: await this.searchService.search(query.q) };
+  }
+
+  @Get('charts')
+  @ApiOperation({ summary: 'Deezer\'s top albums chart' })
+  async charts() {
+    return { success: true, data: await this.searchService.charts() };
   }
 
   @Get('preview')

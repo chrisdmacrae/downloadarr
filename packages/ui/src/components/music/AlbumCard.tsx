@@ -24,7 +24,8 @@ interface AlbumCardProps {
   album: AlbumTile
   /** One line under the artist: why it's here, or when it came out. */
   caption?: string
-  onDismiss: (scope: 'album' | 'artist') => void
+  /** Hides the album or artist from recommendations. Omit where that doesn't apply, like search. */
+  onDismiss?: (scope: 'album' | 'artist') => void
   /** The existing request for this album, if any. */
   request?: TorrentRequest
   onRequest?: () => void
@@ -58,6 +59,7 @@ export function AlbumCard({ album, caption, onDismiss, request, onRequest, reque
     player.current.albumTitle === album.albumTitle
   const isPlaying = isCurrent && player.playing
   const isLoading = isCurrent && player.loading
+  const hasMenu = Boolean((onRequest && !request) || onRadio || onDismiss)
 
   const onPlay = () => {
     if (isCurrent && !isLoading) player.toggle()
@@ -111,30 +113,36 @@ export function AlbumCard({ album, caption, onDismiss, request, onRequest, reque
           </span>
         )}
 
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="glass"
-              size="icon-sm"
-              aria-label={`More options for ${album.albumTitle}`}
-              className="absolute right-2 top-2 opacity-0 group-hover/album:opacity-100 group-focus-within/album:opacity-100 data-[state=open]:opacity-100"
-            >
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            {onRequest && !request && (
-              <DropdownMenuItem onSelect={onRequest} disabled={requesting}>
-                Request this album
-              </DropdownMenuItem>
-            )}
-            {onRadio && <DropdownMenuItem onSelect={onRadio}>Start {album.artistName} radio</DropdownMenuItem>}
-            <DropdownMenuItem onSelect={() => onDismiss('album')}>Not interested in this album</DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => onDismiss('artist')}>
-              Not interested in {album.artistName}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {hasMenu && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="glass"
+                size="icon-sm"
+                aria-label={`More options for ${album.albumTitle}`}
+                className="absolute right-2 top-2 opacity-0 group-hover/album:opacity-100 group-focus-within/album:opacity-100 data-[state=open]:opacity-100"
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {onRequest && !request && (
+                <DropdownMenuItem onSelect={onRequest} disabled={requesting}>
+                  Request this album
+                </DropdownMenuItem>
+              )}
+              {onRadio && <DropdownMenuItem onSelect={onRadio}>Start {album.artistName} radio</DropdownMenuItem>}
+              {onDismiss && (
+                <>
+                  <DropdownMenuItem onSelect={() => onDismiss('album')}>Not interested in this album</DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => onDismiss('artist')}>
+                    Not interested in {album.artistName}
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
       </div>
 
       <div className="min-w-0">

@@ -257,6 +257,18 @@ export class DeezerClient {
     };
   }
 
+  /** Free-text album search. It matches artist names too, so "radiohead" finds their albums. */
+  async searchAlbums(query: string, limit = 50): Promise<DeezerAlbum[]> {
+    const data = await this.get('/search/album', { q: query, limit });
+    return (data?.data ?? []).map(toAlbum);
+  }
+
+  /** Deezer's worldwide album chart. */
+  async chartAlbums(limit = 50): Promise<DeezerAlbum[]> {
+    const data = await this.get('/chart/0/albums', { limit });
+    return (data?.data ?? []).map(toAlbum);
+  }
+
   async albumTracks(albumId: number): Promise<DeezerTrack[]> {
     const data = await this.get(`/album/${albumId}/tracks`, { limit: 100 });
     return (data?.data ?? []).map(toTrack);
