@@ -22,6 +22,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useAria2Stats, useVpnStatus } from '@/hooks/useApi'
 import { formatSpeed } from '@/lib/status'
+import { ProfileSwitcher } from './ProfileSwitcher'
 
 interface NavItem {
   name: string
@@ -168,6 +169,8 @@ export function TopNav({ subnav, onAddUrl }: TopNavProps) {
             <Download className="h-3.5 w-3.5 text-fg-muted" />
             {speed ?? '—'}
           </span>
+
+          <ProfileSwitcher />
 
           {onAddUrl && (
             <Button variant="secondary" size="sm" className="shrink-0" onClick={onAddUrl}>

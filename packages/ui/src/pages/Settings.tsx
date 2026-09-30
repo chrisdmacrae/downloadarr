@@ -5,7 +5,7 @@ import {
   Gauge,
   HardDrive,
   KeyRound,
-  Music,
+  Sparkles,
   Radar,
   ShieldCheck,
   SlidersHorizontal,
@@ -28,7 +28,7 @@ import ProwlarrSettings from '@/components/settings/ProwlarrSettings'
 import { OrganizationSection } from '@/components/settings/OrganizationSection'
 import { QualityRulesSettings } from '@/components/settings/QualityRulesSettings'
 import { ServiceLinks } from '@/components/settings/ServiceLinks'
-import { MusicSourcesSettings } from '@/components/settings/MusicSourcesSettings'
+import { RecommendationSettings } from '@/components/settings/RecommendationSettings'
 import { useToast } from '@/hooks/use-toast'
 import {
   useOrganizationSettings,
@@ -50,7 +50,7 @@ type SectionId =
   | 'general'
   | 'indexing'
   | 'discovery'
-  | 'music'
+  | 'recommendations'
   | 'quality'
   | 'organization'
   | 'paths'
@@ -61,7 +61,10 @@ const SECTION_TITLES: Record<SectionId, { title: string; description: string }> 
   general: { title: 'General', description: 'How this instance is configured and what version it runs' },
   indexing: { title: 'Indexing', description: 'Prowlarr and the Cloudflare bypass your indexers need' },
   discovery: { title: 'Discovery keys', description: 'API keys for movie, TV and game metadata' },
-  music: { title: 'Music', description: 'Listening history that powers music recommendations' },
+  recommendations: {
+    title: 'Recommendations',
+    description: 'Profiles and accounts that power movie, TV and music recommendations',
+  },
   quality: { title: 'Quality rules', description: 'Defaults applied to every new request' },
   organization: {
     title: 'Organization',
@@ -130,7 +133,7 @@ export default function Settings() {
           { id: 'general', label: 'General', icon: SlidersHorizontal },
           { id: 'indexing', label: 'Indexing', icon: Radar },
           { id: 'discovery', label: 'Discovery keys', icon: KeyRound },
-          { id: 'music', label: 'Music', icon: Music },
+          { id: 'recommendations', label: 'Recommendations', icon: Sparkles },
           { id: 'quality', label: 'Quality rules', icon: Gauge },
         ],
       },
@@ -418,7 +421,7 @@ export default function Settings() {
                   </div>
                 )}
 
-                {activeSection === 'music' && <MusicSourcesSettings />}
+                {activeSection === 'recommendations' && <RecommendationSettings />}
 
                 {activeSection === 'quality' && <QualityRulesSettings />}
 

@@ -1,11 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { MusicSource, MusicSourceProvider } from '../../../generated/prisma';
+import { RecommendationSource, RecommendationSourceProvider } from '../../../generated/prisma';
 import { ListenBrainzClient } from '../clients/listenbrainz.client';
 import { LastFmClient } from '../clients/lastfm.client';
 import { DeezerClient } from '../clients/deezer.client';
 import { SpotifyClient } from '../clients/spotify.client';
 import { SpotifyAuthService } from './spotify-auth.service';
-import { MusicSourcesService } from './music-sources.service';
+import { RecommendationSourcesService } from '../../recommendations/services/sources.service';
 import { nameKey } from '../music-keys';
 import { normalizeByMax, TasteArtist } from '../music-scoring';
 
@@ -19,9 +19,9 @@ export interface TasteProfile {
   artists: TasteProfileArtist[];
   /** Every artist you have listened to, weighted or not. */
   knownKeys: Set<string>;
-  /** Providers that synced, and the error for each that didn't. */
-  synced: MusicSourceProvider[];
-  errors: Partial<Record<MusicSourceProvider, string>>;
+  /** IDs of the sources that synced, and the error for each that didn't. */
+  synced: string[];
+  errors: Record<string, string>;
 }
 
 /** Recent listening counts double all-time listening. */
@@ -71,13 +71,13 @@ export class TasteProfileService {
     private readonly deezer: DeezerClient,
     private readonly spotify: SpotifyClient,
     private readonly spotifyAuth: SpotifyAuthService,
-    private readonly sources: MusicSourcesService,
+    private readonly sources: RecommendationSourcesService,
   ) {}
 
-  async build(sources: MusicSource[]): Promise<TasteProfile> {
+  async build(sources: RecommendationSource[]): Promise<TasteProfile> {
     const weights = new Map<string, { name: string; mbid?: string; deezerId?: number; weight: number }>();
     const knownKeys = new Set<string>();
-    const synced: MusicSourceProvider[] = [];
+    const synced: string[] = [];
     const errors: TasteProfile['errors'] = {};
 
     const add = (listens: Listen[], factor: number) => {
@@ -98,11 +98,11 @@ export class TasteProfileService {
         add(recent.slice(0, WEIGHTED_COUNT), RECENT_WEIGHT);
         add(allTime.slice(0, WEIGHTED_COUNT), ALL_TIME_WEIGHT);
         for (const listen of [...recent, ...allTime]) knownKeys.add(nameKey(listen.name));
-        synced.push(source.provider);
+        synced.push(source.id);
       } catch (error) {
         const message = (error as Error).message;
         this.logger.warn(`Could not read ${source.provider} history for ${source.username}: ${message}`);
-        errors[source.provider] = message;
+        errors[source.id] = message;
       }
     }
 
@@ -121,8 +121,8 @@ export class TasteProfileService {
     return { artists, knownKeys, synced, errors };
   }
 
-  private async fetchListens(source: MusicSource): Promise<{ recent: Listen[]; allTime: Listen[] }> {
-    if (source.provider === MusicSourceProvider.LISTENBRAINZ) {
+  private async fetchListens(source: RecommendationSource): Promise<{ recent: Listen[]; allTime: Listen[] }> {
+    if (source.provider === RecommendationSourceProvider.LISTENBRAINZ) {
       const [recent, allTime] = [
         await this.listenBrainz.topArtists(source.username, 'year', WEIGHTED_COUNT),
         await this.listenBrainz.topArtists(source.username, 'all_time', KNOWN_COUNT),
@@ -135,8 +135,8 @@ export class TasteProfileService {
       return { recent: recent.map(toListen), allTime: allTime.map(toListen) };
     }
 
-    if (source.provider === MusicSourceProvider.DEEZER) return this.deezerListens(Number(source.username));
-    if (source.provider === MusicSourceProvider.SPOTIFY) return this.spotifyListens(source);
+    if (source.provider === RecommendationSourceProvider.DEEZER) return this.deezerListens(Number(source.username));
+    if (source.provider === RecommendationSourceProvider.SPOTIFY) return this.spotifyListens(source);
 
     const apiKey = this.sources.lastFmApiKey(source);
     if (!apiKey) throw new Error('No Last.fm API key configured');
@@ -157,7 +157,7 @@ export class TasteProfileService {
    * all-time is the long-term top artists plus what's followed and saved.
    * Spotify shares no play counts, so ranks and saves stand in for them.
    */
-  private async spotifyListens(source: MusicSource): Promise<{ recent: Listen[]; allTime: Listen[] }> {
+  private async spotifyListens(source: RecommendationSource): Promise<{ recent: Listen[]; allTime: Listen[] }> {
     const token = await this.spotifyAuth.accessToken(source);
     const [short, medium, long, followed, albums, tracks, playlistTracks] = [
       await this.spotify.topArtists(token, 'short_term'),

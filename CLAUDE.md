@@ -58,7 +58,7 @@ Background work is **cron-driven via @nestjs/schedule**, not BullMQ (despite REA
 - `tv-show-search-loop.service.ts` — every 5min, TV-show season/episode search loop
 - `download-progress-tracker.service.ts` — every 30s, polls aria2 and updates request status
 - `organization/services/reverse-indexing.service.ts` — hourly, indexes existing library files
-- `music/services/music-sync.service.ts` — daily at 4am, rebuilds music recommendations
+- `recommendations/services/recommendation-sync.service.ts` — daily at 4am, rebuilds every profile's music and Trakt recommendations
 
 ### Module map (packages/api/src)
 
@@ -67,11 +67,12 @@ Background work is **cron-driven via @nestjs/schedule**, not BullMQ (despite REA
 - `download/` — aria2 JSON-RPC client (`aria2.service.ts`), Socket.IO gateway on namespace `/downloads` (room per download: `download-${id}`) pushing progress to the UI
 - `http-downloads/` — direct HTTP/HTTPS downloads (separate `HttpDownloadRequest` model, own progress tracker)
 - `organization/` — moves completed downloads from `DOWNLOAD_PATH` into `LIBRARY_PATH` per naming rules; `OrganizeQueue` for manual approval; reverse indexing of pre-existing files
-- `config/` — `AppConfiguration` singleton row in Postgres: onboarding state + API keys (Prowlarr, OMDb, TMDB, IGDB). **Runtime config lives in the DB, set via the onboarding wizard/settings UI — not only env vars.**
+- `config/` — `AppConfiguration` singleton row in Postgres: onboarding state + API keys (Prowlarr, OMDb, TMDB, IGDB) and the Spotify/Trakt app credentials. **Runtime config lives in the DB, set via the onboarding wizard/settings UI — not only env vars.**
 - `initialization/` — creates `movies/`, `tv-shows/`, `games/`, `other/` subdirs under downloads and library paths on boot
 - `vpn/`, `docker/`, `system/` — VPN connectivity checks, Docker container control, health/version endpoints
 - `requests/` — aggregated request views for the UI
-- `music/` — music discovery: ListenBrainz/Last.fm listening history, a public Deezer profile (read by user ID, no OAuth) and Spotify (OAuth with PKCE via `music/spotify/callback`, which needs an HTTPS address) → taste profile → cached recommendation lists (`MusicRecommendation`), rebuilt nightly by `music-sync.service.ts`; Deezer's public API supplies related artists and 30s previews. Artist radio (`GET /music/radio`, `music-radio.service.ts`) is built on demand and never stored: Deezer's artist mix, plus an LB Radio playlist when a ListenBrainz token is set. The Music page requests albums as `ContentType.MUSIC` (`title` is the album, `artist` is set), searched in Prowlarr's Audio category and ranked by `discovery/services/music-release-ranker.ts`
+- `recommendations/` — per-person **recommendation profiles** (`RecommendationProfile`). Each profile connects its own accounts (`RecommendationSource`, one per provider per profile), and recommendations and dismissals belong to a profile. API reads take an optional `profileId`; without one they merge every profile (`recommendations/merge.ts`). The Spotify and Trakt app credentials are install-level, on `AppConfiguration`. Trakt connects by device login (`trakt-auth.service.ts`; its refresh tokens are single-use) and feeds `VideoRecommendation` (recommended + watchlist, with artwork from TMDB via `TmdbService.getMovieSummary/getTvSummary`), shown as rails on the Movies and TV pages. `RecommendationsModule` also provides everything in `music/` (one module avoids a dependency cycle)
+- `music/` — music discovery: ListenBrainz/Last.fm listening history, a public Deezer profile (read by user ID, no OAuth) and Spotify (OAuth with PKCE via `music/spotify/callback`, which needs an HTTPS address) → taste profile → cached recommendation lists per profile (`MusicRecommendation`, built by `music-lists.service.ts`); Deezer's public API supplies related artists and 30s previews. Artist radio (`GET /music/radio`, `music-radio.service.ts`) is built on demand and never stored: Deezer's artist mix, plus an LB Radio playlist when a ListenBrainz token is set. The Music page requests albums as `ContentType.MUSIC` (`title` is the album, `artist` is set), searched in Prowlarr's Audio category and ranked by `discovery/services/music-release-ranker.ts`
 
 Swagger docs are served at `/api` on the API (port 3001). Global `ValidationPipe` with `whitelist: true, forbidNonWhitelisted: true` — DTO properties must be declared or requests 400.
 

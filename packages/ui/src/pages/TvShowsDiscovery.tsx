@@ -5,6 +5,7 @@ import { MovieDetailModal } from '@/components/MovieDetailModal'
 import { DownloadRequestModal } from '@/components/DownloadRequestModal'
 import { SearchResult, apiService } from '@/services/api'
 import { useToast } from '@/hooks/use-toast'
+import { usePersonalRails } from '@/hooks/usePersonalRails'
 
 const TARGET_GENRES = [
   'Action & Adventure',
@@ -27,6 +28,7 @@ export default function TvShowsDiscovery() {
   const [requestItem, setRequestItem] = useState<SearchResult | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const { toast } = useToast()
+  const { personalRails, onDismiss } = usePersonalRails('TV')
 
   useEffect(() => {
     let cancelled = false
@@ -100,6 +102,8 @@ export default function TvShowsDiscovery() {
         popular={popular}
         popularTitle="Popular TV shows"
         genreRails={genreRails}
+        personalRails={personalRails}
+        onDismiss={onDismiss}
         isLoading={isLoading}
         onItemClick={(item) => {
           setSelectedShow({ id: item.id, title: item.title })

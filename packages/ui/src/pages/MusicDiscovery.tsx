@@ -8,13 +8,14 @@ import { Rail } from '@/components/ds/Rail'
 import { AlbumCard, AlbumCardSkeleton, type AlbumTile } from '@/components/music/AlbumCard'
 import { PreviewPlayerProvider, usePreviewPlayer } from '@/components/music/PreviewPlayer'
 import { useToast } from '@/hooks/use-toast'
+import { useDismissMusic, useMusicDiscover } from '@/hooks/useMusic'
 import {
-  useDismissMusic,
-  useMusicDiscover,
-  useMusicSources,
-  useMusicSyncStatus,
-  useStartMusicSync,
-} from '@/hooks/useMusic'
+  useRecommendationSources,
+  useRecommendationSyncStatus,
+  useStartRecommendationSync,
+} from '@/hooks/useRecommendations'
+import { useProfile } from '@/contexts/ProfileContext'
+import { MUSIC_PROVIDERS } from '@/services/recommendations'
 import { useTorrentRequests } from '@/hooks/useTorrentRequests'
 import { apiService } from '@/services/api'
 import { musicApi, type ArtistRadio, type MusicList, type MusicRecommendation } from '@/services/music'
@@ -99,10 +100,11 @@ export default function MusicDiscovery() {
 function MusicDiscoveryContent() {
   const navigate = useNavigate()
   const { toast } = useToast()
-  const { data: sources, isLoading: sourcesLoading } = useMusicSources()
-  const { data: discover, isLoading: discoverLoading } = useMusicDiscover()
-  const { data: syncStatus } = useMusicSyncStatus()
-  const startSync = useStartMusicSync()
+  const { profileId, profile, profiles } = useProfile()
+  const { data: sources, isLoading: sourcesLoading } = useRecommendationSources()
+  const { data: discover, isLoading: discoverLoading } = useMusicDiscover(profileId)
+  const { data: syncStatus } = useRecommendationSyncStatus()
+  const startSync = useStartRecommendationSync()
   const dismiss = useDismissMusic()
   const { getRequestForAlbum, refreshRequests } = useTorrentRequests()
   const [requesting, setRequesting] = useState<string | null>(null)
@@ -120,7 +122,7 @@ function MusicDiscoveryContent() {
     setTuningTo(artistName)
     setRadio(null)
     try {
-      const station = await musicApi.getArtistRadio(artistName)
+      const station = await musicApi.getArtistRadio(artistName, profileId)
       setRadio(station)
       player.playRadio(station)
     } catch (error: any) {
@@ -161,7 +163,10 @@ function MusicDiscoveryContent() {
   }
 
   const syncing = Boolean(syncStatus?.running) || startSync.isPending
-  const connected = (sources ?? []).filter((s) => s.enabled)
+  // This view's music accounts: the picked profile's, or everyone's.
+  const connected = (sources ?? []).filter(
+    (s) => s.enabled && MUSIC_PROVIDERS.includes(s.provider) && (!profileId || s.profileId === profileId)
+  )
   const lastSynced = connected
     .map((s) => s.lastSyncedAt)
     .filter(Boolean)
@@ -180,12 +185,14 @@ function MusicDiscoveryContent() {
       }
     )
     dismiss.mutate(
-      { artistName: album.artistName, albumTitle: scope === 'album' ? album.albumTitle : undefined },
+      { artistName: album.artistName, albumTitle: scope === 'album' ? album.albumTitle : undefined, profileId },
       {
         onSuccess: () =>
           toast({
             title: scope === 'album' ? 'Album hidden' : `${album.artistName} hidden`,
-            description: 'Undo this in Settings › Music.',
+            description: `${
+              !profileId && profiles.length > 1 ? 'Hidden for every profile. ' : ''
+            }Undo this in Settings › Recommendations.`,
           }),
       }
     )
@@ -197,8 +204,10 @@ function MusicDiscoveryContent() {
       title="Discover music"
       description={
         discover?.topArtists.length
-          ? `Built from your listening to ${joinNames(discover.topArtists.slice(0, 4).map((a) => a.name))} and more`
-          : 'Recommendations built from your ListenBrainz, Last.fm, Deezer and Spotify listening'
+          ? `Built from ${profile && profiles.length > 1 ? `${profile.name}’s` : profiles.length > 1 ? 'everyone’s' : 'your'} listening to ${joinNames(
+              discover.topArtists.slice(0, 4).map((a) => a.name)
+            )} and more`
+          : 'Recommendations built from ListenBrainz, Last.fm, Deezer and Spotify listening'
       }
       actions={
         connected.length > 0 && (
@@ -206,13 +215,13 @@ function MusicDiscoveryContent() {
             {lastSynced && !syncing && (
               <span className="font-mono text-xs text-fg-muted">Updated {formatAgo(lastSynced)}</span>
             )}
-            <Button variant="outline" size="sm" disabled={syncing} onClick={() => startSync.mutate()}>
+            <Button variant="outline" size="sm" disabled={syncing} onClick={() => startSync.mutate(profileId)}>
               {syncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
               {syncing ? 'Updating…' : 'Refresh'}
             </Button>
-            <Button variant="ghost" size="sm" onClick={() => navigate('/settings/music')}>
+            <Button variant="ghost" size="sm" onClick={() => navigate('/settings/recommendations')}>
               <SettingsIcon className="h-4 w-4" />
-              Sources
+              Accounts
             </Button>
           </>
         )
@@ -239,9 +248,9 @@ function MusicDiscoveryContent() {
         {connected.length === 0 ? (
           <EmptyState
             icon={<Music />}
-            title="Connect your listening history"
+            title={profile && profiles.length > 1 ? `Connect ${profile.name}’s listening history` : 'Connect your listening history'}
             description="Connect ListenBrainz, Last.fm, Spotify or a public Deezer profile and Downloadarr will recommend new artists and albums based on what you play."
-            action={<Button onClick={() => navigate('/settings/music')}>Connect a source</Button>}
+            action={<Button onClick={() => navigate('/settings/recommendations')}>Connect an account</Button>}
           />
         ) : !hasAny && syncing ? (
           <>
@@ -260,7 +269,7 @@ function MusicDiscoveryContent() {
               'Refresh to build recommendations from your listening history.'
             }
             action={
-              <Button onClick={() => startSync.mutate()} disabled={syncing}>
+              <Button onClick={() => startSync.mutate(profileId)} disabled={syncing}>
                 Refresh
               </Button>
             }

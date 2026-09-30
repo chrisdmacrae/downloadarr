@@ -1,11 +1,15 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../../database/prisma.service';
-import { MusicSource, MusicSourceProvider } from '../../../generated/prisma';
-import { buildAuthorizeUrl, createPkcePair, SpotifyClient } from '../clients/spotify.client';
+import { RecommendationSource, RecommendationSourceProvider } from '../../../generated/prisma';
+import { buildAuthorizeUrl, createPkcePair, isValidRedirectUri, isValidSpotifyClientId, SpotifyClient } from '../clients/spotify.client';
 import { corsOrigins } from '../../common/utils/cors-origins';
+import { RecommendationAppsService } from '../../recommendations/services/app-credentials.service';
+
+export { isValidRedirectUri, isValidSpotifyClientId };
 
 interface PendingAuth {
+  profileId: string;
   clientId: string;
   redirectUri: string;
   verifier: string;
@@ -17,19 +21,6 @@ interface PendingAuth {
 const PENDING_TTL_MS = 15 * 60 * 1000;
 /** Refresh this long before the access token expires. */
 const REFRESH_MARGIN_MS = 60 * 1000;
-
-/**
- * Spotify only accepts HTTPS redirects, or HTTP on a loopback address for
- * local development.
- */
-export function isValidRedirectUri(value: string): boolean {
-  try {
-    const url = new URL(value);
-    return url.protocol === 'https:' || (url.protocol === 'http:' && ['127.0.0.1', '[::1]'].includes(url.hostname));
-  } catch {
-    return false;
-  }
-}
 
 /**
  * The callback sends the browser back to `returnTo`, so it must be one of the
@@ -46,12 +37,14 @@ export function isAllowedReturnTo(value: string, allowed: string[] | true): bool
   return allowed === true || allowed.includes(url.origin);
 }
 
+const RECONNECT = 'Reconnect it in Settings › Recommendations.';
+
 /**
- * Connects Spotify with the Authorization Code flow and PKCE, so each install
- * needs only its own app's Client ID — no secret to store. Spotify redirects
- * to the API's callback, which finishes the login and sends the browser back
- * to Settings. Pending logins live in memory: an API restart mid-login just
- * means starting again.
+ * Connects a profile's Spotify account with the Authorization Code flow and
+ * PKCE, so each install needs only its own app's Client ID — no secret to
+ * store. Spotify redirects to the API's callback, which finishes the login and
+ * sends the browser back to Settings. Pending logins live in memory: an API
+ * restart mid-login just means starting again.
  */
 @Injectable()
 export class SpotifyAuthService {
@@ -60,17 +53,19 @@ export class SpotifyAuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly spotify: SpotifyClient,
+    private readonly apps: RecommendationAppsService,
   ) {}
 
-  start(input: { clientId: string; redirectUri: string; returnTo: string }): { authorizeUrl: string } {
-    const clientId = input.clientId.trim();
-    const redirectUri = input.redirectUri.trim();
-    if (!/^[0-9a-f]{32}$/i.test(clientId)) {
-      throw new BadRequestException('That doesn’t look like a Spotify Client ID (32 letters and digits)');
+  async start(input: { profileId: string; returnTo: string }): Promise<{ authorizeUrl: string }> {
+    const { spotifyClientId: clientId, spotifyRedirectUri: redirectUri } = await this.apps.get();
+    if (!clientId || !isValidSpotifyClientId(clientId)) {
+      throw new BadRequestException('Add your Spotify app’s Client ID under App credentials first');
     }
-    if (!isValidRedirectUri(redirectUri)) {
-      throw new BadRequestException('Spotify requires an https:// redirect URI');
+    if (!redirectUri || !isValidRedirectUri(redirectUri)) {
+      throw new BadRequestException('Add your Spotify app’s https:// redirect URI under App credentials first');
     }
+    const profile = await this.prisma.recommendationProfile.findUnique({ where: { id: input.profileId } });
+    if (!profile) throw new BadRequestException('No such profile');
     if (!isAllowedReturnTo(input.returnTo, corsOrigins())) {
       throw new BadRequestException(
         `${input.returnTo} isn’t an allowed Downloadarr address. Add its origin to FRONTEND_URL or CORS_ORIGINS.`,
@@ -81,6 +76,7 @@ export class SpotifyAuthService {
     const state = randomBytes(16).toString('hex');
     const { verifier, challenge } = createPkcePair();
     this.pending.set(state, {
+      profileId: input.profileId,
       clientId,
       redirectUri,
       verifier,
@@ -94,12 +90,14 @@ export class SpotifyAuthService {
    * Handles Spotify's redirect. Resolves to where the browser should go next:
    * back to Settings, with the outcome in the query string.
    */
-  async handleCallback(query: { code?: string; state?: string; error?: string }): Promise<{ url: string; connected: boolean }> {
+  async handleCallback(
+    query: { code?: string; state?: string; error?: string },
+  ): Promise<{ url: string; connected: boolean; profileId?: string }> {
     this.prune();
     const pending = query.state ? this.pending.get(query.state) : undefined;
     if (!pending) {
       // Without the pending login there's no known page to return to.
-      throw new BadRequestException('This Spotify login expired or was already used. Start again from Settings › Music.');
+      throw new BadRequestException('This Spotify login expired or was already used. Start again from Settings › Recommendations.');
     }
     this.pending.delete(query.state!);
 
@@ -108,20 +106,20 @@ export class SpotifyAuthService {
       for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
       return url.toString();
     };
-    const failed = (message: string) => ({ url: back({ spotify: 'error', message }), connected: false });
+    const failed = (message: string) => ({ url: back({ spotify: 'error', message }), connected: false, profileId: pending.profileId });
 
     if (query.error || !query.code) {
       return failed(query.error === 'access_denied' ? 'Spotify access was declined' : `Spotify: ${query.error ?? 'no code returned'}`);
     }
     try {
       await this.connect(pending, query.code);
-      return { url: back({ spotify: 'connected' }), connected: true };
+      return { url: back({ spotify: 'connected' }), connected: true, profileId: pending.profileId };
     } catch (error) {
       return failed((error as Error).message);
     }
   }
 
-  private async connect(pending: PendingAuth, code: string): Promise<MusicSource> {
+  private async connect(pending: PendingAuth, code: string): Promise<RecommendationSource> {
     const tokens = await this.spotify.exchangeCode({
       clientId: pending.clientId,
       code,
@@ -138,37 +136,37 @@ export class SpotifyAuthService {
     const data = {
       username: me.id,
       displayName: me.displayName ?? me.id,
-      clientId: pending.clientId,
-      redirectUri: pending.redirectUri,
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken ?? null,
       tokenExpiresAt: tokens.expiresAt,
       enabled: true,
       lastSyncError: null,
     };
-    return this.prisma.musicSource.upsert({
-      where: { provider: MusicSourceProvider.SPOTIFY },
-      create: { provider: MusicSourceProvider.SPOTIFY, ...data },
+    const provider = RecommendationSourceProvider.SPOTIFY;
+    return this.prisma.recommendationSource.upsert({
+      where: { profileId_provider: { profileId: pending.profileId, provider } },
+      create: { profileId: pending.profileId, provider, ...data },
       update: data,
     });
   }
 
   /** A valid access token for the connected account, refreshed if needed. */
-  async accessToken(source: MusicSource): Promise<string> {
+  async accessToken(source: RecommendationSource): Promise<string> {
     const fresh =
       source.accessToken && source.tokenExpiresAt && source.tokenExpiresAt.getTime() - REFRESH_MARGIN_MS > Date.now();
     if (fresh) return source.accessToken!;
-    if (!source.clientId || !source.refreshToken) {
-      throw new Error('Spotify sign-in expired. Reconnect it in Settings › Music.');
+    const { spotifyClientId } = await this.apps.get();
+    if (!spotifyClientId || !source.refreshToken) {
+      throw new Error(`Spotify sign-in expired. ${RECONNECT}`);
     }
 
     let tokens;
     try {
-      tokens = await this.spotify.refresh(source.clientId, source.refreshToken);
+      tokens = await this.spotify.refresh(spotifyClientId, source.refreshToken);
     } catch (err) {
-      throw new Error(`Spotify sign-in expired (${(err as Error).message}). Reconnect it in Settings › Music.`);
+      throw new Error(`Spotify sign-in expired (${(err as Error).message}). ${RECONNECT}`);
     }
-    await this.prisma.musicSource.update({
+    await this.prisma.recommendationSource.update({
       where: { id: source.id },
       data: {
         accessToken: tokens.accessToken,

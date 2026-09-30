@@ -210,3 +210,20 @@ export class SpotifyClient {
     return tracks.slice(0, maxTracks);
   }
 }
+
+/**
+ * Spotify only accepts HTTPS redirects, or HTTP on a loopback address for
+ * local development.
+ */
+export function isValidRedirectUri(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' || (url.protocol === 'http:' && ['127.0.0.1', '[::1]'].includes(url.hostname));
+  } catch {
+    return false;
+  }
+}
+
+export function isValidSpotifyClientId(value: string): boolean {
+  return /^[0-9a-f]{32}$/i.test(value);
+}
