@@ -4,11 +4,12 @@ import { MusicListsService } from './services/music-lists.service';
 import { MusicPreviewService } from './services/music-preview.service';
 import { MusicRadioService } from './services/music-radio.service';
 import { MusicSearchService } from './services/music-search.service';
+import { MusicSimilarService } from './services/music-similar.service';
 import { SpotifyAuthService } from './services/spotify-auth.service';
 import { RecommendationProfilesService } from '../recommendations/services/profiles.service';
 import { RecommendationSyncService } from '../recommendations/services/recommendation-sync.service';
 import { ProfileScopeQueryDto } from '../recommendations/dto/recommendations.dto';
-import { AlbumPreviewQueryDto, ArtistRadioQueryDto, DismissMusicDto, MusicSearchQueryDto } from './dto/music.dto';
+import { AlbumPreviewQueryDto, ArtistRadioQueryDto, DismissMusicDto, MusicSearchQueryDto, SimilarAlbumsQueryDto } from './dto/music.dto';
 
 /**
  * The Music page. Every read takes an optional `profileId`; without one it
@@ -25,6 +26,7 @@ export class MusicController {
     private readonly preview: MusicPreviewService,
     private readonly radio: MusicRadioService,
     private readonly searchService: MusicSearchService,
+    private readonly similarService: MusicSimilarService,
     private readonly spotifyAuth: SpotifyAuthService,
   ) {}
 
@@ -71,6 +73,13 @@ export class MusicController {
     const preview = await this.preview.albumPreview(query.artist, query.album);
     if (!preview) throw new NotFoundException('No preview found for this album');
     return { success: true, data: preview };
+  }
+
+  @Get('similar')
+  @ApiOperation({ summary: 'Albums like this one: Deezer\'s related artists, each with their album closest in genre and era' })
+  async similar(@Query() query: SimilarAlbumsQueryDto) {
+    const profiles = await this.profiles.scope(query.profileId);
+    return { success: true, data: await this.similarService.similar(query.artist, query.album, profiles) };
   }
 
   @Get('radio')

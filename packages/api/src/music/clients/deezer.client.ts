@@ -24,6 +24,7 @@ export interface DeezerAlbum {
   recordType?: string;
   releaseDate?: string;
   coverUrl?: string;
+  genreId?: number;
 }
 
 export interface DeezerTrack {
@@ -56,7 +57,7 @@ export function parseDeezerProfileId(input: string): number | null {
  * Titles of compilations and live records: a poor first listen, and top
  * tracks often land on them because they collect the hits.
  */
-const COMPILATION = /\b(best of|greatest hits|hits|collection|anthology|essentials?|the very best|live|in concert|remixes|epics)\b/i;
+export const COMPILATION = /\b(best of|greatest hits|hits|collection|anthology|essentials?|the very best|live|in concert|remixes|epics)\b/i;
 
 const toAlbum = (a: any): DeezerAlbum => ({
   id: a.id,
@@ -66,6 +67,8 @@ const toAlbum = (a: any): DeezerAlbum => ({
   recordType: a.record_type,
   releaseDate: a.release_date,
   coverUrl: a.cover_xl || a.cover_big || undefined,
+  // -1 is Deezer's "no genre".
+  genreId: a.genre_id > 0 ? a.genre_id : undefined,
 });
 
 const toTrack = (t: any): DeezerTrack => ({
@@ -267,6 +270,12 @@ export class DeezerClient {
   async chartAlbums(limit = 50): Promise<DeezerAlbum[]> {
     const data = await this.get('/chart/0/albums', { limit });
     return (data?.data ?? []).map(toAlbum);
+  }
+
+  /** One album with its genre and release date, which search results leave out. */
+  async album(albumId: number): Promise<DeezerAlbum | null> {
+    const data = await this.get(`/album/${albumId}`);
+    return data?.id ? toAlbum(data) : null;
   }
 
   async albumTracks(albumId: number): Promise<DeezerTrack[]> {

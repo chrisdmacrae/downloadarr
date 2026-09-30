@@ -6,6 +6,7 @@ import { MusicListsService } from './services/music-lists.service';
 import { MusicPreviewService } from './services/music-preview.service';
 import { MusicRadioService } from './services/music-radio.service';
 import { MusicSearchService } from './services/music-search.service';
+import { MusicSimilarService } from './services/music-similar.service';
 import { SpotifyAuthService } from './services/spotify-auth.service';
 import { RecommendationProfilesService } from '../recommendations/services/profiles.service';
 import { RecommendationSyncService } from '../recommendations/services/recommendation-sync.service';
@@ -25,6 +26,7 @@ describe('MusicController Spotify callback', () => {
         { provide: MusicPreviewService, useValue: {} },
         { provide: MusicRadioService, useValue: {} },
         { provide: MusicSearchService, useValue: {} },
+        { provide: MusicSimilarService, useValue: {} },
         { provide: RecommendationProfilesService, useValue: {} },
       ],
     }).compile();

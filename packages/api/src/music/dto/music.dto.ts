@@ -38,6 +38,25 @@ export class MusicSearchQueryDto {
   q: string;
 }
 
+export class SimilarAlbumsQueryDto {
+  @ApiProperty({ example: 'Radiohead' })
+  @IsString()
+  @MinLength(1)
+  @MaxLength(300)
+  artist: string;
+
+  @ApiProperty({ example: 'In Rainbows' })
+  @IsString()
+  @MinLength(1)
+  @MaxLength(300)
+  album: string;
+
+  @ApiPropertyOptional({ description: 'Whose dismissals to respect; omit for everyone' })
+  @IsOptional()
+  @IsString()
+  profileId?: string;
+}
+
 export class ArtistRadioQueryDto {
   @ApiProperty({ example: 'Radiohead' })
   @IsString()
