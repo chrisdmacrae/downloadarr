@@ -17,11 +17,13 @@ import { RecommendationProfilesService } from './services/profiles.service';
 import { RecommendationSourcesService } from './services/sources.service';
 import { RecommendationAppsService } from './services/app-credentials.service';
 import { RecommendationSyncService } from './services/recommendation-sync.service';
+import { TraktClient } from './clients/trakt.client';
+import { TraktAuthService } from './services/trakt-auth.service';
 import { RecommendationsController } from './recommendations.controller';
 
 /**
  * Personal recommendations, per profile: albums from ListenBrainz, Last.fm,
- * Deezer and Spotify listening. Music-specific code lives in src/music; this
+ * Deezer and Spotify listening, and movies and shows from Trakt. Music-specific code lives in src/music; this
  * module owns profiles, accounts and the nightly sync, and wires both together.
  * The sync's @Cron relies on ScheduleModule.forRoot() registered by
  * TorrentsModule.
@@ -43,6 +45,8 @@ import { RecommendationsController } from './recommendations.controller';
     RecommendationSourcesService,
     RecommendationAppsService,
     RecommendationSyncService,
+    TraktClient,
+    TraktAuthService,
   ],
   controllers: [RecommendationsController, MusicController],
 })

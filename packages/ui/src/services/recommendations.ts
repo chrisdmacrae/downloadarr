@@ -34,6 +34,14 @@ export interface RecommendationApps {
   hasTraktClientSecret: boolean
 }
 
+export interface TraktLogin {
+  status: 'pending' | 'connected' | 'expired' | 'denied' | 'error'
+  userCode: string
+  verificationUrl: string
+  expiresAt: string
+  error?: string
+}
+
 export interface RecommendationSyncStatus {
   running: boolean
   currentProfile: string | null
@@ -82,6 +90,17 @@ export const recommendationsApi = {
   /** The API's Spotify callback, as the browser reaches it from here. */
   spotifyCallbackUrl: (): string =>
     new URL(`${api.defaults.baseURL ?? ''}/music/spotify/callback`, window.location.origin).toString(),
+
+  /** Starts a device login; the person enters `userCode` at `verificationUrl`. */
+  startTraktLogin: async (profileId: string): Promise<TraktLogin> =>
+    (await api.post(`/recommendations/profiles/${profileId}/trakt/device`)).data.data,
+
+  getTraktLogin: async (profileId: string): Promise<TraktLogin | null> =>
+    (await api.get(`/recommendations/profiles/${profileId}/trakt/device`)).data.data,
+
+  cancelTraktLogin: async (profileId: string): Promise<void> => {
+    await api.delete(`/recommendations/profiles/${profileId}/trakt/device`)
+  },
 
   startSync: async (profileId?: string): Promise<RecommendationSyncStatus> =>
     (await api.post('/recommendations/sync', undefined, { params: { profileId } })).data.data,

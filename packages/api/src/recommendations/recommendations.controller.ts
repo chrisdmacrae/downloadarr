@@ -6,6 +6,7 @@ import { RecommendationSourcesService } from './services/sources.service';
 import { RecommendationAppsService } from './services/app-credentials.service';
 import { RecommendationSyncService } from './services/recommendation-sync.service';
 import { SpotifyAuthService } from '../music/services/spotify-auth.service';
+import { TraktAuthService } from './services/trakt-auth.service';
 import {
   ProfileNameDto,
   ProfileScopeQueryDto,
@@ -25,6 +26,7 @@ export class RecommendationsController {
     private readonly apps: RecommendationAppsService,
     private readonly syncService: RecommendationSyncService,
     private readonly spotifyAuth: SpotifyAuthService,
+    private readonly traktAuth: TraktAuthService,
   ) {}
 
   @Get('profiles')
@@ -81,7 +83,12 @@ export class RecommendationsController {
     @Param('profileId') profileId: string,
     @Param('provider', providerPipe) provider: RecommendationSourceProvider,
   ) {
-    await this.sources.remove(profileId, provider);
+    if (provider === RecommendationSourceProvider.TRAKT) {
+      // Also revokes the token, so the connection disappears from Trakt's side.
+      await this.traktAuth.disconnect(profileId);
+    } else {
+      await this.sources.remove(profileId, provider);
+    }
     return { success: true };
   }
 
@@ -101,6 +108,26 @@ export class RecommendationsController {
   @ApiOperation({ summary: 'Start a Spotify login for a profile; returns the Spotify address to open' })
   async startSpotifyAuth(@Param('profileId') profileId: string, @Body() dto: StartSpotifyAuthDto) {
     return { success: true, data: await this.spotifyAuth.start({ profileId, returnTo: dto.returnTo }) };
+  }
+
+  @Post('profiles/:profileId/trakt/device')
+  @ApiOperation({ summary: 'Start a Trakt device login for a profile; returns the code to enter at trakt.tv/activate' })
+  async startTraktLogin(@Param('profileId') profileId: string) {
+    const login = await this.traktAuth.start(profileId, () => void this.syncService.sync(profileId));
+    return { success: true, data: login };
+  }
+
+  @Get('profiles/:profileId/trakt/device')
+  @ApiOperation({ summary: 'How a profile\'s Trakt device login is going' })
+  traktLoginStatus(@Param('profileId') profileId: string) {
+    return { success: true, data: this.traktAuth.status(profileId) };
+  }
+
+  @Delete('profiles/:profileId/trakt/device')
+  @ApiOperation({ summary: 'Abandon a profile\'s Trakt device login' })
+  cancelTraktLogin(@Param('profileId') profileId: string) {
+    this.traktAuth.cancel(profileId);
+    return { success: true };
   }
 
   @Post('sync')

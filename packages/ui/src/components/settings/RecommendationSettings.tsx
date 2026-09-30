@@ -31,6 +31,7 @@ import type { RecommendationProfile } from '@/services/recommendations'
 import { AppCredentialsCard } from './AppCredentialsCard'
 import { SourceCard, USERNAME_PROVIDERS } from './SourceCard'
 import { SpotifySourceCard } from './SpotifySourceCard'
+import { TraktSourceCard } from './TraktSourceCard'
 
 /**
  * Settings › Recommendations: the apps profiles sign in through, each
@@ -198,6 +199,7 @@ function ProfileAccounts({ profile, canDelete }: { profile: RecommendationProfil
         />
       ))}
       <SpotifySourceCard profileId={profile.id} source={own.find((s) => s.provider === 'SPOTIFY')} />
+      <TraktSourceCard profileId={profile.id} source={own.find((s) => s.provider === 'TRAKT')} />
     </div>
   )
 }
