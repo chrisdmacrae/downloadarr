@@ -1,12 +1,6 @@
 import { IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
-export class SpotifyCallbackQueryDto {
-  @ApiPropertyOptional() @IsOptional() @IsString() code?: string;
-  @ApiPropertyOptional() @IsOptional() @IsString() state?: string;
-  @ApiPropertyOptional() @IsOptional() @IsString() error?: string;
-}
-
 export class DismissMusicDto {
   @ApiProperty({ example: 'Radiohead' })
   @IsString()

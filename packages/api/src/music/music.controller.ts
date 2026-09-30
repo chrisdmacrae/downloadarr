@@ -7,7 +7,7 @@ import { SpotifyAuthService } from './services/spotify-auth.service';
 import { RecommendationProfilesService } from '../recommendations/services/profiles.service';
 import { RecommendationSyncService } from '../recommendations/services/recommendation-sync.service';
 import { ProfileScopeQueryDto } from '../recommendations/dto/recommendations.dto';
-import { AlbumPreviewQueryDto, ArtistRadioQueryDto, DismissMusicDto, SpotifyCallbackQueryDto } from './dto/music.dto';
+import { AlbumPreviewQueryDto, ArtistRadioQueryDto, DismissMusicDto } from './dto/music.dto';
 
 /**
  * The Music page. Every read takes an optional `profileId`; without one it
@@ -31,8 +31,14 @@ export class MusicController {
   @Get('spotify/callback')
   @Redirect()
   @ApiOperation({ summary: 'Where Spotify sends you after signing in; redirects back to Settings' })
-  async spotifyCallback(@Query() query: SpotifyCallbackQueryDto) {
-    const { url, connected, profileId } = await this.spotifyAuth.handleCallback(query);
+  // Named parameters rather than a DTO: Spotify adds its own (like `ubi`), and
+  // the global pipe would reject a DTO with properties it doesn't declare.
+  async spotifyCallback(
+    @Query('code') code?: string,
+    @Query('state') state?: string,
+    @Query('error') error?: string,
+  ) {
+    const { url, connected, profileId } = await this.spotifyAuth.handleCallback({ code, state, error });
     if (connected) void this.syncService.sync(profileId);
     return { url, statusCode: 302 };
   }
