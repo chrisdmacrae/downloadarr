@@ -16,7 +16,7 @@ import type { OrganizationRule } from '@/services/api'
 import { OrganizeQueue } from '@/components/OrganizeQueue'
 
 interface RuleFormData {
-  contentType: 'MOVIE' | 'TV_SHOW' | 'GAME'
+  contentType: 'MOVIE' | 'TV_SHOW' | 'GAME' | 'MUSIC'
   isDefault: boolean
   isActive: boolean
   folderNamePattern: string
@@ -48,12 +48,13 @@ export function OrganizationSection() {
 
   // Path preview tool state
   const [previewData, setPreviewData] = useState({
-    contentType: 'MOVIE' as 'MOVIE' | 'TV_SHOW' | 'GAME',
+    contentType: 'MOVIE' as 'MOVIE' | 'TV_SHOW' | 'GAME' | 'MUSIC',
     title: '',
     year: '',
     season: '',
     episode: '',
     platform: '',
+    artist: '',
     quality: '',
     format: '',
     edition: '',
@@ -105,6 +106,7 @@ export function OrganizationSection() {
       .replace(/\{season\}/g, data.season ? String(data.season).padStart(2, '0') : '01')
       .replace(/\{episode\}/g, data.episode ? String(data.episode).padStart(2, '0') : '01')
       .replace(/\{platform\}/g, data.platform || (isGame ? 'Platform' : ''))
+      .replace(/\{artist\}/g, data.artist || 'Example Artist')
       .replace(/\{quality\}/g, isGame ? '' : (data.quality || '1080p'))
       .replace(/\{format\}/g, data.format || (isGame ? 'NTSC-U' : 'BluRay'))
       .replace(/\{edition\}/g, data.edition || '')
@@ -226,6 +228,8 @@ export function OrganizationSection() {
         switch (contentType) {
           case 'GAME':
             return '.zip' // or could be .iso, .rom, etc.
+          case 'MUSIC':
+            return '.flac'
           case 'MOVIE':
           case 'TV_SHOW':
           default:
@@ -385,7 +389,7 @@ export function OrganizationSection() {
     }
   }
 
-  const getDefaultPatterns = (contentType: 'MOVIE' | 'TV_SHOW' | 'GAME') => {
+  const getDefaultPatterns = (contentType: 'MOVIE' | 'TV_SHOW' | 'GAME' | 'MUSIC') => {
     switch (contentType) {
       case 'MOVIE':
         return {
@@ -403,10 +407,15 @@ export function OrganizationSection() {
           folderNamePattern: '{title} ({platform})',
           fileNamePattern: '{filename}',
         }
+      case 'MUSIC':
+        return {
+          folderNamePattern: '{artist}/{title} ({year})',
+          fileNamePattern: '{filename}',
+        }
     }
   }
 
-  const handleContentTypeChange = (contentType: 'MOVIE' | 'TV_SHOW' | 'GAME') => {
+  const handleContentTypeChange = (contentType: 'MOVIE' | 'TV_SHOW' | 'GAME' | 'MUSIC') => {
     const patterns = getDefaultPatterns(contentType)
     setFormData(prev => ({
       ...prev,
@@ -421,6 +430,7 @@ export function OrganizationSection() {
       case 'MOVIE': return 'movie' as const
       case 'TV_SHOW': return 'tv' as const
       case 'GAME': return 'game' as const
+      case 'MUSIC': return 'game' as const
       default: return 'other' as const
     }
   }
@@ -430,6 +440,7 @@ export function OrganizationSection() {
       case 'MOVIE': return 'Movie'
       case 'TV_SHOW': return 'TV Show'
       case 'GAME': return 'Game'
+      case 'MUSIC': return 'Music'
       default: return contentType
     }
   }
@@ -684,6 +695,7 @@ export function OrganizationSection() {
               <h4 className="font-medium mb-2">Games</h4>
               <ul className="space-y-1 text-fg-muted">
                 <li><code>{'{platform}'}</code> - Game platform</li>
+                <li><code>{'{artist}'}</code> - Album artist (music; <code>/</code> in a music pattern makes a subfolder)</li>
               </ul>
             </div>
           </div>
@@ -811,7 +823,7 @@ export function OrganizationSection() {
                 value={previewData.contentType}
                 onChange={(e) => setPreviewData(prev => ({
                   ...prev,
-                  contentType: e.target.value as 'MOVIE' | 'TV_SHOW' | 'GAME',
+                  contentType: e.target.value as 'MOVIE' | 'TV_SHOW' | 'GAME' | 'MUSIC',
                   // Reset platform when changing content type
                   platform: e.target.value === 'GAME' ? prev.platform : ''
                 }))}
@@ -819,6 +831,7 @@ export function OrganizationSection() {
                 <option value="MOVIE">Movie</option>
                 <option value="TV_SHOW">TV Show</option>
                 <option value="GAME">Game</option>
+                <option value="MUSIC">Music</option>
               </select>
             </div>
 
@@ -899,6 +912,19 @@ export function OrganizationSection() {
               </>
             )}
 
+            {previewData.contentType === 'MUSIC' && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Artist</label>
+                <input
+                  type="text"
+                  placeholder="Radiohead"
+                  className="h-10 w-full rounded-control border border-subtle bg-surface-input px-3 text-sm text-fg-primary transition-[background-color,border-color,box-shadow] duration-fast ease-standard hover:border-strong focus:border-[color:var(--accent)] focus:shadow-[0_0_0_3px_var(--brand-tint-16)] focus:outline-none"
+                  value={previewData.artist}
+                  onChange={(e) => setPreviewData(prev => ({ ...prev, artist: e.target.value }))}
+                />
+              </div>
+            )}
+
             {previewData.contentType === 'GAME' && (
               <div className="space-y-2">
                 <label className="text-sm font-medium">Platform</label>
@@ -974,6 +1000,12 @@ export function OrganizationSection() {
                     platform: 'nintendo-nes',
                     format: 'NTSC-U',
                     filename: 'Super Mario Bros (NES).zip'
+                  },
+                  MUSIC: {
+                    title: 'In Rainbows',
+                    artist: 'Radiohead',
+                    year: '2007',
+                    filename: '01 - 15 Step.flac'
                   }
                 }
 
@@ -1034,7 +1066,7 @@ export function OrganizationSection() {
               <Label htmlFor="contentType">Content Type</Label>
               <Select
                 value={formData.contentType}
-                onValueChange={(value: 'MOVIE' | 'TV_SHOW' | 'GAME') => handleContentTypeChange(value)}
+                onValueChange={(value: 'MOVIE' | 'TV_SHOW' | 'GAME' | 'MUSIC') => handleContentTypeChange(value)}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -1043,6 +1075,7 @@ export function OrganizationSection() {
                   <SelectItem value="MOVIE">Movie</SelectItem>
                   <SelectItem value="TV_SHOW">TV Show</SelectItem>
                   <SelectItem value="GAME">Game</SelectItem>
+                  <SelectItem value="MUSIC">Music</SelectItem>
                 </SelectContent>
               </Select>
             </div>

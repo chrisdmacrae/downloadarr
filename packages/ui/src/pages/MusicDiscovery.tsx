@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Loader2, Music, RefreshCw, Settings as SettingsIcon } from 'lucide-react'
 
@@ -14,6 +15,8 @@ import {
   useMusicSyncStatus,
   useStartMusicSync,
 } from '@/hooks/useMusic'
+import { useTorrentRequests } from '@/hooks/useTorrentRequests'
+import { apiService } from '@/services/api'
 import type { MusicList, MusicRecommendation } from '@/services/music'
 
 const RAILS: Array<{ list: MusicList; title: string; caption: (album: MusicRecommendation) => string | undefined }> = [
@@ -44,7 +47,7 @@ const RAILS: Array<{ list: MusicList; title: string; caption: (album: MusicRecom
   },
   {
     list: 'SAVED_ALBUMS',
-    title: 'Saved on Deezer',
+    title: 'Saved albums',
     caption: (album) => (album.releaseDate ? album.releaseDate.slice(0, 4) : undefined),
   },
 ]
@@ -86,6 +89,31 @@ function MusicDiscoveryContent() {
   const { data: syncStatus } = useMusicSyncStatus()
   const startSync = useStartMusicSync()
   const dismiss = useDismissMusic()
+  const { getRequestForAlbum, refreshRequests } = useTorrentRequests()
+  const [requesting, setRequesting] = useState<string | null>(null)
+
+  const onRequest = async (album: MusicRecommendation) => {
+    setRequesting(album.id)
+    try {
+      await apiService.requestMusicDownload({
+        title: album.albumTitle,
+        artist: album.artistName,
+        musicbrainzId: album.releaseGroupMbid ?? undefined,
+        year: album.releaseDate ? Number(album.releaseDate.slice(0, 4)) || undefined : undefined,
+        posterUrl: album.coverUrl ?? undefined,
+      })
+      toast({ title: 'Album requested', description: `${album.albumTitle} by ${album.artistName}` })
+      refreshRequests()
+    } catch (error: any) {
+      toast({
+        title: 'Couldn’t request album',
+        description: error?.response?.data?.message ?? error?.message,
+        variant: 'destructive',
+      })
+    } finally {
+      setRequesting(null)
+    }
+  }
 
   const syncing = Boolean(syncStatus?.running) || startSync.isPending
   const connected = (sources ?? []).filter((s) => s.enabled)
@@ -116,7 +144,7 @@ function MusicDiscoveryContent() {
       description={
         discover?.topArtists.length
           ? `Built from your listening to ${joinNames(discover.topArtists.slice(0, 4).map((a) => a.name))} and more`
-          : 'Recommendations built from your ListenBrainz, Last.fm and Deezer listening'
+          : 'Recommendations built from your ListenBrainz, Last.fm, Deezer and Spotify listening'
       }
       actions={
         connected.length > 0 && (
@@ -158,7 +186,7 @@ function MusicDiscoveryContent() {
           <EmptyState
             icon={<Music />}
             title="Connect your listening history"
-            description="Connect ListenBrainz, Last.fm or a public Deezer profile and Downloadarr will recommend new artists and albums based on what you play."
+            description="Connect ListenBrainz, Last.fm, Spotify or a public Deezer profile and Downloadarr will recommend new artists and albums based on what you play."
             action={<Button onClick={() => navigate('/settings/music')}>Connect a source</Button>}
           />
         ) : !hasAny && syncing ? (
@@ -195,6 +223,9 @@ function MusicDiscoveryContent() {
                     album={album}
                     caption={caption(album)}
                     onDismiss={(scope) => onDismiss(album, scope)}
+                    request={getRequestForAlbum(album.artistName, album.albumTitle)}
+                    onRequest={() => onRequest(album)}
+                    requesting={requesting === album.id}
                   />
                 ))}
               </Rail>

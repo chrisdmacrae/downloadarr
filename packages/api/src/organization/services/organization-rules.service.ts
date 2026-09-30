@@ -265,6 +265,11 @@ export class OrganizationRulesService {
         folderNamePattern = '{title} ({platform})';
         fileNamePattern = '{filename}';
         break;
+      case ContentType.MUSIC:
+        // Artist/Album (Year): the layout Jellyfin, Plex and Navidrome expect.
+        folderNamePattern = '{artist}/{title} ({year})';
+        fileNamePattern = '{filename}';
+        break;
       default:
         folderNamePattern = '{title}';
         fileNamePattern = '{filename}';
@@ -296,6 +301,8 @@ export class OrganizationRulesService {
         return settings.tvShowsPath || `${settings.libraryPath}/tv-shows`;
       case ContentType.GAME:
         return settings.gamesPath || `${settings.libraryPath}/games`;
+      case ContentType.MUSIC:
+        return settings.musicPath || `${settings.libraryPath}/music`;
       default:
         return settings.libraryPath;
     }
@@ -304,9 +311,20 @@ export class OrganizationRulesService {
   private generateFolderPath(context: OrganizationContext, rule: OrganizationRule, basePath: string): string {
     let folderPath = basePath;
 
-    // Generate main folder name
-    const mainFolderName = this.applyPattern(rule.folderNamePattern, context);
-    folderPath = `${folderPath}/${this.sanitizePath(mainFolderName)}`;
+    if (context.contentType === ContentType.MUSIC) {
+      // Music patterns nest ("{artist}/{title}"). Split the pattern before
+      // filling it in, so a slash in a name ("AC/DC") stays in its level, and
+      // drop the "()" an unknown year leaves behind.
+      for (const segmentPattern of rule.folderNamePattern.split('/')) {
+        const segment = this.applyPattern(segmentPattern, context).replace(/\(\s*\)/g, '');
+        const clean = this.sanitizePath(segment).trim();
+        if (clean) folderPath = `${folderPath}/${clean}`;
+      }
+      if (context.subfolder) folderPath = `${folderPath}/${this.sanitizePath(context.subfolder)}`;
+    } else {
+      const mainFolderName = this.applyPattern(rule.folderNamePattern, context);
+      folderPath = `${folderPath}/${this.sanitizePath(mainFolderName)}`;
+    }
 
     // Add season folder for TV shows
     if (context.contentType === ContentType.TV_SHOW && context.season && rule.seasonFolderPattern) {
@@ -344,6 +362,7 @@ export class OrganizationRulesService {
       .replace(/{episode}/g, context.episode?.toString() || '')
       .replace(/{episodeNumber}/g, context.episode?.toString().padStart(2, '0') || '')
       .replace(/{platform}/g, context.platform || '')
+      .replace(/{artist}/g, context.artist || 'Unknown Artist')
       .replace(/{quality}/g, context.quality || '')
       .replace(/{format}/g, context.format || '')
       .replace(/{edition}/g, context.edition || '')

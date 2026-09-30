@@ -22,6 +22,11 @@ export class UpdateOrganizationSettingsDto {
   @IsOptional()
   gamesPath?: string;
 
+  @ApiProperty({ description: 'Music path override' })
+  @IsString()
+  @IsOptional()
+  musicPath?: string;
+
   @ApiProperty({ description: 'Whether to organize files on download completion' })
   @IsBoolean()
   @IsOptional()

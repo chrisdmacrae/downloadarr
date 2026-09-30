@@ -33,6 +33,7 @@ export class InitializationService implements OnModuleInit {
       'movies',
       'tv-shows',
       'games',
+      'music',
       'other'
     ];
 
@@ -64,7 +65,8 @@ export class InitializationService implements OnModuleInit {
     const subdirectories = [
       'movies',
       'tv-shows',
-      'games'
+      'games',
+      'music'
     ];
 
     this.logger.log(`📚 Creating library directories in: ${libraryPath}`);
@@ -100,7 +102,7 @@ export class InitializationService implements OnModuleInit {
 
     try {
       // Check download directories
-      const downloadSubdirs = ['movies', 'tv-shows', 'games', 'other'];
+      const downloadSubdirs = ['movies', 'tv-shows', 'games', 'music', 'other'];
       for (const subdir of downloadSubdirs) {
         const fullPath = join(downloadPath, subdir);
         await fs.access(fullPath, fs.constants.F_OK | fs.constants.W_OK);
@@ -113,7 +115,7 @@ export class InitializationService implements OnModuleInit {
 
     try {
       // Check library directories
-      const librarySubdirs = ['movies', 'tv-shows', 'games'];
+      const librarySubdirs = ['movies', 'tv-shows', 'games', 'music'];
       for (const subdir of librarySubdirs) {
         const fullPath = join(libraryPath, subdir);
         await fs.access(fullPath, fs.constants.F_OK | fs.constants.W_OK);

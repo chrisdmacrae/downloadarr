@@ -151,6 +151,16 @@ export function useTorrentRequests() {
     })
   }
 
+  /** The open request for an album, matched on artist and album title. */
+  const getRequestForAlbum = (artist: string, album: string): TorrentRequest | undefined => {
+    return requests.find(
+      (request) =>
+        request.contentType === 'MUSIC' &&
+        request.title.toLowerCase() === album.toLowerCase() &&
+        (request.artist ?? '').toLowerCase() === artist.toLowerCase()
+    )
+  }
+
   const getRequestsByStatus = (status: TorrentRequest['status']) => {
     return requests.filter(request => request.status === status)
   }
@@ -220,6 +230,7 @@ export function useTorrentRequests() {
     getRequestForItem,
     getRequestForShow,
     getRequestForGame,
+    getRequestForAlbum,
     getRequestsByStatus,
     refreshRequests,
     loadMore,

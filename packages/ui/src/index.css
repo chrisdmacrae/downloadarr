@@ -103,6 +103,7 @@
     --type-movie: var(--tone-brightest);
     --type-tv: var(--tone-bright);
     --type-game: var(--tone-mid);
+    --type-music: var(--tone-mid);
     --type-other: var(--tone-dim);
 
     /* Protection gradients — poster and hero legibility */

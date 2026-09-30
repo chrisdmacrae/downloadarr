@@ -4,6 +4,8 @@ import { MusicRecommendationList, MusicSource, MusicSourceProvider } from '../..
 import { ListenBrainzClient } from '../clients/listenbrainz.client';
 import { LastFmClient } from '../clients/lastfm.client';
 import { DeezerClient } from '../clients/deezer.client';
+import { SpotifyClient } from '../clients/spotify.client';
+import { SpotifyAuthService } from './spotify-auth.service';
 import { MusicSourcesService } from './music-sources.service';
 import { TasteProfile, TasteProfileArtist } from './taste-profile.service';
 import { albumDismissalKey, albumKey, artistDismissalKey, coverArtUrl, nameKey } from '../music-keys';
@@ -41,6 +43,8 @@ export class MusicRecommenderService {
     private readonly listenBrainz: ListenBrainzClient,
     private readonly lastFm: LastFmClient,
     private readonly deezer: DeezerClient,
+    private readonly spotify: SpotifyClient,
+    private readonly spotifyAuth: SpotifyAuthService,
     private readonly sourcesService: MusicSourcesService,
   ) {}
 
@@ -51,6 +55,7 @@ export class MusicRecommenderService {
     const lbToken = lb?.apiKey ?? null;
     const dz = sources.find((s) => s.provider === MusicSourceProvider.DEEZER && profile.synced.includes(s.provider));
     const deezerUserId = dz ? Number(dz.username) : null;
+    const sp = sources.find((s) => s.provider === MusicSourceProvider.SPOTIFY && profile.synced.includes(s.provider));
 
     const seeds = profile.artists.slice(0, SEED_COUNT);
     const deezerIds = await this.resolveDeezerIds(seeds);
@@ -64,7 +69,7 @@ export class MusicRecommenderService {
       lb ? this.weeklyPicks(lb.username) : Promise.resolve([]),
       this.mostPlayed(lb?.username, lf?.username, lfKey, deezerUserId),
       deezerUserId ? this.flow(deezerUserId) : Promise.resolve([]),
-      deezerUserId ? this.savedAlbums(deezerUserId) : Promise.resolve([]),
+      this.savedAlbums(deezerUserId, sp),
     ]);
 
     return lists.flatMap((list) => {
@@ -274,21 +279,39 @@ export class MusicRecommenderService {
     return [...albums.values()];
   }
 
-  /** Albums saved on Deezer, most recently saved first. */
-  private async savedAlbums(userId: number): Promise<RecommendedAlbum[]> {
-    const albums = (await this.attempt('Deezer saved albums', () => this.deezer.userFavoriteAlbums(userId))) ?? [];
-    return albums
-      .filter((album) => album.artistName)
-      .map((album, i) => ({
-        list: MusicRecommendationList.SAVED_ALBUMS,
-        artistName: album.artistName!,
-        albumTitle: album.title,
-        releaseDate: album.releaseDate,
-        coverUrl: album.coverUrl,
-        score: rankSimilarity(i, albums.length),
-        reasons: [],
-        sources: ['deezer'],
-      }));
+  /**
+   * Albums saved on Deezer and Spotify, most recently saved first. Each list
+   * is ranked on its own and then interleaved, so neither buries the other.
+   */
+  private async savedAlbums(deezerUserId: number | null, spotifySource?: MusicSource): Promise<RecommendedAlbum[]> {
+    const lists: Array<{ source: string; albums: Array<{ artistName?: string; title: string; releaseDate?: string; coverUrl?: string }> }> = [];
+    if (deezerUserId) {
+      const albums = await this.attempt('Deezer saved albums', () => this.deezer.userFavoriteAlbums(deezerUserId));
+      lists.push({ source: 'deezer', albums: albums ?? [] });
+    }
+    if (spotifySource) {
+      const albums = await this.attempt('Spotify saved albums', async () =>
+        this.spotify.savedAlbums(await this.spotifyAuth.accessToken(spotifySource)),
+      );
+      lists.push({ source: 'spotify', albums: albums ?? [] });
+    }
+
+    return lists
+      .flatMap(({ source, albums }) =>
+        albums
+          .filter((album) => album.artistName)
+          .map((album, i) => ({
+            list: MusicRecommendationList.SAVED_ALBUMS,
+            artistName: album.artistName!,
+            albumTitle: album.title,
+            releaseDate: album.releaseDate,
+            coverUrl: album.coverUrl,
+            score: rankSimilarity(i, albums.length),
+            reasons: [],
+            sources: [source],
+          })),
+      )
+      .sort((a, b) => b.score - a.score);
   }
 
   /** Your most played albums over the past year, across providers. */

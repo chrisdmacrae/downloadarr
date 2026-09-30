@@ -43,7 +43,7 @@ The Prisma client is generated to `packages/api/generated/prisma` (not `node_mod
 
 ### The request lifecycle (core domain)
 
-The heart of the app is `packages/api/src/torrents/`: users create a `RequestedTorrent` (movie, TV show, or game), and background cron loops drive it through a **state machine** to completion. Do not set `status` directly — transitions are validated by `state-machine/request-state-machine.ts`:
+The heart of the app is `packages/api/src/torrents/`: users create a `RequestedTorrent` (movie, TV show, game, or music album), and background cron loops drive it through a **state machine** to completion. Do not set `status` directly — transitions are validated by `state-machine/request-state-machine.ts`:
 
 ```
 PENDING → SEARCHING → FOUND → DOWNLOADING → COMPLETED (terminal)
@@ -71,7 +71,7 @@ Background work is **cron-driven via @nestjs/schedule**, not BullMQ (despite REA
 - `initialization/` — creates `movies/`, `tv-shows/`, `games/`, `other/` subdirs under downloads and library paths on boot
 - `vpn/`, `docker/`, `system/` — VPN connectivity checks, Docker container control, health/version endpoints
 - `requests/` — aggregated request views for the UI
-- `music/` — music discovery: ListenBrainz/Last.fm listening history and a public Deezer profile (read by user ID, no OAuth) → taste profile → cached recommendation lists (`MusicRecommendation`), rebuilt nightly by `music-sync.service.ts`; Deezer's public API supplies related artists and 30s previews. Discovery only — there is no music request type yet
+- `music/` — music discovery: ListenBrainz/Last.fm listening history, a public Deezer profile (read by user ID, no OAuth) and Spotify (OAuth with PKCE via `music/spotify/callback`, which needs an HTTPS address) → taste profile → cached recommendation lists (`MusicRecommendation`), rebuilt nightly by `music-sync.service.ts`; Deezer's public API supplies related artists and 30s previews. The Music page requests albums as `ContentType.MUSIC` (`title` is the album, `artist` is set), searched in Prowlarr's Audio category and ranked by `discovery/services/music-release-ranker.ts`
 
 Swagger docs are served at `/api` on the API (port 3001). Global `ValidationPipe` with `whitelist: true, forbidNonWhitelisted: true` — DTO properties must be declared or requests 400.
 
@@ -83,7 +83,7 @@ Single axios client in `src/services/api.ts` (base URL from `VITE_API_URL`, defa
 
 - **VPN posture**: with the VPN overlay (`docker-compose.vpn.yml`), only **aria2** (and the vpn-ip-monitor) run with `network_mode: service:vpn` — download traffic goes through the VPN; the API, frontend, Prowlarr, etc. keep normal networking.
 - **Onboarding is mandatory**: features assume `AppConfiguration.onboardingCompleted`; API keys for discovery services come from the DB config, with env vars as fallback.
-- **File organization naming** is specified in `docs/prompts/ORGANIZATION-RULES.md`: movies `{title} ({year})/`, TV `{title} ({year})/Season {n}/{title} - SxxExx - ...`, games `{title} ({platform})/`. Organization rules per content type are user-editable (`OrganizationRule` model); games platforms come from `config/game-platforms.yml`.
+- **File organization naming** is specified in `docs/prompts/ORGANIZATION-RULES.md`: movies `{title} ({year})/`, TV `{title} ({year})/Season {n}/{title} - SxxExx - ...`, games `{title} ({platform})/`, music `{artist}/{title} ({year})/` (music patterns may contain `/` to nest folders). Organization rules per content type are user-editable (`OrganizationRule` model); games platforms come from `config/game-platforms.yml`.
 - **CORS**: allowed origins are `FRONTEND_URL` plus optional `CORS_ORIGINS` (both comma-separated; `*` allows any), resolved by `common/utils/cors-origins.ts` for both `main.ts` and the WebSocket gateway (see `docs/CORS_CONFIGURATION.md`).
 - **Deployment**: images are published to GHCR by `.github/workflows/build-and-deploy.yml` on pushes to `main` and `v*` tags; end users install via `setup.sh` + `docker-compose.yml`. Changes to compose files affect real installs.
 - `docs/prompts/` contains design docs (requests system, organization rules, reverse indexing) that explain intent behind these subsystems.

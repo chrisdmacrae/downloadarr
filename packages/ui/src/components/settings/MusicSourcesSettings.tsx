@@ -16,6 +16,7 @@ import {
   useUndoMusicDismissal,
 } from '@/hooks/useMusic'
 import type { MusicSource, MusicSourceProvider } from '@/services/music'
+import { SpotifySourceCard } from './SpotifySourceCard'
 
 interface ProviderCopy {
   provider: MusicSourceProvider
@@ -197,6 +198,7 @@ export function MusicSourcesSettings() {
       {PROVIDERS.map((copy) => (
         <SourceCard key={copy.provider} copy={copy} source={sources?.find((s) => s.provider === copy.provider)} />
       ))}
+      <SpotifySourceCard source={sources?.find((s) => s.provider === 'SPOTIFY')} />
 
       <Card>
         <CardHeader className="pb-3">

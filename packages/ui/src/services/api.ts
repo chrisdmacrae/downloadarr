@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { cloudflareAccessHeaders } from './cloudflare';
 
 // Runtime configuration
 interface RuntimeConfig {
@@ -43,6 +44,16 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  // Send the Cloudflare Access cookie when the API is on another origin.
+  withCredentials: true,
+});
+
+// Read per request: Access refreshes the token as the session renews.
+api.interceptors.request.use((config) => {
+  for (const [name, value] of Object.entries(cloudflareAccessHeaders())) {
+    config.headers.set(name, value);
+  }
+  return config;
 });
 
 // Types for API responses
@@ -219,6 +230,7 @@ export interface OrganizationSettings {
   moviesPath?: string;
   tvShowsPath?: string;
   gamesPath?: string;
+  musicPath?: string;
   organizeOnComplete: boolean;
   replaceExistingFiles: boolean;
   extractArchives: boolean;
@@ -231,7 +243,7 @@ export interface OrganizationSettings {
 
 export interface OrganizationRule {
   id: string;
-  contentType: 'MOVIE' | 'TV_SHOW' | 'GAME';
+  contentType: 'MOVIE' | 'TV_SHOW' | 'GAME' | 'MUSIC';
   isDefault: boolean;
   isActive: boolean;
   folderNamePattern: string;
@@ -244,7 +256,7 @@ export interface OrganizationRule {
 }
 
 export interface CreateOrganizationRuleDto {
-  contentType: 'MOVIE' | 'TV_SHOW' | 'GAME';
+  contentType: 'MOVIE' | 'TV_SHOW' | 'GAME' | 'MUSIC';
   isDefault?: boolean;
   isActive?: boolean;
   folderNamePattern: string;
@@ -257,7 +269,7 @@ export interface CreateOrganizationRuleDto {
 export interface OrganizeQueueItem {
   id: string;
   folderPath: string;
-  contentType: 'MOVIE' | 'TV_SHOW' | 'GAME';
+  contentType: 'MOVIE' | 'TV_SHOW' | 'GAME' | 'MUSIC';
   detectedTitle?: string;
   detectedYear?: number;
   detectedSeason?: number;
@@ -306,7 +318,7 @@ export interface FileMetadata {
 // Torrent Request Types
 export interface TorrentRequest {
   id: string;
-  contentType: 'MOVIE' | 'TV_SHOW' | 'GAME';
+  contentType: 'MOVIE' | 'TV_SHOW' | 'GAME' | 'MUSIC';
   title: string;
   year?: number;
   season?: number;
@@ -321,6 +333,9 @@ export interface TorrentRequest {
   igdbId?: number;
   platform?: string;
   genre?: string;
+  // Music-specific fields: title is the album
+  artist?: string;
+  musicbrainzId?: string;
   status: 'PENDING' | 'SEARCHING' | 'FOUND' | 'DOWNLOADING' | 'COMPLETED' | 'FAILED' | 'CANCELLED' | 'EXPIRED';
   priority: number;
   preferredQualities: string[];
@@ -344,7 +359,7 @@ export interface HttpDownloadRequest {
   id: string;
   url: string;
   filename?: string;
-  contentType?: 'MOVIE' | 'TV_SHOW' | 'GAME';
+  contentType?: 'MOVIE' | 'TV_SHOW' | 'GAME' | 'MUSIC';
   title?: string;
   year?: number;
   imdbId?: string;
@@ -352,6 +367,9 @@ export interface HttpDownloadRequest {
   igdbId?: number;
   platform?: string;
   genre?: string;
+  // Music-specific fields: title is the album
+  artist?: string;
+  musicbrainzId?: string;
   season?: number;
   episode?: number;
   posterUrl?: string;
@@ -380,7 +398,7 @@ export interface CreateHttpDownloadRequestDto {
 }
 
 export interface MatchMetadataDto {
-  contentType: 'MOVIE' | 'TV_SHOW' | 'GAME';
+  contentType: 'MOVIE' | 'TV_SHOW' | 'GAME' | 'MUSIC';
   title: string;
   year?: number;
   imdbId?: string;
@@ -388,6 +406,9 @@ export interface MatchMetadataDto {
   igdbId?: number;
   platform?: string;
   genre?: string;
+  // Music-specific fields: title is the album
+  artist?: string;
+  musicbrainzId?: string;
   season?: number;
   episode?: number;
   posterUrl?: string;
@@ -397,7 +418,7 @@ export interface MatchMetadataDto {
 export interface AggregatedRequest {
   id: string;
   type: 'torrent' | 'http';
-  contentType: 'MOVIE' | 'TV_SHOW' | 'GAME' | null;
+  contentType: 'MOVIE' | 'TV_SHOW' | 'GAME' | 'MUSIC' | null;
   title: string | null;
   year: number | null;
   status: string;
@@ -533,6 +554,9 @@ export interface CreateTorrentRequestDto {
   igdbId?: number;
   platform?: string;
   genre?: string;
+  // Music-specific fields: title is the album
+  artist?: string;
+  musicbrainzId?: string;
   posterUrl?: string;
   backdropUrl?: string;
   preferredQualities?: string[];
@@ -808,6 +832,12 @@ export const apiService = {
 
   requestGameDownload: async (dto: CreateTorrentRequestDto): Promise<{ success: boolean; data?: TorrentRequest; error?: string }> => {
     const response = await api.post('/torrent-requests/games', dto);
+    return response.data;
+  },
+
+  /** `title` is the album; `artist` is required. */
+  requestMusicDownload: async (dto: CreateTorrentRequestDto): Promise<{ success: boolean; data?: TorrentRequest; error?: string }> => {
+    const response = await api.post('/torrent-requests/music', dto);
     return response.data;
   },
 
@@ -1088,7 +1118,7 @@ export const apiService = {
     return response.data;
   },
 
-  getOrganizationRule: async (contentType: 'MOVIE' | 'TV_SHOW' | 'GAME'): Promise<OrganizationRule> => {
+  getOrganizationRule: async (contentType: 'MOVIE' | 'TV_SHOW' | 'GAME' | 'MUSIC'): Promise<OrganizationRule> => {
     const response = await api.get(`/organization/rules/${contentType}`);
     return response.data;
   },
@@ -1109,7 +1139,7 @@ export const apiService = {
   },
 
   previewOrganizationPath: async (context: {
-    contentType: 'MOVIE' | 'TV_SHOW' | 'GAME';
+    contentType: 'MOVIE' | 'TV_SHOW' | 'GAME' | 'MUSIC';
     title: string;
     year?: number;
     season?: number;
@@ -1143,7 +1173,7 @@ export const apiService = {
     return response.data;
   },
 
-  extractMetadata: async (fileName: string, contentType: 'MOVIE' | 'TV_SHOW' | 'GAME'): Promise<FileMetadata> => {
+  extractMetadata: async (fileName: string, contentType: 'MOVIE' | 'TV_SHOW' | 'GAME' | 'MUSIC'): Promise<FileMetadata> => {
     const response = await api.get(`/organization/extract-metadata?fileName=${encodeURIComponent(fileName)}&contentType=${contentType}`);
     return response.data;
   },

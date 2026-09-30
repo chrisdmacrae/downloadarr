@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from './useApi'
+import { withCloudflareAccess } from '../services/cloudflare'
 
 // Runtime configuration
 const getRuntimeApiUrl = (): string => {
@@ -72,7 +73,7 @@ export const useAppConfiguration = () => {
   return useQuery({
     queryKey: queryKeys.appConfiguration,
     queryFn: async (): Promise<AppConfiguration> => {
-      const response = await fetch(`${API_BASE_URL}/configuration`)
+      const response = await fetch(`${API_BASE_URL}/configuration`, withCloudflareAccess())
       if (!response.ok) {
         throw new Error('Failed to fetch app configuration')
       }
@@ -86,7 +87,7 @@ export const useOnboardingStatus = () => {
   return useQuery({
     queryKey: queryKeys.onboardingStatus,
     queryFn: async (): Promise<{ completed: boolean }> => {
-      const response = await fetch(`${API_BASE_URL}/configuration/onboarding/status`)
+      const response = await fetch(`${API_BASE_URL}/configuration/onboarding/status`, withCloudflareAccess())
       if (!response.ok) {
         throw new Error('Failed to fetch onboarding status')
       }
@@ -100,7 +101,7 @@ export const useProwlarrConfig = () => {
   return useQuery({
     queryKey: queryKeys.prowlarrConfig,
     queryFn: async (): Promise<ProwlarrConfig> => {
-      const response = await fetch(`${API_BASE_URL}/configuration/prowlarr`)
+      const response = await fetch(`${API_BASE_URL}/configuration/prowlarr`, withCloudflareAccess())
       if (!response.ok) {
         throw new Error('Failed to fetch Prowlarr configuration')
       }
@@ -115,13 +116,13 @@ export const useCompleteOnboarding = () => {
   
   return useMutation({
     mutationFn: async (data: OnboardingData) => {
-      const response = await fetch(`${API_BASE_URL}/configuration/onboarding/complete`, {
+      const response = await fetch(`${API_BASE_URL}/configuration/onboarding/complete`, withCloudflareAccess({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(data),
-      })
+      }))
 
       if (!response.ok) {
         let errorMessage = 'Failed to complete onboarding'
@@ -153,13 +154,13 @@ export const useCompleteOnboarding = () => {
 export const useTestProwlarrConnection = () => {
   return useMutation({
     mutationFn: async (data: { url?: string; apiKey?: string }): Promise<ProwlarrConnectionTest> => {
-      const response = await fetch(`${API_BASE_URL}/prowlarr/test`, {
+      const response = await fetch(`${API_BASE_URL}/prowlarr/test`, withCloudflareAccess({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(data),
-      })
+      }))
 
       if (!response.ok) {
         throw new Error('Failed to test the Prowlarr connection')
@@ -176,13 +177,13 @@ export const useUpdateAppConfiguration = () => {
   
   return useMutation({
     mutationFn: async (data: Partial<AppConfiguration>) => {
-      const response = await fetch(`${API_BASE_URL}/configuration`, {
+      const response = await fetch(`${API_BASE_URL}/configuration`, withCloudflareAccess({
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(data),
-      })
+      }))
       
       if (!response.ok) {
         throw new Error('Failed to update app configuration')

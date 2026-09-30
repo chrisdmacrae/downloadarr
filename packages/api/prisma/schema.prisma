@@ -26,6 +26,9 @@ model RequestedTorrent {
   igdbId             Int?               // IGDB game ID
   platform           String?            // Game platform (PC, PlayStation, etc.)
   genre              String?            // Game genre
+  // Music-specific fields: title is the album
+  artist             String?
+  musicbrainzId      String?            // MusicBrainz release group ID
   // Artwork captured from the discovery provider at request time
   posterUrl          String?            // Poster artwork URL (2:3 / 3:4)
   backdropUrl        String?            // Backdrop artwork URL (16:9)
@@ -238,6 +241,7 @@ enum ContentType {
   MOVIE
   TV_SHOW
   GAME
+  MUSIC
 }
 
 enum RequestStatus {
@@ -363,6 +367,7 @@ model OrganizationSettings {
   moviesPath            String?  // Override for movies
   tvShowsPath           String?  // Override for TV shows
   gamesPath             String?  // Override for games
+  musicPath             String?  // Override for music
 
   // Organization behavior
   organizeOnComplete    Boolean  @default(true)
@@ -500,6 +505,7 @@ enum MusicSourceProvider {
   LISTENBRAINZ
   LASTFM
   DEEZER
+  SPOTIFY
 }
 
 enum MusicRecommendationList {
@@ -508,18 +514,24 @@ enum MusicRecommendationList {
   WEEKLY_PICKS    // Albums from ListenBrainz's Weekly Exploration playlist
   MOST_PLAYED     // Your most played albums
   FLOW            // Albums from your Deezer Flow mix
-  SAVED_ALBUMS    // Albums you saved on Deezer, newest first
+  SAVED_ALBUMS    // Albums you saved on Deezer or Spotify, newest first
 }
 
 // One connected account per provider: this is a single-user app.
 model MusicSource {
   id            String              @id @default(cuid())
   provider      MusicSourceProvider @unique
-  username      String              // Deezer: the numeric user ID
-  displayName   String?             // Deezer profile name, for display
+  username      String              // Deezer: numeric user ID. Spotify: user ID
+  displayName   String?             // Deezer or Spotify profile name, for display
   // Last.fm: API key, falling back to LASTFM_API_KEY. ListenBrainz: optional
   // user token, needed only for picking a new artist's best-known album.
   apiKey        String?
+  // Spotify OAuth (Authorization Code with PKCE, so no client secret).
+  clientId       String?
+  redirectUri    String?
+  accessToken    String?
+  refreshToken   String?
+  tokenExpiresAt DateTime?
   enabled       Boolean             @default(true)
   lastSyncedAt  DateTime?
   lastSyncError String?

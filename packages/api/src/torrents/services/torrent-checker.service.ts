@@ -15,6 +15,8 @@ import { TorrentResult } from '../../discovery/interfaces/external-api.interface
 import { TvShowTorrentSelectionService } from './tv-show-torrent-selection.service';
 import { TvShowGapAnalysisService } from './tv-show-gap-analysis.service';
 
+import { rankMusicReleases } from '../../discovery/services/music-release-ranker';
+
 @Injectable()
 export class TorrentCheckerService {
   private readonly logger = new Logger(TorrentCheckerService.name);
@@ -220,6 +222,11 @@ export class TorrentCheckerService {
       return request.title;
     }
 
+    // Albums are searched as "Artist Album"; the title alone is too ambiguous.
+    if (request.contentType === ContentType.MUSIC && request.artist) {
+      return `${request.artist} ${request.title}`;
+    }
+
     // For movies and games, keep the existing logic
     return request.title;
   }
@@ -275,9 +282,17 @@ export class TorrentCheckerService {
           language: request.preferredLanguages as any,
           limit: 50,
         });
+      } else if (request.contentType === ContentType.MUSIC) {
+        searchResult = await this.prowlarrService.searchMusicTorrents({
+          query: searchQuery,
+          indexers: request.trustedIndexers.length > 0 ? request.trustedIndexers : undefined,
+          minSeeders: request.minSeeders,
+          maxSize: `${request.maxSizeGB}GB`,
+          limit: 50,
+        });
       }
 
-      if (!searchResult.success || !searchResult.data) {
+      if (!searchResult?.success || !searchResult.data) {
         this.logger.warn(`Search failed for ${request.title}: ${searchResult.error}`);
         return { torrents: [] };
       }
@@ -295,8 +310,18 @@ export class TorrentCheckerService {
         trustedIndexers: request.trustedIndexers,
       };
 
-      const filteredTorrents = this.torrentFilterService.filterAndRankTorrents(torrents, filterCriteria);
-      
+      let filteredTorrents = this.torrentFilterService.filterAndRankTorrents(torrents, filterCriteria);
+
+      // Video quality rules mean nothing for audio: keep only this artist's
+      // album, lossless first.
+      if (request.contentType === ContentType.MUSIC) {
+        filteredTorrents = rankMusicReleases(filteredTorrents, {
+          artist: request.artist ?? '',
+          album: request.title,
+          year: request.year,
+        });
+      }
+
       return {
         torrents: filteredTorrents,
         bestTorrent: filteredTorrents.length > 0 ? filteredTorrents[0] : undefined,
@@ -514,6 +539,8 @@ export class TorrentCheckerService {
       return `${baseDir}/tv-shows`;
     } else if (request.contentType === ContentType.GAME) {
       return `${baseDir}/games`;
+    } else if (request.contentType === ContentType.MUSIC) {
+      return `${baseDir}/music`;
     } else {
       return `${baseDir}/other`;
     }

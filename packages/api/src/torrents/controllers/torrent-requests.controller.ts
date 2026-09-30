@@ -159,6 +159,31 @@ export class TorrentRequestsController {
     }
   }
 
+  @Post('music')
+  @ApiOperation({
+    summary: 'Request album download',
+    description: 'Create a new torrent request for a music album; `title` is the album and `artist` is required',
+  })
+  @ApiResponse({ status: 201, description: 'Music request created successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid request data' })
+  @ApiResponse({ status: 409, description: 'Duplicate request - album already requested' })
+  async requestMusic(@Body() dto: CreateTorrentRequestDto): Promise<{ success: boolean; data: RequestedTorrent }> {
+    if (!dto.artist?.trim()) {
+      throw new HttpException('artist is required for music requests', HttpStatus.BAD_REQUEST);
+    }
+    try {
+      this.logger.log(`Creating music request: ${dto.artist} - ${dto.title}`);
+      const request = await this.requestedTorrentsService.createMusicRequest(dto);
+      return { success: true, data: request };
+    } catch (error) {
+      this.logger.error(`Error creating music request: ${error.message}`, error.stack);
+      if (error.message.includes('already exists')) {
+        throw new HttpException(error.message, HttpStatus.CONFLICT);
+      }
+      throw new HttpException('Failed to create music request', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
   @Get('counts')
   @ApiOperation({
     summary: 'Get torrent request counts by status',
@@ -1400,6 +1425,8 @@ export class TorrentRequestsController {
       return `${baseDir}/tv-shows`;
     } else if (request.contentType === 'GAME') {
       return `${baseDir}/games`;
+    } else if (request.contentType === 'MUSIC') {
+      return `${baseDir}/music`;
     } else {
       return `${baseDir}/other`;
     }

@@ -234,6 +234,7 @@ export default function Settings() {
         moviesPath: formData.moviesPath,
         tvShowsPath: formData.tvShowsPath,
         gamesPath: formData.gamesPath,
+        musicPath: formData.musicPath,
         organizeOnComplete: formData.organizeOnComplete,
         replaceExistingFiles: formData.replaceExistingFiles,
         extractArchives: formData.extractArchives,
@@ -273,6 +274,7 @@ export default function Settings() {
       moviesPath: '',
       tvShowsPath: '',
       gamesPath: '',
+      musicPath: '',
       organizeOnComplete: true,
       replaceExistingFiles: true,
       extractArchives: true,
@@ -476,6 +478,16 @@ export default function Settings() {
                               className="font-mono"
                               value={formData.gamesPath || ''}
                               onChange={(e) => handleInputChange('gamesPath', e.target.value)}
+                            />
+                          </div>
+                          <div className="flex flex-col gap-2">
+                            <Label htmlFor="musicPath">Music path</Label>
+                            <Input
+                              id="musicPath"
+                              placeholder="/library/music"
+                              className="font-mono"
+                              value={formData.musicPath || ''}
+                              onChange={(e) => handleInputChange('musicPath', e.target.value)}
                             />
                           </div>
                         </div>

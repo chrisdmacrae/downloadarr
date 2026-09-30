@@ -72,7 +72,7 @@ export class AppConfigurationController {
    * Create default organization rules for all content types
    */
   private async createDefaultOrganizationRules(): Promise<void> {
-    const contentTypes = [ContentType.MOVIE, ContentType.TV_SHOW, ContentType.GAME];
+    const contentTypes = [ContentType.MOVIE, ContentType.TV_SHOW, ContentType.GAME, ContentType.MUSIC];
 
     for (const contentType of contentTypes) {
       try {

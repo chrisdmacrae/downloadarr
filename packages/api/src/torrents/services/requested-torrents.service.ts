@@ -179,6 +179,66 @@ export class RequestedTorrentsService {
     });
   }
 
+  async createMusicRequest(dto: CreateTorrentRequestDto): Promise<RequestedTorrent> {
+    const artist = dto.artist!.trim();
+    const existing = await this.findExistingMusicRequest(artist, dto.title, dto.musicbrainzId);
+    if (existing) {
+      throw new Error(`A request for "${dto.title}" by ${artist} already exists with status: ${existing.status}`);
+    }
+
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 30);
+    const nextSearchAt = new Date();
+    nextSearchAt.setMinutes(nextSearchAt.getMinutes() + 1);
+
+    return this.prisma.requestedTorrent.create({
+      data: {
+        contentType: ContentType.MUSIC,
+        title: dto.title,
+        artist,
+        musicbrainzId: dto.musicbrainzId,
+        year: dto.year,
+        // Video quality, format and language rules don't apply to audio;
+        // music releases are ranked by audio format instead.
+        preferredQualities: [],
+        preferredFormats: [],
+        preferredLanguages: [],
+        // Music trackers are smaller: fewer seeders, much smaller files.
+        minSeeders: dto.minSeeders ?? 1,
+        maxSizeGB: dto.maxSizeGB || 5,
+        blacklistedWords: dto.blacklistedWords || [],
+        trustedIndexers: dto.trustedIndexers || [],
+        searchIntervalMins: dto.searchIntervalMins || 30,
+        maxSearchAttempts: dto.maxSearchAttempts || 50,
+        priority: dto.priority || 5,
+        posterUrl: dto.posterUrl,
+        backdropUrl: dto.backdropUrl,
+        expiresAt,
+        nextSearchAt,
+        userId: dto.userId,
+      },
+    });
+  }
+
+  /** An open request for the same album, by MusicBrainz ID or artist and title. */
+  private async findExistingMusicRequest(artist: string, title: string, musicbrainzId?: string): Promise<RequestedTorrent | null> {
+    const baseWhere = {
+      contentType: ContentType.MUSIC,
+      status: { notIn: [RequestStatus.CANCELLED, RequestStatus.FAILED, RequestStatus.EXPIRED] },
+    };
+    if (musicbrainzId) {
+      const byId = await this.prisma.requestedTorrent.findFirst({ where: { ...baseWhere, musicbrainzId } });
+      if (byId) return byId;
+    }
+    return this.prisma.requestedTorrent.findFirst({
+      where: {
+        ...baseWhere,
+        artist: { equals: artist, mode: 'insensitive' },
+        title: { equals: title, mode: 'insensitive' },
+      },
+    });
+  }
+
   async getRequestById(id: string): Promise<RequestedTorrent> {
     const request = await this.prisma.requestedTorrent.findUnique({
       where: { id },

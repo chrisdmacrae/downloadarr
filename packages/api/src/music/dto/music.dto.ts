@@ -26,6 +26,29 @@ export class UpsertMusicSourceDto {
   enabled?: boolean;
 }
 
+export class StartSpotifyAuthDto {
+  @ApiProperty({ description: 'Client ID of your Spotify app', example: '0123456789abcdef0123456789abcdef' })
+  @IsString()
+  clientId: string;
+
+  @ApiProperty({
+    description: 'HTTPS address of this API\'s callback, as registered in the Spotify app',
+    example: 'https://media.example.com/api/music/spotify/callback',
+  })
+  @IsString()
+  redirectUri: string;
+
+  @ApiProperty({ description: 'Settings page to return to; must be an allowed CORS origin' })
+  @IsString()
+  returnTo: string;
+}
+
+export class SpotifyCallbackQueryDto {
+  @ApiPropertyOptional() @IsOptional() @IsString() code?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() state?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() error?: string;
+}
+
 export class DismissMusicDto {
   @ApiProperty({ example: 'Radiohead' })
   @IsString()

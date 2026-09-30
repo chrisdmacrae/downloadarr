@@ -8,6 +8,10 @@ export interface OrganizationContext {
   season?: number;
   episode?: number;
   platform?: string;
+  /** Music: the album artist. `title` is the album. */
+  artist?: string;
+  /** Music: a disc folder kept under the album, e.g. "CD1". */
+  subfolder?: string;
 
   // Quality information
   quality?: string;

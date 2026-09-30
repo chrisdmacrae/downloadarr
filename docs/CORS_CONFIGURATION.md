@@ -113,6 +113,12 @@ docker-compose up -d
 
 The WebSocket gateway (used for real-time updates) uses the same `FRONTEND_URL` and `CORS_ORIGINS` configuration, so no additional setup is needed.
 
+## Cloudflare Access
+
+If the UI and API sit behind Cloudflare Access on different hostnames, the UI sends its API requests with credentials, so the `CF_Authorization` cookie goes along wherever its domain covers the API's hostname. When that cookie is readable from JavaScript (the Access application's HttpOnly cookie setting is off), the UI also copies the token into a `cf-access-token` header, which Access accepts on any hostname protected by the same team.
+
+Cross-origin requests with that header trigger a CORS preflight, which Access blocks by default. Turn on **CORS settings → Bypass OPTIONS requests to origin** on the API's Access application so the preflight reaches the API, which allows the header.
+
 ## Security Notes
 
 - Only add origins you trust to the `FRONTEND_URL` list

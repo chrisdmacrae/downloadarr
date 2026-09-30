@@ -1,4 +1,4 @@
-import {
+import { Music,
   AlertCircle,
   CheckCircle,
   Clock,
@@ -170,7 +170,7 @@ export function statusTone(status: string | undefined | null): StatusTone {
 /* Content types — monochrome too: white, ink-100, ink-300, ink-400.           */
 /* -------------------------------------------------------------------------- */
 
-export type ContentTypeKey = 'MOVIE' | 'TV_SHOW' | 'GAME' | 'OTHER'
+export type ContentTypeKey = 'MOVIE' | 'TV_SHOW' | 'GAME' | 'MUSIC' | 'OTHER'
 
 export interface ContentTypeTone {
   label: string
@@ -208,6 +208,15 @@ const CONTENT_TYPES: Record<ContentTypeKey, ContentTypeTone> = {
     variant: 'game',
     aspect: 'game',
   },
+  MUSIC: {
+    label: 'Album',
+    short: 'Music',
+    icon: Music,
+    color: 'var(--type-music)',
+    variant: 'game',
+    // Covers are square; 3:4 crops them least.
+    aspect: 'game',
+  },
   OTHER: {
     label: 'Other',
     short: 'Other',
@@ -224,6 +233,7 @@ export function normalizeContentType(type: string | undefined | null): ContentTy
   if (upper === 'MOVIE' || upper === 'MOVIES') return 'MOVIE'
   if (upper === 'TV' || upper === 'TV_SHOW' || upper === 'TVSHOW' || upper === 'TV_SHOWS') return 'TV_SHOW'
   if (upper === 'GAME' || upper === 'GAMES') return 'GAME'
+  if (upper === 'MUSIC' || upper === 'ALBUM' || upper === 'ALBUMS') return 'MUSIC'
   return 'OTHER'
 }
 

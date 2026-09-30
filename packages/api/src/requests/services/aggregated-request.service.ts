@@ -158,7 +158,8 @@ export class AggregatedRequestService {
       id: req.id,
       type: 'torrent' as const,
       contentType: req.contentType,
-      title: req.title,
+      // An album title alone is ambiguous in a mixed list.
+      title: req.contentType === ContentType.MUSIC && req.artist ? `${req.title} — ${req.artist}` : req.title,
       year: req.year,
       status: req.status,
       priority: req.priority,

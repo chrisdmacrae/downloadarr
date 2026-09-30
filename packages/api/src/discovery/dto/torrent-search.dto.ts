@@ -193,6 +193,8 @@ export class TvTorrentSearchDto extends TorrentSearchDto {
   imdbId?: string;
 }
 
+export class MusicTorrentSearchDto extends TorrentSearchDto {}
+
 export class GameTorrentSearchDto extends TorrentSearchDto {
   @ApiPropertyOptional({
     description: 'Game release year',

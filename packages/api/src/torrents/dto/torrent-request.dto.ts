@@ -115,6 +115,22 @@ export class CreateTorrentRequestDto {
   genre?: string;
 
   @ApiPropertyOptional({
+    description: 'Album artist, for music requests (the title is the album)',
+    example: 'Radiohead',
+  })
+  @IsOptional()
+  @IsString()
+  artist?: string;
+
+  @ApiPropertyOptional({
+    description: 'MusicBrainz release group ID, for music requests',
+    example: '6e335887-60ba-38f0-95af-fae7774336bf',
+  })
+  @IsOptional()
+  @IsString()
+  musicbrainzId?: string;
+
+  @ApiPropertyOptional({
     description: 'Poster artwork URL captured from the discovery provider',
     example: 'https://image.tmdb.org/t/p/w500/abc.jpg',
   })

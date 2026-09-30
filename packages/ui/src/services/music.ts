@@ -1,6 +1,6 @@
 import api from '@/services/api'
 
-export type MusicSourceProvider = 'LISTENBRAINZ' | 'LASTFM' | 'DEEZER'
+export type MusicSourceProvider = 'LISTENBRAINZ' | 'LASTFM' | 'DEEZER' | 'SPOTIFY'
 export type MusicList =
   | 'NEW_ARTISTS'
   | 'FRESH_RELEASES'
@@ -11,13 +11,16 @@ export type MusicList =
 
 export interface MusicSource {
   provider: MusicSourceProvider
-  /** For Deezer, the numeric user ID. */
+  /** For Deezer, the numeric user ID; for Spotify, the user ID. */
   username: string
-  /** Deezer profile name. */
+  /** Deezer or Spotify profile name. */
   displayName: string | null
   enabled: boolean
   /** Last.fm API key, or ListenBrainz token. Write-only. */
   hasApiKey: boolean
+  /** Spotify only. */
+  clientId: string | null
+  redirectUri: string | null
   lastSyncedAt: string | null
   lastSyncError: string | null
 }
@@ -88,6 +91,14 @@ export const musicApi = {
   removeSource: async (provider: MusicSourceProvider): Promise<void> => {
     await api.delete(`/music/sources/${provider}`)
   },
+
+  /** Returns the Spotify sign-in address to send the browser to. */
+  startSpotifyAuth: async (body: { clientId: string; redirectUri: string; returnTo: string }): Promise<string> =>
+    (await api.post('/music/spotify/authorize', body)).data.data.authorizeUrl,
+
+  /** The API's Spotify callback, as the browser reaches it from here. */
+  spotifyCallbackUrl: (): string =>
+    new URL(`${api.defaults.baseURL ?? ''}/music/spotify/callback`, window.location.origin).toString(),
 
   startSync: async (): Promise<MusicSyncStatus> => (await api.post('/music/sync')).data.data,
 

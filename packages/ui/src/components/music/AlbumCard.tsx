@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Loader2, MoreHorizontal, Pause, Play } from 'lucide-react'
+import { Download, Loader2, MoreHorizontal, Pause, Play } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import {
@@ -8,7 +8,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { StatusBadge } from '@/components/ds/StatusBadge'
 import { cn } from '@/lib/utils'
+import type { TorrentRequest } from '@/services/api'
 import type { MusicRecommendation } from '@/services/music'
 import { usePreviewPlayer } from './PreviewPlayer'
 
@@ -17,6 +19,10 @@ interface AlbumCardProps {
   /** One line under the artist: why it's here, or when it came out. */
   caption?: string
   onDismiss: (scope: 'album' | 'artist') => void
+  /** The existing request for this album, if any. */
+  request?: TorrentRequest
+  onRequest?: () => void
+  requesting?: boolean
 }
 
 /** Missing artwork: the title's first two letters at 14% white on ink. */
@@ -34,7 +40,7 @@ function CoverPlaceholder({ title }: { title: string }) {
  * A square album tile. The cover plays a preview; the menu dismisses the album
  * or the whole artist from future lists.
  */
-export function AlbumCard({ album, caption, onDismiss }: AlbumCardProps) {
+export function AlbumCard({ album, caption, onDismiss, request, onRequest, requesting }: AlbumCardProps) {
   const player = usePreviewPlayer()
   // Cover Art Archive has gaps; a broken cover falls back to the placeholder.
   const [coverFailed, setCoverFailed] = useState(false)
@@ -89,6 +95,12 @@ export function AlbumCard({ album, caption, onDismiss }: AlbumCardProps) {
           </span>
         </button>
 
+        {request && (
+          <span className="pointer-events-none absolute left-2 top-2">
+            <StatusBadge status={request.status} onArtwork size="sm" />
+          </span>
+        )}
+
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
@@ -101,6 +113,11 @@ export function AlbumCard({ album, caption, onDismiss }: AlbumCardProps) {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            {onRequest && !request && (
+              <DropdownMenuItem onSelect={onRequest} disabled={requesting}>
+                Request this album
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem onSelect={() => onDismiss('album')}>Not interested in this album</DropdownMenuItem>
             <DropdownMenuItem onSelect={() => onDismiss('artist')}>
               Not interested in {album.artistName}
@@ -120,6 +137,19 @@ export function AlbumCard({ album, caption, onDismiss }: AlbumCardProps) {
           <p className="mt-0.5 line-clamp-2 text-xs text-fg-muted" title={caption}>
             {caption}
           </p>
+        )}
+        {onRequest && !request && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="mt-2 h-8 w-full"
+            disabled={requesting}
+            onClick={onRequest}
+            aria-label={`Request ${album.albumTitle} by ${album.artistName}`}
+          >
+            {requesting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+            Request
+          </Button>
         )}
       </div>
     </div>

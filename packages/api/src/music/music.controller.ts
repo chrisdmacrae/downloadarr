@@ -1,10 +1,17 @@
-import { Body, Controller, Delete, Get, HttpCode, NotFoundException, Param, ParseEnumPipe, Post, Put, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, NotFoundException, Param, ParseEnumPipe, Post, Put, Query, Redirect } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { MusicSourceProvider } from '../../generated/prisma';
 import { MusicSourcesService } from './services/music-sources.service';
 import { MusicSyncService } from './services/music-sync.service';
 import { MusicPreviewService } from './services/music-preview.service';
-import { AlbumPreviewQueryDto, DismissMusicDto, UpsertMusicSourceDto } from './dto/music.dto';
+import { SpotifyAuthService } from './services/spotify-auth.service';
+import {
+  AlbumPreviewQueryDto,
+  DismissMusicDto,
+  SpotifyCallbackQueryDto,
+  StartSpotifyAuthDto,
+  UpsertMusicSourceDto,
+} from './dto/music.dto';
 
 @ApiTags('music')
 @Controller('music')
@@ -13,6 +20,7 @@ export class MusicController {
     private readonly sources: MusicSourcesService,
     private readonly syncService: MusicSyncService,
     private readonly preview: MusicPreviewService,
+    private readonly spotifyAuth: SpotifyAuthService,
   ) {}
 
   @Get('sources')
@@ -39,6 +47,21 @@ export class MusicController {
   async removeSource(@Param('provider', new ParseEnumPipe(MusicSourceProvider)) provider: MusicSourceProvider) {
     await this.sources.remove(provider);
     return { success: true };
+  }
+
+  @Post('spotify/authorize')
+  @ApiOperation({ summary: 'Start a Spotify login; returns the Spotify address to open' })
+  startSpotifyAuth(@Body() dto: StartSpotifyAuthDto) {
+    return { success: true, data: this.spotifyAuth.start(dto) };
+  }
+
+  @Get('spotify/callback')
+  @Redirect()
+  @ApiOperation({ summary: 'Where Spotify sends you after signing in; redirects back to Settings' })
+  async spotifyCallback(@Query() query: SpotifyCallbackQueryDto) {
+    const { url, connected } = await this.spotifyAuth.handleCallback(query);
+    if (connected) void this.syncService.sync();
+    return { url, statusCode: 302 };
   }
 
   @Post('sync')

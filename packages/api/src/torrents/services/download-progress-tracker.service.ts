@@ -484,6 +484,8 @@ export class DownloadProgressTrackerService {
             season: request.season || extractedSeasonEpisode.season,
             episode: request.episode || extractedSeasonEpisode.episode,
             platform: request.platform || undefined,
+            artist: request.artist || undefined,
+            subfolder: request.contentType === ContentType.MUSIC ? this.discFolderFromPath(file.path) : undefined,
             quality: this.extractQualityFromPath(file.path),
             format: this.extractFormatFromPath(file.path),
             edition: this.extractEditionFromPath(file.path),
@@ -621,6 +623,15 @@ export class DownloadProgressTrackerService {
   /**
    * Extract season and episode information from file path
    */
+  /**
+   * Multi-disc albums ship as "CD1/01 - Track.flac", "CD2/01 - Track.flac".
+   * Keeping the disc folder stops disc 2 overwriting disc 1.
+   */
+  private discFolderFromPath(filePath: string): string | undefined {
+    const parent = filePath.split('/').slice(-2, -1)[0];
+    return parent && /^(cd|disc|disk)[\s._-]*\d+$/i.test(parent.trim()) ? parent.trim() : undefined;
+  }
+
   private extractSeasonEpisodeFromPath(filePath: string): { season?: number; episode?: number } {
     const fileName = filePath.toLowerCase();
 

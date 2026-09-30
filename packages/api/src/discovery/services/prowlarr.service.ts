@@ -12,7 +12,7 @@ import {
   TorrentSearchParams,
   ProwlarrRelease,
 } from '../interfaces/external-api.interface';
-import { MovieTorrentSearchDto, TvTorrentSearchDto, GameTorrentSearchDto } from '../dto/torrent-search.dto';
+import { MovieTorrentSearchDto, TvTorrentSearchDto, GameTorrentSearchDto, MusicTorrentSearchDto } from '../dto/torrent-search.dto';
 
 /**
  * ASP.NET Core binds a `List<int>` from repeated keys (`indexerIds=1&indexerIds=2`),
@@ -209,6 +209,17 @@ export class ProwlarrService extends BaseExternalApiService {
     return this.searchTorrents(searchParams);
   }
 
+  /** Albums, in the Newznab Audio categories (3000 and its subcategories). */
+  async searchMusicTorrents(searchDto: MusicTorrentSearchDto): Promise<ExternalApiResponse<TorrentResult[]>> {
+    return this.searchTorrents({
+      query: searchDto.query,
+      categoryCode: '3000',
+      indexers: searchDto.indexers,
+      minSeeders: searchDto.minSeeders,
+      maxSize: searchDto.maxSize,
+    });
+  }
+
   /**
    * The indexers Prowlarr currently has enabled, for the settings UI and for
    * turning caller-supplied indexer names into the ids the search API wants.
@@ -319,6 +330,7 @@ export class ProwlarrService extends BaseExternalApiService {
       'Console/PS4': '1180',
       'Games': '4050', // Default to PC/Games
       'TV/UHD': '5160',
+      'Audio': '3000',
     };
 
     return category ? categoryMap[category] || '' : '';

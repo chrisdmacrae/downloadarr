@@ -12,6 +12,9 @@ export interface MusicSourceView {
   displayName: string | null;
   enabled: boolean;
   hasApiKey: boolean;
+  /** Spotify only; not secret, and shown so a reconnect can reuse them. */
+  clientId: string | null;
+  redirectUri: string | null;
   lastSyncedAt: Date | null;
   lastSyncError: string | null;
 }
@@ -34,6 +37,8 @@ export class MusicSourcesService {
       hasApiKey: Boolean(
         source.provider === MusicSourceProvider.LASTFM ? this.lastFmApiKey(source) : source.apiKey,
       ),
+      clientId: source.clientId,
+      redirectUri: source.redirectUri,
       lastSyncedAt: source.lastSyncedAt,
       lastSyncError: source.lastSyncError,
     };
@@ -57,6 +62,9 @@ export class MusicSourcesService {
     provider: MusicSourceProvider,
     input: { username: string; apiKey?: string; enabled?: boolean },
   ): Promise<MusicSource> {
+    if (provider === MusicSourceProvider.SPOTIFY) {
+      throw new BadRequestException('Connect Spotify with its sign-in flow, not a username');
+    }
     let username = input.username.trim();
     let displayName: string | null = null;
     if (!username) throw new BadRequestException('Username is required');

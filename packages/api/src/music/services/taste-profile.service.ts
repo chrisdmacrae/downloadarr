@@ -3,6 +3,8 @@ import { MusicSource, MusicSourceProvider } from '../../../generated/prisma';
 import { ListenBrainzClient } from '../clients/listenbrainz.client';
 import { LastFmClient } from '../clients/lastfm.client';
 import { DeezerClient } from '../clients/deezer.client';
+import { SpotifyClient } from '../clients/spotify.client';
+import { SpotifyAuthService } from './spotify-auth.service';
 import { MusicSourcesService } from './music-sources.service';
 import { nameKey } from '../music-keys';
 import { normalizeByMax, TasteArtist } from '../music-scoring';
@@ -35,10 +37,24 @@ interface Listen {
   count: number;
 }
 
-/** Deezer has no play counts, so saves stand in for them. */
-const DEEZER_FAVORITE_ARTIST = 3;
-const DEEZER_FAVORITE_ALBUM = 2;
-const DEEZER_FAVORITE_TRACK = 1;
+/** Deezer and Spotify share no play counts, so saves stand in for them. */
+const FAVORITE_ARTIST_POINTS = 3;
+const FAVORITE_ALBUM_POINTS = 2;
+const FAVORITE_TRACK_POINTS = 1;
+const PLAYLIST_TRACK_POINTS = 0.5;
+
+/** Sums points per artist, merging spellings, heaviest first. */
+function tallyListens(entries: Array<{ id?: number; name?: string; points: number }>): Listen[] {
+  const counts = new Map<string, Listen>();
+  for (const { id, name, points } of entries) {
+    if (!name) continue;
+    const key = nameKey(name);
+    const listen = counts.get(key) ?? { name, deezerId: id, count: 0 };
+    listen.count += points;
+    counts.set(key, listen);
+  }
+  return [...counts.values()].sort((a, b) => b.count - a.count);
+}
 
 /**
  * Turns listening history into weighted artists. Each provider's lists are
@@ -53,6 +69,8 @@ export class TasteProfileService {
     private readonly listenBrainz: ListenBrainzClient,
     private readonly lastFm: LastFmClient,
     private readonly deezer: DeezerClient,
+    private readonly spotify: SpotifyClient,
+    private readonly spotifyAuth: SpotifyAuthService,
     private readonly sources: MusicSourcesService,
   ) {}
 
@@ -118,6 +136,7 @@ export class TasteProfileService {
     }
 
     if (source.provider === MusicSourceProvider.DEEZER) return this.deezerListens(Number(source.username));
+    if (source.provider === MusicSourceProvider.SPOTIFY) return this.spotifyListens(source);
 
     const apiKey = this.sources.lastFmApiKey(source);
     if (!apiKey) throw new Error('No Last.fm API key configured');
@@ -134,6 +153,37 @@ export class TasteProfileService {
   }
 
   /**
+   * Recent listening is Spotify's short- and medium-term top artists, ranked;
+   * all-time is the long-term top artists plus what's followed and saved.
+   * Spotify shares no play counts, so ranks and saves stand in for them.
+   */
+  private async spotifyListens(source: MusicSource): Promise<{ recent: Listen[]; allTime: Listen[] }> {
+    const token = await this.spotifyAuth.accessToken(source);
+    const [short, medium, long, followed, albums, tracks, playlistTracks] = [
+      await this.spotify.topArtists(token, 'short_term'),
+      await this.spotify.topArtists(token, 'medium_term'),
+      await this.spotify.topArtists(token, 'long_term'),
+      await this.spotify.followedArtists(token),
+      await this.spotify.savedAlbums(token),
+      await this.spotify.savedTracks(token),
+      // Playlists are a weaker signal, and some fail on older playlist APIs.
+      await this.spotify.playlistTracks(token, source.username).catch(() => []),
+    ];
+    const ranked = (artists: Array<{ name: string }>, factor: number) =>
+      artists.map((a, i) => ({ name: a.name, points: (artists.length - i) * factor }));
+
+    const recent = tallyListens([...ranked(short, 1), ...ranked(medium, 0.5)]);
+    const allTime = tallyListens([
+      ...ranked(long, 1),
+      ...followed.map((a) => ({ name: a.name, points: FAVORITE_ARTIST_POINTS })),
+      ...albums.map((a) => ({ name: a.artistName, points: FAVORITE_ALBUM_POINTS })),
+      ...tracks.map((t) => ({ name: t.artistName, points: FAVORITE_TRACK_POINTS })),
+      ...playlistTracks.map((t) => ({ name: t.artistName, points: PLAYLIST_TRACK_POINTS })),
+    ]);
+    return { recent, allTime };
+  }
+
+  /**
    * Recent listening is the user's Deezer charts, ranked; all-time is what
    * they've saved, since Deezer shares no play counts.
    */
@@ -146,26 +196,14 @@ export class TasteProfileService {
       await this.deezer.userFavoriteTracks(userId),
     ];
 
-    const tally = (entries: Array<{ id?: number; name?: string; points: number }>) => {
-      const counts = new Map<string, Listen>();
-      for (const { id, name, points } of entries) {
-        if (!name) continue;
-        const key = nameKey(name);
-        const listen = counts.get(key) ?? { name, deezerId: id, count: 0 };
-        listen.count += points;
-        counts.set(key, listen);
-      }
-      return [...counts.values()].sort((a, b) => b.count - a.count);
-    };
-
-    const recent = tally([
+    const recent = tallyListens([
       ...chartArtists.map((a, i) => ({ id: a.id, name: a.name, points: chartArtists.length - i })),
       ...chartAlbums.map((a, i) => ({ id: a.artistId, name: a.artistName, points: (chartAlbums.length - i) / 2 })),
     ]);
-    const allTime = tally([
-      ...favoriteArtists.map((a) => ({ id: a.id, name: a.name, points: DEEZER_FAVORITE_ARTIST })),
-      ...favoriteAlbums.map((a) => ({ id: a.artistId, name: a.artistName, points: DEEZER_FAVORITE_ALBUM })),
-      ...favoriteTracks.map((t) => ({ id: t.artistId, name: t.artistName, points: DEEZER_FAVORITE_TRACK })),
+    const allTime = tallyListens([
+      ...favoriteArtists.map((a) => ({ id: a.id, name: a.name, points: FAVORITE_ARTIST_POINTS })),
+      ...favoriteAlbums.map((a) => ({ id: a.artistId, name: a.artistName, points: FAVORITE_ALBUM_POINTS })),
+      ...favoriteTracks.map((t) => ({ id: t.artistId, name: t.artistName, points: FAVORITE_TRACK_POINTS })),
     ]);
     return { recent, allTime };
   }

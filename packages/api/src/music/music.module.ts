@@ -4,16 +4,18 @@ import { HttpModule } from '@nestjs/axios';
 import { ListenBrainzClient } from './clients/listenbrainz.client';
 import { LastFmClient } from './clients/lastfm.client';
 import { DeezerClient } from './clients/deezer.client';
+import { SpotifyClient } from './clients/spotify.client';
 import { MusicSourcesService } from './services/music-sources.service';
 import { TasteProfileService } from './services/taste-profile.service';
 import { MusicRecommenderService } from './services/music-recommender.service';
 import { MusicSyncService } from './services/music-sync.service';
 import { MusicPreviewService } from './services/music-preview.service';
+import { SpotifyAuthService } from './services/spotify-auth.service';
 import { MusicController } from './music.controller';
 
 /**
- * Music discovery: listening history from ListenBrainz, Last.fm and a public
- * Deezer profile becomes recommendation lists. Deezer's public API also
+ * Music discovery: listening history from ListenBrainz, Last.fm, a public
+ * Deezer profile and a Spotify account becomes recommendation lists. Deezer's public API also
  * supplies related artists and previews.
  * The nightly sync's @Cron relies on ScheduleModule.forRoot() registered by
  * TorrentsModule.
@@ -24,6 +26,8 @@ import { MusicController } from './music.controller';
     ListenBrainzClient,
     LastFmClient,
     DeezerClient,
+    SpotifyClient,
+    SpotifyAuthService,
     MusicSourcesService,
     TasteProfileService,
     MusicRecommenderService,
