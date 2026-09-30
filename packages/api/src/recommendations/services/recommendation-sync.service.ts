@@ -1,9 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { RecommendationProfile } from '../../../generated/prisma';
+import { RecommendationProfile, RecommendationSourceProvider } from '../../../generated/prisma';
 import { MusicListsService } from '../../music/services/music-lists.service';
 import { RecommendationProfilesService } from './profiles.service';
 import { MUSIC_PROVIDERS, RecommendationSourcesService } from './sources.service';
+import { VideoRecommendationsService } from './video-recommendations.service';
 
 export interface RecommendationSyncStatus {
   running: boolean;
@@ -36,6 +37,7 @@ export class RecommendationSyncService {
     private readonly profiles: RecommendationProfilesService,
     private readonly sources: RecommendationSourcesService,
     private readonly music: MusicListsService,
+    private readonly video: VideoRecommendationsService,
   ) {}
 
   getStatus(): RecommendationSyncStatus {
@@ -80,6 +82,14 @@ export class RecommendationSyncService {
         await this.music.buildForProfile(profile, musicSources);
       } catch (error) {
         errors.push(`${profile.name}: ${(error as Error).message}`);
+      }
+    }
+    const trakt = sources.find((s) => s.provider === RecommendationSourceProvider.TRAKT);
+    if (trakt) {
+      try {
+        await this.video.buildForProfile(profile, trakt);
+      } catch (error) {
+        errors.push(`${profile.name} (Trakt): ${(error as Error).message}`);
       }
     }
     return errors;

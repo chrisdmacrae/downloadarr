@@ -908,6 +908,55 @@ export class TmdbService extends BaseExternalApiService {
     }
   }
 
+  /**
+   * A title's poster, backdrop and facts, as a search result. One plain
+   * request per title (no credits or recommendations), cached for the life of
+   * the process — recommendation syncs look up the same titles every night.
+   */
+  async getMovieSummary(tmdbId: number): Promise<SearchResult | null> {
+    return this.summary('movie', tmdbId);
+  }
+
+  async getTvSummary(tmdbId: number): Promise<SearchResult | null> {
+    return this.summary('tv', tmdbId);
+  }
+
+  private readonly summaryCache = new Map<string, SearchResult | null>();
+
+  private async summary(kind: 'movie' | 'tv', tmdbId: number): Promise<SearchResult | null> {
+    const key = `${kind}:${tmdbId}`;
+    if (this.summaryCache.has(key)) return this.summaryCache.get(key)!;
+
+    const response =
+      kind === 'movie'
+        ? await this.makeRequest<TmdbMovieDetails>(`/movie/${tmdbId}`)
+        : await this.makeRequest<TmdbTvShowDetails>(`/tv/${tmdbId}`);
+    if (!response.success || !response.data) {
+      // A missing title is cached; a failed request isn't, so it's retried.
+      if (response.statusCode === 404) this.summaryCache.set(key, null);
+      return null;
+    }
+
+    const data: any = response.data;
+    const date = kind === 'movie' ? data.release_date : data.first_air_date;
+    const result: SearchResult = {
+      id: String(data.id),
+      title: kind === 'movie' ? data.title : data.name,
+      year: date ? new Date(date).getFullYear() : undefined,
+      poster: data.poster_path ? `${this.imageBaseUrl}${data.poster_path}` : undefined,
+      backdrop: data.backdrop_path ? `${this.backdropBaseUrl}${data.backdrop_path}` : undefined,
+      overview: data.overview || undefined,
+      type: kind,
+      rating: data.vote_average || undefined,
+      genres: data.genres?.map((g: { name: string }) => g.name) || undefined,
+      ...(kind === 'movie'
+        ? { runtime: data.runtime || undefined }
+        : { seasons: data.number_of_seasons || undefined, episodeRuntime: data.episode_run_time?.[0] || undefined }),
+    };
+    this.summaryCache.set(key, result);
+    return result;
+  }
+
   async getMovieDetails(tmdbId: string): Promise<ExternalApiResponse<MovieDetails>> {
     try {
       const id = parseInt(tmdbId);

@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
-import { recommendationsApi, type RecommendationSourceProvider } from '@/services/recommendations'
+import { recommendationsApi, type RecommendationSourceProvider, type VideoKind } from '@/services/recommendations'
 
 export const recommendationKeys = {
   profiles: ['recommendations', 'profiles'] as const,
@@ -120,5 +120,35 @@ export const useStartRecommendationSync = () => {
   return useMutation({
     mutationFn: (profileId?: string) => recommendationsApi.startSync(profileId),
     onSuccess: (status) => queryClient.setQueryData(recommendationKeys.syncStatus, status),
+  })
+}
+
+/** Omit `profileId` for every profile, merged. */
+export const useVideoRecommendations = (kind: VideoKind, profileId?: string) =>
+  useQuery({
+    queryKey: ['recommendations', 'video', kind, profileId ?? 'all'],
+    queryFn: () => recommendationsApi.getVideoRails(kind, profileId),
+    staleTime: 60_000,
+  })
+
+export const useDismissVideo = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: recommendationsApi.dismissVideo,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['recommendations', 'video'] }),
+  })
+}
+
+export const useVideoDismissals = (profileId?: string) =>
+  useQuery({
+    queryKey: ['recommendations', 'video', 'dismissals', profileId ?? 'all'],
+    queryFn: () => recommendationsApi.getVideoDismissals(profileId),
+  })
+
+export const useUndoVideoDismissal = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: recommendationsApi.undoVideoDismissal,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['recommendations', 'video', 'dismissals'] }),
   })
 }

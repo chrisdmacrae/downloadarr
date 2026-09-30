@@ -1,4 +1,4 @@
-import api from '@/services/api'
+import api, { type SearchResult } from '@/services/api'
 
 export type RecommendationSourceProvider = 'LISTENBRAINZ' | 'LASTFM' | 'DEEZER' | 'SPOTIFY' | 'TRAKT'
 
@@ -40,6 +40,26 @@ export interface TraktLogin {
   verificationUrl: string
   expiresAt: string
   error?: string
+}
+
+/** A recommended movie or show; `id` is the TMDB ID, as everywhere else. */
+export type VideoRecommendation = SearchResult & { profiles: string[] }
+
+export interface VideoRails {
+  recommended: VideoRecommendation[]
+  watchlist: VideoRecommendation[]
+}
+
+export type VideoKind = 'MOVIE' | 'TV'
+
+export interface VideoDismissal {
+  id: string
+  profileId: string
+  profileName: string
+  kind: VideoKind
+  tmdbId: number
+  title: string
+  createdAt: string
 }
 
 export interface RecommendationSyncStatus {
@@ -100,6 +120,22 @@ export const recommendationsApi = {
 
   cancelTraktLogin: async (profileId: string): Promise<void> => {
     await api.delete(`/recommendations/profiles/${profileId}/trakt/device`)
+  },
+
+  /** Omit `profileId` for every profile, merged. */
+  getVideoRails: async (kind: VideoKind, profileId?: string): Promise<VideoRails> =>
+    (await api.get(`/recommendations/${kind === 'MOVIE' ? 'movies' : 'tv'}`, { params: { profileId } })).data.data,
+
+  /** Omit `profileId` to dismiss for every profile. */
+  dismissVideo: async (body: { kind: VideoKind; tmdbId: number; title: string; profileId?: string }): Promise<void> => {
+    await api.post('/recommendations/video-dismissals', body)
+  },
+
+  getVideoDismissals: async (profileId?: string): Promise<VideoDismissal[]> =>
+    (await api.get('/recommendations/video-dismissals', { params: { profileId } })).data.data,
+
+  undoVideoDismissal: async (id: string): Promise<void> => {
+    await api.delete(`/recommendations/video-dismissals/${id}`)
   },
 
   startSync: async (profileId?: string): Promise<RecommendationSyncStatus> =>

@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { HttpModule } from '@nestjs/axios';
 
 import { GameConfigModule } from '../config/config.module';
+import { DiscoveryModule } from '../discovery/discovery.module';
 import { ListenBrainzClient } from '../music/clients/listenbrainz.client';
 import { LastFmClient } from '../music/clients/lastfm.client';
 import { DeezerClient } from '../music/clients/deezer.client';
@@ -19,6 +20,7 @@ import { RecommendationAppsService } from './services/app-credentials.service';
 import { RecommendationSyncService } from './services/recommendation-sync.service';
 import { TraktClient } from './clients/trakt.client';
 import { TraktAuthService } from './services/trakt-auth.service';
+import { VideoRecommendationsService } from './services/video-recommendations.service';
 import { RecommendationsController } from './recommendations.controller';
 
 /**
@@ -29,7 +31,7 @@ import { RecommendationsController } from './recommendations.controller';
  * TorrentsModule.
  */
 @Module({
-  imports: [HttpModule.register({ timeout: 15000, maxRedirects: 5 }), GameConfigModule],
+  imports: [HttpModule.register({ timeout: 15000, maxRedirects: 5 }), GameConfigModule, DiscoveryModule],
   providers: [
     ListenBrainzClient,
     LastFmClient,
@@ -47,6 +49,7 @@ import { RecommendationsController } from './recommendations.controller';
     RecommendationSyncService,
     TraktClient,
     TraktAuthService,
+    VideoRecommendationsService,
   ],
   controllers: [RecommendationsController, MusicController],
 })

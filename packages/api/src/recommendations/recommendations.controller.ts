@@ -1,13 +1,15 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, ParseEnumPipe, Patch, Post, Put, Query } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
-import { RecommendationSourceProvider } from '../../generated/prisma';
+import { RecommendationSourceProvider, VideoKind } from '../../generated/prisma';
 import { RecommendationProfilesService } from './services/profiles.service';
 import { RecommendationSourcesService } from './services/sources.service';
 import { RecommendationAppsService } from './services/app-credentials.service';
 import { RecommendationSyncService } from './services/recommendation-sync.service';
 import { SpotifyAuthService } from '../music/services/spotify-auth.service';
 import { TraktAuthService } from './services/trakt-auth.service';
+import { VideoRecommendationsService } from './services/video-recommendations.service';
 import {
+  DismissVideoDto,
   ProfileNameDto,
   ProfileScopeQueryDto,
   StartSpotifyAuthDto,
@@ -27,6 +29,7 @@ export class RecommendationsController {
     private readonly syncService: RecommendationSyncService,
     private readonly spotifyAuth: SpotifyAuthService,
     private readonly traktAuth: TraktAuthService,
+    private readonly video: VideoRecommendationsService,
   ) {}
 
   @Get('profiles')
@@ -127,6 +130,39 @@ export class RecommendationsController {
   @ApiOperation({ summary: 'Abandon a profile\'s Trakt device login' })
   cancelTraktLogin(@Param('profileId') profileId: string) {
     this.traktAuth.cancel(profileId);
+    return { success: true };
+  }
+
+  @Get('movies')
+  @ApiOperation({ summary: 'Recommended and watchlisted movies for a profile, or for everyone' })
+  async movies(@Query() query: ProfileScopeQueryDto) {
+    return { success: true, data: await this.video.rails(await this.profiles.scope(query.profileId), VideoKind.MOVIE) };
+  }
+
+  @Get('tv')
+  @ApiOperation({ summary: 'Recommended and watchlisted shows for a profile, or for everyone' })
+  async tv(@Query() query: ProfileScopeQueryDto) {
+    return { success: true, data: await this.video.rails(await this.profiles.scope(query.profileId), VideoKind.TV) };
+  }
+
+  @Get('video-dismissals')
+  @ApiOperation({ summary: 'Movies and shows marked not interested' })
+  async listVideoDismissals(@Query() query: ProfileScopeQueryDto) {
+    const rows = await this.video.listDismissals(await this.profiles.scope(query.profileId));
+    return { success: true, data: rows.map(({ profile, ...row }) => ({ ...row, profileName: profile.name })) };
+  }
+
+  @Post('video-dismissals')
+  @ApiOperation({ summary: 'Mark a movie or show not interested, for one profile or every profile' })
+  async dismissVideo(@Body() dto: DismissVideoDto) {
+    await this.video.dismiss(await this.profiles.scope(dto.profileId), dto.kind as VideoKind, dto.tmdbId, dto.title);
+    return { success: true };
+  }
+
+  @Delete('video-dismissals/:id')
+  @ApiOperation({ summary: 'Undo a movie or show dismissal' })
+  async undoVideoDismissal(@Param('id') id: string) {
+    await this.video.undoDismissal(id);
     return { success: true };
   }
 

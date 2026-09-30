@@ -1,4 +1,4 @@
-import { IsBoolean, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsBoolean, IsIn, IsInt, IsOptional, IsString, MaxLength, Min, MinLength } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class ProfileNameDto {
@@ -76,4 +76,26 @@ export class StartSpotifyAuthDto {
   @ApiProperty({ description: 'Settings page to return to; must be an allowed CORS origin' })
   @IsString()
   returnTo: string;
+}
+
+export class DismissVideoDto {
+  @ApiProperty({ enum: ['MOVIE', 'TV'] })
+  @IsIn(['MOVIE', 'TV'])
+  kind: 'MOVIE' | 'TV';
+
+  @ApiProperty({ example: 603 })
+  @IsInt()
+  @Min(1)
+  tmdbId: number;
+
+  @ApiProperty({ example: 'The Matrix' })
+  @IsString()
+  @MinLength(1)
+  @MaxLength(300)
+  title: string;
+
+  @ApiPropertyOptional({ description: 'Dismiss for this profile only; omit to dismiss for every profile' })
+  @IsOptional()
+  @IsString()
+  profileId?: string;
 }

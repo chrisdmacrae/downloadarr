@@ -19,6 +19,8 @@ export interface DiscoveryRail {
   id: string
   title: string
   items: SearchResult[]
+  /** Personal rails offer "Not interested" on each card. */
+  dismissible?: boolean
 }
 
 interface DiscoveryScreenProps {
@@ -33,6 +35,9 @@ interface DiscoveryScreenProps {
   popular: SearchResult[]
   popularTitle: string
   genreRails: DiscoveryRail[]
+  /** The picked profile's recommendations, shown above everything else. */
+  personalRails?: DiscoveryRail[]
+  onDismiss?: (item: SearchResult) => void
   isLoading: boolean
   onItemClick: (item: SearchResult) => void
   onRequest?: (item: SearchResult) => void
@@ -70,6 +75,8 @@ export function DiscoveryScreen({
   popular,
   popularTitle,
   genreRails,
+  personalRails = [],
+  onDismiss,
   isLoading,
   onItemClick,
   onRequest,
@@ -141,7 +148,7 @@ export function DiscoveryScreen({
 
   const hero = featured.find((item) => item.backdrop) ?? featured[0]
 
-  const renderCard = (item: SearchResult, index: number, total: number) => {
+  const renderCard = (item: SearchResult, index: number, total: number, dismissible = false) => {
     const request = requestFor(item)
     return (
       <PosterCard
@@ -176,6 +183,18 @@ export function DiscoveryScreen({
               >
                 Details
               </Button>
+              {dismissible && onDismiss && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onDismiss(item)
+                  }}
+                >
+                  Not interested
+                </Button>
+              )}
             </>
           ) : undefined
         }
@@ -253,6 +272,14 @@ export function DiscoveryScreen({
             </Button>
           </form>
         </div>
+
+        {personalRails
+          .filter((rail) => rail.items.length > 0)
+          .map((rail) => (
+            <Rail key={rail.id} title={rail.title} count={rail.items.length}>
+              {rail.items.map((item, i) => renderCard(item, i, rail.items.length, rail.dismissible))}
+            </Rail>
+          ))}
 
         {featured.length > 0 && (
           <Rail title="Featured" count={featured.length}>

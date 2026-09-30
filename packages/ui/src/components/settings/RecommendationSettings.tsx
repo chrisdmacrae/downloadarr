@@ -25,6 +25,8 @@ import {
   useRecommendationSyncStatus,
   useRenameProfile,
   useStartRecommendationSync,
+  useUndoVideoDismissal,
+  useVideoDismissals,
 } from '@/hooks/useRecommendations'
 import { useMusicDismissals, useUndoMusicDismissal } from '@/hooks/useMusic'
 import type { RecommendationProfile } from '@/services/recommendations'
@@ -240,29 +242,46 @@ function SyncCard() {
 
 function HiddenItemsCard() {
   const { profileId, profiles, label } = useProfile()
-  const { data: dismissals } = useMusicDismissals(profileId)
-  const undo = useUndoMusicDismissal()
+  const { data: musicDismissals } = useMusicDismissals(profileId)
+  const { data: videoDismissals } = useVideoDismissals(profileId)
+  const undoMusic = useUndoMusicDismissal()
+  const undoVideo = useUndoVideoDismissal()
   const showOwner = !profileId && profiles.length > 1
+  const items = [
+    ...(videoDismissals ?? []).map((d) => ({
+      id: d.id,
+      label: `${d.title} (${d.kind === 'MOVIE' ? 'movie' : 'show'})`,
+      profileName: d.profileName,
+      undo: () => undoVideo.mutate(d.id),
+    })),
+    ...(musicDismissals ?? []).map((d) => ({
+      id: d.id,
+      label: d.label,
+      profileName: d.profileName,
+      undo: () => undoMusic.mutate(d.id),
+    })),
+  ]
+  const busy = undoMusic.isPending || undoVideo.isPending
 
   return (
     <Card>
       <CardHeader className="pb-3">
-        <CardTitle className="text-base">Hidden artists and albums</CardTitle>
+        <CardTitle className="text-base">Hidden items</CardTitle>
         <CardDescription>
           {profiles.length > 1 ? `Showing ${label === 'everyone' ? 'everyone’s' : `${label}’s`}. ` : ''}Anything you show
           again returns at the next refresh.
         </CardDescription>
       </CardHeader>
       <CardContent className="pt-0">
-        {dismissals?.length ? (
+        {items.length ? (
           <ul className="flex flex-col divide-y divide-[color:var(--border-hairline)] rounded-card border border-hairline">
-            {dismissals.map((d) => (
+            {items.map((d) => (
               <li key={d.id} className="flex items-center justify-between gap-3 px-3 py-2">
                 <span className="min-w-0 truncate text-sm text-fg-primary">
                   {d.label}
                   {showOwner && <span className="text-fg-muted"> · {d.profileName}</span>}
                 </span>
-                <Button variant="ghost" size="sm" disabled={undo.isPending} onClick={() => undo.mutate(d.id)}>
+                <Button variant="ghost" size="sm" disabled={busy} onClick={d.undo}>
                   Show again
                 </Button>
               </li>
@@ -270,7 +289,8 @@ function HiddenItemsCard() {
           </ul>
         ) : (
           <p className="text-sm text-fg-muted">
-            Nothing hidden. Use the menu on any album on the Music page to hide it or its artist.
+            Nothing hidden. Hide albums and artists from their menu on the Music page, and movies and shows with “Not
+            interested” on their recommendation rails.
           </p>
         )}
       </CardContent>
