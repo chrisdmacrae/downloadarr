@@ -26,6 +26,22 @@ For multiple allowed origins, separate them with commas:
 FRONTEND_URL=http://localhost:3000,https://your-domain.com,http://downloadarr:3000
 ```
 
+### Extra Origins (`CORS_ORIGINS`)
+
+`CORS_ORIGINS` is optional and adds origins on top of `FRONTEND_URL`, comma-separated. Use it for addresses other than the UI's own, such as a LAN IP, a reverse proxy, or another tool that calls the API:
+
+```bash
+CORS_ORIGINS=http://192.168.1.10:3000,https://media.example.com
+```
+
+Set it to `*` to allow any origin:
+
+```bash
+CORS_ORIGINS=*
+```
+
+A `*` in either variable allows every origin. The API then echoes each caller's origin back rather than sending a literal `*`, because browsers reject `*` on requests with credentials. Anyone who can reach the API can then call it from any website, so only do this on a trusted network.
+
 ## Common Scenarios
 
 ### 1. Local Development
@@ -95,11 +111,11 @@ docker-compose up -d
 
 ## WebSocket Configuration
 
-The WebSocket gateway (used for real-time updates) uses the same `FRONTEND_URL` configuration, so no additional setup is needed.
+The WebSocket gateway (used for real-time updates) uses the same `FRONTEND_URL` and `CORS_ORIGINS` configuration, so no additional setup is needed.
 
 ## Security Notes
 
 - Only add origins you trust to the `FRONTEND_URL` list
 - Use HTTPS origins in production
-- Avoid using wildcards (`*`) in production environments
+- Avoid `CORS_ORIGINS=*` unless the API is only reachable on a trusted network
 - The API includes `credentials: true` to support authentication cookies

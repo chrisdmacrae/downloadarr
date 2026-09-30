@@ -27,6 +27,7 @@ services:
     environment:
       NODE_ENV: development
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
     volumes:
       # Inherit base volumes from docker-compose.yml
       - ${DOWNLOAD_PATH}:/app/downloads

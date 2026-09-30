@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { corsOrigins } from './common/utils/cors-origins';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -10,13 +11,9 @@ async function bootstrap() {
   // and SIGKILL us, and so onModuleDestroy hooks run.
   app.enableShutdownHooks();
 
-  // Enable CORS for frontend
-  const corsOrigins = process.env.FRONTEND_URL
-    ? process.env.FRONTEND_URL.split(',').map(origin => origin.trim())
-    : ['http://localhost:3000'];
-
+  // Enable CORS for the frontend, plus any CORS_ORIGINS.
   app.enableCors({
-    origin: corsOrigins,
+    origin: corsOrigins(),
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],

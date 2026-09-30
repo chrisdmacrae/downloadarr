@@ -74,6 +74,7 @@ services:
       DOWNLOAD_PATH: /app/downloads
       LIBRARY_PATH: /app/library
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
     volumes:
       - ${DOWNLOAD_PATH}:/app/downloads
       - ${LIBRARY_PATH}:/app/library
