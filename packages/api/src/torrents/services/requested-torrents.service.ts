@@ -61,7 +61,21 @@ export class RequestedTorrentsService {
     });
   }
 
+  /**
+   * TV show requests are created one at a time. The duplicate check and the
+   * insert are separate queries, so two requests for the same show arriving
+   * together (a double click, or the UI and another client) would both pass
+   * the check.
+   */
+  private tvShowCreation: Promise<unknown> = Promise.resolve();
+
   async createTvShowRequest(dto: CreateTorrentRequestDto): Promise<RequestedTorrent> {
+    const creation = this.tvShowCreation.then(() => this.createTvShowRequestInTurn(dto));
+    this.tvShowCreation = creation.catch(() => undefined);
+    return creation;
+  }
+
+  private async createTvShowRequestInTurn(dto: CreateTorrentRequestDto): Promise<RequestedTorrent> {
     const isOngoing = dto.isOngoing === true;
     const logMessage = isOngoing
       ? `Creating ongoing TV show request for: ${dto.title}`
@@ -78,7 +92,8 @@ export class RequestedTorrentsService {
 
       this.logger.warn(existingMessage);
 
-      const errorMessage = isOngoing
+      // An ongoing request already covers any season or episode asked for
+      const errorMessage = isOngoing || existingRequest.isOngoing
         ? `An ongoing request for "${dto.title}" already exists with status: ${existingRequest.status}`
         : `A request for "${dto.title}" S${dto.season}${dto.episode ? `E${dto.episode}` : ''} already exists with status: ${existingRequest.status}`;
 
@@ -663,49 +678,12 @@ export class RequestedTorrentsService {
     // Exclude cancelled, failed, and expired requests from duplicate check
     const excludedStatuses = [RequestStatus.CANCELLED, RequestStatus.FAILED, RequestStatus.EXPIRED];
 
-    const isOngoing = dto.isOngoing === true;
+    // An ongoing request covers the whole show, so it is a duplicate of any
+    // new request for that show: ongoing, or one season or episode of it
+    const existingOngoing = await this.findOngoingTvShowRequest(dto, excludedStatuses);
+    if (existingOngoing) return existingOngoing;
 
-    // For ongoing requests, check for any existing ongoing request for the same show
-    if (isOngoing) {
-      const baseWhere = {
-        contentType: ContentType.TV_SHOW,
-        status: { notIn: excludedStatuses },
-        isOngoing: true,
-      };
-
-      // First, try to find by IMDB ID if provided (most accurate)
-      if (dto.imdbId) {
-        const existingByImdb = await this.prisma.requestedTorrent.findFirst({
-          where: {
-            ...baseWhere,
-            imdbId: dto.imdbId,
-          },
-        });
-        if (existingByImdb) return existingByImdb;
-      }
-
-      // Then try by TMDB ID if provided
-      if (dto.tmdbId) {
-        const existingByTmdb = await this.prisma.requestedTorrent.findFirst({
-          where: {
-            ...baseWhere,
-            tmdbId: dto.tmdbId,
-          },
-        });
-        if (existingByTmdb) return existingByTmdb;
-      }
-
-      // Finally, try by title for ongoing requests
-      if (dto.title) {
-        const existingByTitle = await this.prisma.requestedTorrent.findFirst({
-          where: {
-            ...baseWhere,
-            title: { equals: dto.title, mode: 'insensitive' },
-          },
-        });
-        if (existingByTitle) return existingByTitle;
-      }
-    } else {
+    if (dto.isOngoing !== true) {
       // For specific season/episode requests, use the original logic
       const baseWhere = {
         contentType: ContentType.TV_SHOW,
@@ -747,6 +725,40 @@ export class RequestedTorrentsService {
         });
         if (existingByTitleSeason) return existingByTitleSeason;
       }
+    }
+
+    return null;
+  }
+
+  private async findOngoingTvShowRequest(dto: CreateTorrentRequestDto, excludedStatuses: RequestStatus[]): Promise<RequestedTorrent | null> {
+    const baseWhere = {
+      contentType: ContentType.TV_SHOW,
+      status: { notIn: excludedStatuses },
+      isOngoing: true,
+    };
+
+    // First, try to find by IMDB ID if provided (most accurate)
+    if (dto.imdbId) {
+      const existingByImdb = await this.prisma.requestedTorrent.findFirst({
+        where: { ...baseWhere, imdbId: dto.imdbId },
+      });
+      if (existingByImdb) return existingByImdb;
+    }
+
+    // Then try by TMDB ID if provided
+    if (dto.tmdbId) {
+      const existingByTmdb = await this.prisma.requestedTorrent.findFirst({
+        where: { ...baseWhere, tmdbId: dto.tmdbId },
+      });
+      if (existingByTmdb) return existingByTmdb;
+    }
+
+    // Finally, try by title
+    if (dto.title) {
+      const existingByTitle = await this.prisma.requestedTorrent.findFirst({
+        where: { ...baseWhere, title: { equals: dto.title, mode: 'insensitive' } },
+      });
+      if (existingByTitle) return existingByTitle;
     }
 
     return null;

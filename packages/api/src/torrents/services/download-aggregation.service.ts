@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
-import { Aria2Service } from '../../download/aria2.service';
+import { Aria2Service, isGidNotFoundError } from '../../download/aria2.service';
 import { RequestStatus, RequestedTorrent } from '../../../generated/prisma';
 
 export interface AggregatedDownloadStatus {
@@ -329,8 +329,13 @@ export class DownloadAggregationService {
         reason: status.errorMessage,
       };
     } catch (error) {
+      // Only a download aria2 has forgotten is lost. If aria2 itself cannot be
+      // asked, the download is most likely still running.
+      if (isGidNotFoundError(error)) {
+        return { failed: true, reason: 'Download no longer exists in aria2' };
+      }
       this.logger.debug(`Error checking failure status for ${aria2Gid}:`, error);
-      return { failed: true, reason: 'Unable to get download status' };
+      return { failed: false };
     }
   }
 

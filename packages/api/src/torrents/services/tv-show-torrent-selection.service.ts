@@ -192,18 +192,27 @@ export class TvShowTorrentSelectionService {
       return null;
     }
 
-    // Sort by priority (highest first), then by chronological order, then by seeders
+    // Chronological order comes first: whatever covers the earliest missing
+    // season wins, however good a pack for later seasons looks. Among those,
+    // the kind of torrent decides (series pack, multi-season, season, episode),
+    // then the earliest episode, then seeders.
     matches.sort((a, b) => {
-      if (a.priority !== b.priority) {
-        return b.priority - a.priority;
-      }
-
-      // If priorities are equal, prefer torrents covering earlier seasons
       const aEarliestSeason = this.getEarliestSeasonFromMatch(a);
       const bEarliestSeason = this.getEarliestSeasonFromMatch(b);
 
       if (aEarliestSeason !== bEarliestSeason) {
         return aEarliestSeason - bEarliestSeason; // Earlier seasons first
+      }
+
+      if (a.priority !== b.priority) {
+        return b.priority - a.priority;
+      }
+
+      const aEarliestEpisode = this.getEarliestEpisodeFromMatch(a);
+      const bEarliestEpisode = this.getEarliestEpisodeFromMatch(b);
+
+      if (aEarliestEpisode !== bEarliestEpisode) {
+        return aEarliestEpisode - bEarliestEpisode;
       }
 
       return b.torrent.seeders - a.torrent.seeders;
@@ -214,9 +223,29 @@ export class TvShowTorrentSelectionService {
   }
 
   /**
+   * The seasons a show still needs anything from, earliest first
+   */
+  getNeededSeasons(missingContent: MissingContent): number[] {
+    const seasons = new Set([
+      ...missingContent.missingSeasons,
+      ...missingContent.incompleteSeasons.map(season => season.seasonNumber),
+    ]);
+    return [...seasons].sort((a, b) => a - b);
+  }
+
+  private getEarliestEpisodeFromMatch(match: TorrentMatch): number {
+    if (match.covers.episodes && match.covers.episodes.length > 0) {
+      const season = this.getEarliestSeasonFromMatch(match);
+      return Math.min(...match.covers.episodes.filter(ep => ep.season === season).map(ep => ep.episode));
+    }
+
+    return 0; // Packs start at the first episode
+  }
+
+  /**
    * Get the earliest season number from a torrent match for sorting
    */
-  private getEarliestSeasonFromMatch(match: TorrentMatch): number {
+  getEarliestSeasonFromMatch(match: TorrentMatch): number {
     if (match.covers.seasons && match.covers.seasons.length > 0) {
       return Math.min(...match.covers.seasons);
     }

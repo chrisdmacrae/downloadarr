@@ -22,7 +22,12 @@ export class DownloadService {
     private prisma: PrismaService,
   ) {}
 
-  async createDownload(createDownloadDto: CreateDownloadDto) {
+  /**
+   * `matchRequests: false` is for downloads started on behalf of a request:
+   * the caller links the two itself, and guessing a request from the download
+   * name could pick another one with a similar title.
+   */
+  async createDownload(createDownloadDto: CreateDownloadDto, { matchRequests = true }: { matchRequests?: boolean } = {}) {
     const { url, type, destination, name, mediaType, mediaTitle, mediaYear, mediaPoster, mediaOverview } = createDownloadDto;
 
     const options = {
@@ -61,7 +66,9 @@ export class DownloadService {
     });
 
     // Check if this download matches any existing torrent requests
-    await this.checkAndUpdateMatchingTorrentRequests(url, name, metadata.id.toString(), gid);
+    if (matchRequests) {
+      await this.checkAndUpdateMatchingTorrentRequests(url, name, metadata.id.toString(), gid);
+    }
 
     return {
       id: metadata.id,

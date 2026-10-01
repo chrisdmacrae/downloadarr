@@ -3,10 +3,11 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { RequestedTorrentsService } from './requested-torrents.service';
 import { RequestLifecycleOrchestrator } from './request-lifecycle-orchestrator.service';
 import { DownloadAggregationService } from './download-aggregation.service';
-import { Aria2Service } from '../../download/aria2.service';
+import { Aria2Service, isGidNotFoundError } from '../../download/aria2.service';
 import { PrismaService } from '../../database/prisma.service';
 import { OrganizationRulesService } from '../../organization/services/organization-rules.service';
 import { FileOrganizationService } from '../../organization/services/file-organization.service';
+import { SeasonScanningService } from './season-scanning.service';
 import { RequestStatus, ContentType } from '../../../generated/prisma';
 import { fromAria2Path } from '../../common/utils/aria2-paths';
 
@@ -22,6 +23,7 @@ export class DownloadProgressTrackerService {
     private readonly prisma: PrismaService,
     private readonly organizationRulesService: OrganizationRulesService,
     private readonly fileOrganizationService: FileOrganizationService,
+    private readonly seasonScanningService: SeasonScanningService,
   ) {}
 
   @Cron(CronExpression.EVERY_30_SECONDS)
@@ -82,7 +84,16 @@ export class DownloadProgressTrackerService {
         try {
           // Only adopt downloads aria2 still knows about
           await this.aria2Service.getStatus(torrentDownload.aria2Gid!);
-        } catch {
+        } catch (error) {
+          // aria2 no longer has this download (it lost its session), so it will
+          // never finish: stop treating it as active, or it is polled forever
+          if (isGidNotFoundError(error)) {
+            await this.prisma.torrentDownload.update({
+              where: { id: torrentDownload.id },
+              data: { status: 'FAILED', updatedAt: new Date() },
+            });
+            this.logger.warn(`Download ${torrentDownload.aria2Gid} for request ${request.id} (${request.title}) is gone from aria2, marked as failed`);
+          }
           continue;
         }
 
@@ -193,6 +204,7 @@ export class DownloadProgressTrackerService {
         // Handle simple request completion (movies, games, or legacy downloads)
         // First, try to organize the downloaded files
         await this.organizeDownloadedFiles(requestId, aria2Gid);
+        await this.countDownloadedEpisodes(requestId);
 
         await this.orchestrator.markAsCompleted(requestId);
         this.logger.log(`Download completed for request ${requestId}`);
@@ -246,11 +258,33 @@ export class DownloadProgressTrackerService {
       if (torrentDownload.aria2Gid) {
         await this.organizeDownloadedFiles(torrentDownload.requestedTorrentId, torrentDownload.aria2Gid);
       }
+      await this.countDownloadedEpisodes(torrentDownload.requestedTorrentId);
 
       // Mark the request as completed
       await this.orchestrator.markAsCompleted(torrentDownload.requestedTorrentId);
     } catch (error) {
       this.logger.error(`Error completing TorrentDownload ${torrentDownload.id}:`, error);
+    }
+  }
+
+  /**
+   * Mark the episodes a TV download just delivered. Completing the request
+   * decides what the show still needs from its episodes; left to the periodic
+   * scan, the season just downloaded would still look missing and be fetched
+   * again instead of the next one.
+   */
+  private async countDownloadedEpisodes(requestId: string): Promise<void> {
+    try {
+      const request = await this.prisma.requestedTorrent.findUnique({
+        where: { id: requestId },
+        select: { contentType: true },
+      });
+      if (request?.contentType !== ContentType.TV_SHOW) {
+        return;
+      }
+      await this.seasonScanningService.scanTvShowRequest(requestId);
+    } catch (error) {
+      this.logger.warn(`Could not scan episodes for request ${requestId} after its download: ${error.message}`);
     }
   }
 
@@ -481,8 +515,11 @@ export class DownloadProgressTrackerService {
             contentType: request.contentType as ContentType,
             title: request.title,
             year: request.year || undefined,
-            season: request.season || extractedSeasonEpisode.season,
-            episode: request.episode || extractedSeasonEpisode.episode,
+            // The file knows which episode it is. The request's own season is
+            // only where it started (a show found in the library carries the
+            // first season folder), so it must not file season 2 under season 1.
+            season: extractedSeasonEpisode.season || request.season || undefined,
+            episode: extractedSeasonEpisode.episode || request.episode || undefined,
             platform: request.platform || undefined,
             artist: request.artist || undefined,
             subfolder: request.contentType === ContentType.MUSIC ? this.discFolderFromPath(file.path) : undefined,

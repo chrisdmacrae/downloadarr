@@ -24,6 +24,15 @@ export interface DownloadOptions {
   'header'?: string[];
 }
 
+/**
+ * True when aria2 answered that it has no download with the GID asked for,
+ * as opposed to the RPC call itself failing.
+ */
+export function isGidNotFoundError(error: unknown): boolean {
+  const message = (error as { message?: unknown } | null)?.message;
+  return typeof message === 'string' && /GID \S+ is not found/i.test(message);
+}
+
 export interface DownloadStatus {
   gid: string;
   status: 'active' | 'waiting' | 'paused' | 'error' | 'complete' | 'removed';
@@ -223,7 +232,12 @@ export class Aria2Service implements OnModuleInit, OnModuleDestroy {
       const status = await this.aria2.call('tellStatus', gid);
       return status as DownloadStatus;
     } catch (error) {
-      this.logger.error(`Failed to get status for GID ${gid}:`, error);
+      // aria2 forgets its downloads when it restarts; callers handle a missing GID
+      if (isGidNotFoundError(error)) {
+        this.logger.debug(`GID ${gid} is not known to aria2`);
+      } else {
+        this.logger.error(`Failed to get status for GID ${gid}:`, error);
+      }
       throw error;
     }
   }
