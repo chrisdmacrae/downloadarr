@@ -62,7 +62,7 @@ Background work is **cron-driven via @nestjs/schedule**, not BullMQ (despite REA
 
 ### Module map (packages/api/src)
 
-- `discovery/` — external metadata APIs (OMDb movies, TMDB TV, IGDB games) + Prowlarr torrent search, quality/format filtering (`torrent-filter.service.ts`) and ranking
+- `discovery/` — external metadata APIs (OMDb movies, TMDB TV, IGDB games) + Prowlarr torrent search, quality/format filtering (`torrent-filter.service.ts`) and ranking. `GET /movies/discover` and `/tv-shows/discover` page through TMDB by genre, year range and sort (`TmdbService.discoverMovies/discoverTvShows`), and `GET /games/discover` does the same over IGDB with a platform filter (`IgdbService.discoverGames`; IGDB sorts nulls first, so every order but `title` leaves out unrated games). The UI's browse pages (`pages/Browse.tsx`, at `/movies/browse`, `/tv-shows/browse` and `/games/browse`) scroll through them. Listings stop at 500 pages, so decade filters are what reach older titles
 - `torrents/` — request lifecycle, state machines, TV-show gap analysis/selection (see above)
 - `download/` — aria2 JSON-RPC client (`aria2.service.ts`), Socket.IO gateway on namespace `/downloads` (room per download: `download-${id}`) pushing progress to the UI
 - `http-downloads/` — direct HTTP/HTTPS downloads (separate `HttpDownloadRequest` model, own progress tracker)

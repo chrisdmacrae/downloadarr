@@ -1,6 +1,7 @@
-import { IsString, IsOptional, IsInt, Min, Max, IsNotEmpty } from 'class-validator';
+import { IsString, IsOptional, IsInt, IsIn, Min, Max, MaxLength, IsNotEmpty } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional, OmitType } from '@nestjs/swagger';
+import { DISCOVER_SORTS, DiscoverSort, GAME_DISCOVER_SORTS, GameDiscoverSort } from '../interfaces/external-api.interface';
 
 export class SearchQueryDto {
   @ApiProperty({
@@ -127,4 +128,87 @@ export class GenreMoviesDto {
   @Min(1)
   @Max(100)
   page?: number = 1;
+}
+
+export class DiscoverDto {
+  @ApiPropertyOptional({
+    description: 'Genre ID from TMDB; omit to browse every genre',
+    example: 28,
+    minimum: 1,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  genreId?: number;
+
+  @ApiPropertyOptional({
+    description: 'Earliest release year, inclusive',
+    example: 1980,
+    minimum: 1870,
+    maximum: 2100,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1870)
+  @Max(2100)
+  yearFrom?: number;
+
+  @ApiPropertyOptional({
+    description: 'Latest release year, inclusive',
+    example: 1989,
+    minimum: 1870,
+    maximum: 2100,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1870)
+  @Max(2100)
+  yearTo?: number;
+
+  @ApiPropertyOptional({
+    description: 'Ordering of the listing',
+    enum: DISCOVER_SORTS,
+    default: 'popular',
+  })
+  @IsOptional()
+  @IsIn(DISCOVER_SORTS)
+  sort?: DiscoverSort = 'popular';
+
+  @ApiPropertyOptional({
+    description: 'Page number for pagination (TMDB serves at most 500 pages per listing)',
+    example: 1,
+    minimum: 1,
+    maximum: 500,
+    default: 1,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(500)
+  page?: number = 1;
+}
+
+export class GameDiscoverDto extends OmitType(DiscoverDto, ['sort'] as const) {
+  @ApiPropertyOptional({
+    description: 'Supported platform name; omit to browse every supported platform',
+    example: 'SNES',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  @Transform(({ value }) => value?.trim())
+  platform?: string;
+
+  @ApiPropertyOptional({
+    description: 'Ordering of the listing',
+    enum: GAME_DISCOVER_SORTS,
+    default: 'popular',
+  })
+  @IsOptional()
+  @IsIn(GAME_DISCOVER_SORTS)
+  sort?: GameDiscoverSort = 'popular';
 }

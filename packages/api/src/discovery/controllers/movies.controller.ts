@@ -2,7 +2,7 @@ import { Controller, Get, Query, Param, HttpException, HttpStatus, Logger } from
 import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { OmdbService } from '../services/omdb.service';
 import { TmdbService } from '../services/tmdb.service';
-import { MovieSearchDto, PopularContentDto, GenreMoviesDto } from '../dto/search.dto';
+import { MovieSearchDto, PopularContentDto, GenreMoviesDto, DiscoverDto } from '../dto/search.dto';
 import { SearchResult, MovieDetails } from '../interfaces/external-api.interface';
 
 @ApiTags('Movies')
@@ -145,6 +145,68 @@ export class MoviesController {
 
       throw new HttpException(
         'Internal server error while getting popular movies',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Get('discover')
+  @ApiOperation({
+    summary: 'Browse movies',
+    description: 'Page through movies from TMDB, optionally narrowed to a genre and a span of release years',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'A page of movies, with the total page and result counts',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid browse parameters',
+  })
+  @ApiResponse({
+    status: 503,
+    description: 'External API service unavailable',
+  })
+  async discoverMovies(@Query() discoverDto: DiscoverDto): Promise<{
+    success: boolean;
+    data?: SearchResult[];
+    page?: number;
+    totalPages?: number;
+    totalResults?: number;
+    error?: string;
+  }> {
+    try {
+      this.logger.log(`Browsing movies: ${JSON.stringify(discoverDto)}`);
+
+      if (discoverDto.yearFrom && discoverDto.yearTo && discoverDto.yearFrom > discoverDto.yearTo) {
+        throw new HttpException('yearFrom must not be later than yearTo', HttpStatus.BAD_REQUEST);
+      }
+
+      const result = await this.tmdbService.discoverMovies(discoverDto);
+
+      if (!result.success || !result.data) {
+        throw new HttpException(
+          result.error || 'Failed to browse movies',
+          result.statusCode || HttpStatus.SERVICE_UNAVAILABLE,
+        );
+      }
+
+      return {
+        success: true,
+        data: result.data.results,
+        page: result.data.page,
+        totalPages: result.data.totalPages,
+        totalResults: result.data.totalResults,
+      };
+    } catch (error) {
+      this.logger.error(`Error browsing movies: ${error.message}`, error.stack);
+
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      throw new HttpException(
+        'Internal server error while browsing movies',
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }

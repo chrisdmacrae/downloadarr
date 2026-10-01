@@ -4,7 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { BaseExternalApiService } from './base-external-api.service';
 import { IgdbAuthService } from './igdb-auth.service';
 import { AppConfigurationService } from '../../config/services/app-configuration.service';
-import { ExternalApiConfig, ExternalApiResponse, GameDetails, SearchResult } from '../interfaces/external-api.interface';
+import { ExternalApiConfig, ExternalApiResponse, GameDetails, SearchResult, GameDiscoverOptions, DiscoverPage } from '../interfaces/external-api.interface';
 import { firstValueFrom, timeout, retry, catchError } from 'rxjs';
 import { AxiosRequestConfig } from 'axios';
 
@@ -301,35 +301,190 @@ where game_type = 0 & rating_count > 100 & platforms = (${platformFilter});`;
     return `${this.screenshotBaseUrl}${imageId}`;
   }
 
-  private getPlatformId(platformName: string): number | null {
-    // Map platform names to IGDB platform IDs
-    const platformMap: Record<string, number> = {
-      // PC Platforms
-      'PC': 6, // PC (Microsoft Windows)
-      'Steam': 6, // Steam uses PC platform ID
-      'Windows': 6, // Windows is PC
-      // Console Platforms
-      'NES': 18,
-      'SNES': 19,
-      'N64': 4,
-      'GameCube': 21,
-      'Wii': 5,
-      'Wii U': 41,
-      'Game Boy': 33,
-      'Game Boy Color': 22,
-      'Game Boy Advance': 24,
-      'Switch': 130,
-      'Genesis': 29,
-      'Saturn': 32,
-      'Dreamcast': 23,
-      'PlayStation': 7,
-      'PlayStation 2': 8,
-      'PlayStation 3': 9,
-      'Xbox': 11,
-      'Xbox 360': 12,
-    };
+  // Map platform names to IGDB platform IDs
+  private static readonly PLATFORM_IDS: Record<string, number> = {
+    // PC Platforms
+    'PC': 6, // PC (Microsoft Windows)
+    'Steam': 6, // Steam uses PC platform ID
+    'Windows': 6, // Windows is PC
+    // Console Platforms
+    'NES': 18,
+    'SNES': 19,
+    'N64': 4,
+    'GameCube': 21,
+    'Wii': 5,
+    'Wii U': 41,
+    'Game Boy': 33,
+    'Game Boy Color': 22,
+    'Game Boy Advance': 24,
+    'Switch': 130,
+    'Genesis': 29,
+    'Saturn': 32,
+    'Dreamcast': 23,
+    'PlayStation': 7,
+    'PlayStation 2': 8,
+    'PlayStation 3': 9,
+    'Xbox': 11,
+    'Xbox 360': 12,
+  };
 
-    return platformMap[platformName] || null;
+  private getPlatformId(platformName: string): number | null {
+    return IgdbService.PLATFORM_IDS[platformName] || null;
+  }
+
+  /** IGDB's genres, by the names the UI shows. */
+  private static readonly GENRES: Array<{ id: number; name: string }> = [
+    { id: 31, name: 'Adventure' },
+    { id: 33, name: 'Arcade' },
+    { id: 35, name: 'Card & Board' },
+    { id: 4, name: 'Fighting' },
+    { id: 25, name: 'Hack and Slash' },
+    { id: 32, name: 'Indie' },
+    { id: 36, name: 'MOBA' },
+    { id: 7, name: 'Music' },
+    { id: 30, name: 'Pinball' },
+    { id: 8, name: 'Platform' },
+    { id: 2, name: 'Point-and-Click' },
+    { id: 9, name: 'Puzzle' },
+    { id: 26, name: 'Quiz' },
+    { id: 10, name: 'Racing' },
+    { id: 12, name: 'RPG' },
+    { id: 11, name: 'Real-Time Strategy' },
+    { id: 5, name: 'Shooter' },
+    { id: 13, name: 'Simulation' },
+    { id: 14, name: 'Sports' },
+    { id: 15, name: 'Strategy' },
+    { id: 24, name: 'Tactical' },
+    { id: 16, name: 'Turn-Based Strategy' },
+    { id: 34, name: 'Visual Novel' },
+  ];
+
+  getGameGenres(): Array<{ id: number; name: string }> {
+    return IgdbService.GENRES;
+  }
+
+  private static readonly DISCOVER_PAGE_SIZE = 40;
+  /** Matches the browse listings of movies and TV: 500 pages and no further. */
+  private static readonly DISCOVER_MAX_PAGE = 500;
+  /** Rating order needs enough ratings to mean something. */
+  private static readonly TOP_RATED_MIN_RATINGS = 10;
+  private static readonly COUNT_TTL_MS = 60 * 60 * 1000;
+
+  /** How many games match a filter, so a listing can say how long it is. */
+  private readonly countCache = new Map<string, { count: number; expires: number }>();
+
+  /**
+   * A browse listing: every game on a platform (or on all supported ones),
+   * optionally narrowed to a genre and a span of release years, one page at a
+   * time.
+   *
+   * IGDB sorts missing values first, so each order requires the field it
+   * sorts on. That leaves games nobody has rated out of every order except
+   * `title`, which is the one that lists everything.
+   */
+  async discoverGames(options: GameDiscoverOptions = {}): Promise<ExternalApiResponse<DiscoverPage>> {
+    try {
+      const { platform, genreId, yearFrom, yearTo, sort = 'popular', page = 1 } = options;
+      const conditions = ['game_type = 0'];
+
+      if (platform) {
+        const platformId = this.getPlatformId(platform);
+        if (!platformId) {
+          return { success: false, error: `Platform "${platform}" not supported`, statusCode: 400 };
+        }
+        conditions.push(`platforms = (${platformId})`);
+      } else {
+        const supported = [...new Set(Object.values(IgdbService.PLATFORM_IDS))];
+        conditions.push(`platforms = (${supported.join(',')})`);
+      }
+
+      if (genreId) {
+        conditions.push(`genres = (${Math.trunc(genreId)})`);
+      }
+      if (yearFrom) {
+        conditions.push(`first_release_date >= ${Date.UTC(yearFrom, 0, 1) / 1000}`);
+      }
+      if (yearTo) {
+        conditions.push(`first_release_date < ${Date.UTC(yearTo + 1, 0, 1) / 1000}`);
+      }
+
+      let order: string;
+      switch (sort) {
+        case 'top_rated':
+          order = 'rating desc';
+          conditions.push(`rating_count >= ${IgdbService.TOP_RATED_MIN_RATINGS}`);
+          break;
+        case 'newest': {
+          order = 'first_release_date desc';
+          // Unreleased games would otherwise lead the list. Rounded to the end
+          // of today so the filter, and its cached count, hold for the day.
+          const endOfToday = (Math.floor(Date.now() / 86_400_000) + 1) * 86_400;
+          conditions.push(`first_release_date < ${endOfToday}`);
+          break;
+        }
+        case 'oldest':
+          order = 'first_release_date asc';
+          conditions.push('first_release_date != null');
+          break;
+        case 'title':
+          order = 'name asc';
+          break;
+        default:
+          order = 'rating_count desc';
+          conditions.push('rating_count != null');
+      }
+
+      const where = conditions.join(' & ');
+      const pageSize = IgdbService.DISCOVER_PAGE_SIZE;
+      const requestBody = `fields id, name, summary, cover.url, first_release_date, genres.name, platforms.name, screenshots.url, rating;
+sort ${order};
+limit ${pageSize};
+offset ${(page - 1) * pageSize};
+where ${where};`;
+
+      const [response, count] = await Promise.all([
+        this.makeIgdbRequest<IgdbGame[]>('/games', requestBody),
+        this.countGames(where),
+      ]);
+
+      if (!response.success || !response.data) {
+        return { success: false, error: response.error, statusCode: response.statusCode };
+      }
+
+      // Without a count, a full page is taken to mean another follows.
+      const totalPages =
+        count != null
+          ? Math.max(1, Math.ceil(count / pageSize))
+          : response.data.length === pageSize ? page + 1 : page;
+
+      return {
+        success: true,
+        data: {
+          results: response.data.map(game => this.mapGameItem(game)),
+          page,
+          totalPages: Math.min(totalPages, IgdbService.DISCOVER_MAX_PAGE),
+          totalResults: count,
+        },
+      };
+    } catch (error) {
+      this.logger.error(`Error discovering games: ${error.message}`, error.stack);
+      return { success: false, error: error.message };
+    }
+  }
+
+  private async countGames(where: string): Promise<number | undefined> {
+    const cached = this.countCache.get(where);
+    if (cached && cached.expires > Date.now()) {
+      return cached.count;
+    }
+
+    const response = await this.makeIgdbRequest<{ count: number }>('/games/count', `where ${where};`);
+    if (!response.success || typeof response.data?.count !== 'number') {
+      return undefined;
+    }
+
+    this.countCache.set(where, { count: response.data.count, expires: Date.now() + IgdbService.COUNT_TTL_MS });
+    return response.data.count;
   }
 
   async getGamesByPlatform(platformName: string, limit: number = 20): Promise<ExternalApiResponse<SearchResult[]>> {

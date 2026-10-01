@@ -131,6 +131,35 @@ export interface DownloadJob {
   mediaOverview?: string;
   status: string;
   totalSize: number;
+/** How a browse listing is ordered. */
+export type DiscoverSort = 'popular' | 'top_rated' | 'newest' | 'oldest';
+/** Games can also be listed by name, the one order that includes unrated games. */
+export type GameDiscoverSort = DiscoverSort | 'title';
+
+export interface DiscoverParams {
+  genreId?: number;
+  /** Inclusive release-year range; either end may be left open. */
+  yearFrom?: number;
+  yearTo?: number;
+  sort?: DiscoverSort;
+  page?: number;
+}
+
+export interface GameDiscoverParams extends Omit<DiscoverParams, 'sort'> {
+  /** A supported platform name ("PC", "SNES"); omit for every supported platform. */
+  platform?: string;
+  sort?: GameDiscoverSort;
+}
+
+export interface DiscoverResponse {
+  success: boolean;
+  data?: SearchResult[];
+  page?: number;
+  totalPages?: number;
+  totalResults?: number;
+  error?: string;
+}
+
   completedSize: number;
   progress: number;
   downloadSpeed: number;
@@ -666,6 +695,11 @@ export const apiService = {
   },
 
   // Discovery Services
+  discoverMovies: async (params: DiscoverParams = {}): Promise<DiscoverResponse> => {
+    const response = await api.get('/movies/discover', { params });
+    return response.data;
+  },
+
   // Movies
   searchMovies: async (query: string, year?: number, page?: number): Promise<{ success: boolean; data?: SearchResult[]; error?: string }> => {
     const params = new URLSearchParams({ query });
@@ -695,6 +729,11 @@ export const apiService = {
   getMoviesByGenre: async (genreId: number, page?: number): Promise<{ success: boolean; data?: SearchResult[]; error?: string }> => {
     const params = page ? `?page=${page}` : '';
     const response = await api.get(`/movies/genres/${genreId}${params}`);
+    return response.data;
+  },
+
+  discoverTvShows: async (params: DiscoverParams = {}): Promise<DiscoverResponse> => {
+    const response = await api.get('/tv-shows/discover', { params });
     return response.data;
   },
 
@@ -770,6 +809,16 @@ export const apiService = {
     const params = page ? `?page=${page}` : '';
     const response = await api.get(`/anime/movies/popular${params}`);
     return response.data;
+  discoverGames: async (params: GameDiscoverParams = {}): Promise<DiscoverResponse> => {
+    const response = await api.get('/games/discover', { params });
+    return response.data;
+  },
+
+  getGameGenres: async (): Promise<{ success: boolean; data?: Array<{ id: number; name: string }>; error?: string }> => {
+    const response = await api.get('/games/genres/list');
+    return response.data;
+  },
+
   },
 
   getAnimeMovieGenres: async (): Promise<{ success: boolean; data?: Array<{ id: number; name: string }>; error?: string }> => {

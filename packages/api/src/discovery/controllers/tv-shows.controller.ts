@@ -1,7 +1,7 @@
 import { Controller, Get, Query, Param, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { TmdbService } from '../services/tmdb.service';
-import { TvSearchDto, PopularContentDto } from '../dto/search.dto';
+import { TvSearchDto, PopularContentDto, DiscoverDto } from '../dto/search.dto';
 import { SearchResult, TvShowDetails } from '../interfaces/external-api.interface';
 
 @ApiTags('TV Shows')
@@ -122,6 +122,68 @@ export class TvShowsController {
       
       throw new HttpException(
         'Internal server error while getting popular TV shows',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Get('discover')
+  @ApiOperation({
+    summary: 'Browse TV shows',
+    description: 'Page through TV shows from TMDB, optionally narrowed to a genre and a span of release years',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'A page of TV shows, with the total page and result counts',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid browse parameters',
+  })
+  @ApiResponse({
+    status: 503,
+    description: 'External API service unavailable',
+  })
+  async discoverTvShows(@Query() discoverDto: DiscoverDto): Promise<{
+    success: boolean;
+    data?: SearchResult[];
+    page?: number;
+    totalPages?: number;
+    totalResults?: number;
+    error?: string;
+  }> {
+    try {
+      this.logger.log(`Browsing TV shows: ${JSON.stringify(discoverDto)}`);
+
+      if (discoverDto.yearFrom && discoverDto.yearTo && discoverDto.yearFrom > discoverDto.yearTo) {
+        throw new HttpException('yearFrom must not be later than yearTo', HttpStatus.BAD_REQUEST);
+      }
+
+      const result = await this.tmdbService.discoverTvShows(discoverDto);
+
+      if (!result.success || !result.data) {
+        throw new HttpException(
+          result.error || 'Failed to browse TV shows',
+          result.statusCode || HttpStatus.SERVICE_UNAVAILABLE,
+        );
+      }
+
+      return {
+        success: true,
+        data: result.data.results,
+        page: result.data.page,
+        totalPages: result.data.totalPages,
+        totalResults: result.data.totalResults,
+      };
+    } catch (error) {
+      this.logger.error(`Error browsing TV shows: ${error.message}`, error.stack);
+
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      throw new HttpException(
+        'Internal server error while browsing TV shows',
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }

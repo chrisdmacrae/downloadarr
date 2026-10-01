@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 import { DiscoveryScreen, type DiscoveryRail } from '@/components/discovery/DiscoveryScreen'
 import { MovieDetailModal } from '@/components/MovieDetailModal'
@@ -23,11 +24,13 @@ export default function TvShowsDiscovery() {
   const [featured, setFeatured] = useState<SearchResult[]>([])
   const [popular, setPopular] = useState<SearchResult[]>([])
   const [genreRails, setGenreRails] = useState<DiscoveryRail[]>([])
+  const [allGenres, setAllGenres] = useState<Array<{ id: string; title: string }>>([])
   const [selectedShow, setSelectedShow] = useState<{ id: string; title: string } | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [requestItem, setRequestItem] = useState<SearchResult | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const { toast } = useToast()
+  const navigate = useNavigate()
   const { personalRails, onDismiss } = usePersonalRails('TV')
 
   useEffect(() => {
@@ -44,6 +47,7 @@ export default function TvShowsDiscovery() {
 
         const genresResponse = await apiService.getTvGenres()
         if (!cancelled && genresResponse.success && genresResponse.data) {
+          setAllGenres(genresResponse.data.map((genre) => ({ id: String(genre.id), title: genre.name })))
           const genres = genresResponse.data.filter((genre) =>
             TARGET_GENRES.some(
               (target) =>
@@ -102,6 +106,8 @@ export default function TvShowsDiscovery() {
         popular={popular}
         popularTitle="Popular TV shows"
         genreRails={genreRails}
+        browseGenres={allGenres}
+        onBrowse={(genreId) => navigate(`/tv-shows/browse${genreId ? `?genre=${genreId}` : ''}`)}
         personalRails={personalRails}
         onDismiss={onDismiss}
         isLoading={isLoading}
