@@ -16,13 +16,17 @@ export default defineConfig({
     watch: {
       usePolling: true, // Enable polling for file changes in Docker
     },
+    // The API serves the built UI itself. In development Vite serves it, and
+    // hands the API's routes on to wherever the API is running.
     proxy: {
       '/api': {
-        target: process.env.NODE_ENV === 'development' && process.env.DOCKER_ENV
-          ? 'http://api:3001'  // Use Docker service name in development
-          : 'http://localhost:3001',
+        target: process.env.VITE_API_PROXY || 'http://localhost:3001',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, ''),
+      },
+      '/socket.io': {
+        target: process.env.VITE_API_PROXY || 'http://localhost:3001',
+        changeOrigin: true,
+        ws: true,
       },
     },
   },

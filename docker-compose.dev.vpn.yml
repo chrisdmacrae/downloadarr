@@ -54,11 +54,11 @@ services:
       retries: 3
       start_period: 30s
 
-  # Override API service for development with VPN
-  api:
+  # Override Downloadarr for development with VPN
+  downloadarr:
     build:
-      dockerfile: packages/api/Dockerfile.dev
-    container_name: downloadarr-api-dev-vpn
+      dockerfile: Dockerfile.dev
+    container_name: downloadarr-app-dev-vpn
     environment:
       NODE_ENV: development
       VPN_ENABLED: "true"
@@ -82,6 +82,7 @@ services:
       # Add development-specific volumes
       - ./packages/api/src:/app/packages/api/src:ro
       - ./packages/api/prisma:/app/packages/api/prisma
+      - ./packages/ui/src:/app/packages/ui/src:ro
       - vpn_ip_share:/tmp/vpn-ip:ro  # Read-only access to VPN IP data
     networks:
       - downloadarr
@@ -90,18 +91,6 @@ services:
       - postgres
       - redis
       - flaresolverr
-
-  # Override Frontend for development
-  frontend:
-    build:
-      dockerfile: packages/ui/Dockerfile.dev
-    container_name: downloadarr-frontend-dev-vpn
-    environment:
-      DOCKER_ENV: "true"
-      VITE_API_URL: ${VITE_API_URL:-http://localhost:3001}
-    volumes:
-      # Mount source code for hot reloading
-      - ./packages/ui/src:/app/packages/ui/src:ro
 
   # Override original Aria2 to route through VPN
   aria2:
@@ -173,8 +162,8 @@ services:
     volumes:
       - postgres_data_dev:/var/lib/postgresql/data
 
-  # FlareSolverr is registered with Prowlarr over its API by the Downloadarr
-  # API on start-up, so there is nothing to configure here.
+  # FlareSolverr is registered with Prowlarr over its API by Downloadarr
+  # on start-up, so there is nothing to configure here.
   prowlarr:
     container_name: downloadarr-prowlarr-dev-vpn
     volumes:

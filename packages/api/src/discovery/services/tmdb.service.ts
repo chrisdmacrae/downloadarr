@@ -5,7 +5,7 @@ import { AxiosRequestConfig, AxiosResponse } from 'axios';
 import { firstValueFrom, timeout, retry, catchError } from 'rxjs';
 import { BaseExternalApiService } from './base-external-api.service';
 import { AppConfigurationService } from '../../config/services/app-configuration.service';
-import { ExternalApiConfig, ExternalApiResponse, TvShowDetails, SearchResult, MovieDetails, CreditPerson, PersonDetails } from '../interfaces/external-api.interface';
+import { ExternalApiConfig, ExternalApiResponse, TvShowDetails, SearchResult, MovieDetails, CreditPerson, PersonDetails, DiscoverOptions, DiscoverPage } from '../interfaces/external-api.interface';
 
 interface TmdbSearchResponse {
   page: number;
@@ -651,6 +651,103 @@ export class TmdbService extends BaseExternalApiService {
         success: false,
         error: error.message,
       };
+    }
+  }
+
+  /** TMDB refuses pages past 500, whatever `total_pages` says. */
+  private static readonly DISCOVER_MAX_PAGE = 500;
+  /**
+   * Vote floors for browse listings. Rating order needs enough votes to mean
+   * something; date order needs a few, or it leads with empty stub entries.
+   */
+  private static readonly TOP_RATED_MIN_VOTES = { movie: 200, tv: 50 };
+  private static readonly DATED_MIN_VOTES = 10;
+
+  /**
+   * A browse listing: every title in a genre (or in all of them), optionally
+   * narrowed to a span of years, one page at a time. Each combination of
+   * filters is its own listing of up to 500 pages, so narrowing to a decade
+   * reaches titles the all-time popularity order never gets to.
+   */
+  async discoverMovies(options: DiscoverOptions = {}): Promise<ExternalApiResponse<DiscoverPage>> {
+    return this.discover('movie', options);
+  }
+
+  async discoverTvShows(options: DiscoverOptions = {}): Promise<ExternalApiResponse<DiscoverPage>> {
+    return this.discover('tv', options);
+  }
+
+  private async discover(kind: 'movie' | 'tv', options: DiscoverOptions): Promise<ExternalApiResponse<DiscoverPage>> {
+    try {
+      const { genreId, yearFrom, yearTo, sort = 'popular', page = 1 } = options;
+      const dateField = kind === 'movie' ? 'primary_release_date' : 'first_air_date';
+
+      const params: Record<string, string> = {
+        page: page.toString(),
+        include_adult: 'false',
+      };
+      if (genreId) {
+        params.with_genres = genreId.toString();
+      }
+      if (yearFrom) {
+        params[`${dateField}.gte`] = `${yearFrom}-01-01`;
+      }
+      if (yearTo) {
+        params[`${dateField}.lte`] = `${yearTo}-12-31`;
+      }
+
+      switch (sort) {
+        case 'top_rated':
+          params.sort_by = 'vote_average.desc';
+          params['vote_count.gte'] = TmdbService.TOP_RATED_MIN_VOTES[kind].toString();
+          break;
+        case 'newest': {
+          params.sort_by = `${dateField}.desc`;
+          params['vote_count.gte'] = TmdbService.DATED_MIN_VOTES.toString();
+          // Unreleased titles would otherwise lead the list.
+          const today = new Date().toISOString().slice(0, 10);
+          const upper = params[`${dateField}.lte`];
+          params[`${dateField}.lte`] = upper && upper < today ? upper : today;
+          break;
+        }
+        case 'oldest':
+          params.sort_by = `${dateField}.asc`;
+          params['vote_count.gte'] = TmdbService.DATED_MIN_VOTES.toString();
+          break;
+        default:
+          params.sort_by = 'popularity.desc';
+      }
+
+      const response = await this.makeRequest<TmdbMovieSearchResponse | TmdbSearchResponse>(`/discover/${kind}`, params);
+
+      if (!response.success || !response.data) {
+        return { success: false, error: response.error, statusCode: response.statusCode };
+      }
+
+      const genreNames = await this.getGenreNameMap(kind);
+      // Anime has its own destination, so it is excluded here. Pages come back
+      // shorter as a result; TMDB has no "exclude by origin" filter.
+      const results: SearchResult[] =
+        kind === 'movie'
+          ? (response.data.results as TmdbMovieItem[])
+              .filter(item => !this.isAnimeMovie(item))
+              .map(item => this.mapMovieItem(item, genreNames))
+          : (response.data.results as TmdbTvShowItem[])
+              .filter(item => !this.isAnime(item))
+              .map(item => this.mapTvItem(item, genreNames));
+
+      return {
+        success: true,
+        data: {
+          results,
+          page: response.data.page,
+          totalPages: Math.min(response.data.total_pages, TmdbService.DISCOVER_MAX_PAGE),
+          totalResults: response.data.total_results,
+        },
+      };
+    } catch (error) {
+      this.logger.error(`Error discovering ${kind} titles: ${error.message}`, error.stack);
+      return { success: false, error: error.message };
     }
   }
 

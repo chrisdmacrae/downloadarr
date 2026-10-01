@@ -39,8 +39,8 @@ describe('LanDiscoveryService', () => {
     });
 
     it('includes an advertised URL only when configured, without a trailing slash', () => {
-      env.LAN_DISCOVERY_ADVERTISED_URL = 'https://downloadarr.example.com/api/';
-      expect(service.replyFor(DISCOVERY_QUESTION)?.Address).toBe('https://downloadarr.example.com/api');
+      env.LAN_DISCOVERY_ADVERTISED_URL = 'https://downloadarr.example.com/';
+      expect(service.replyFor(DISCOVERY_QUESTION)?.Address).toBe('https://downloadarr.example.com');
     });
   });
 

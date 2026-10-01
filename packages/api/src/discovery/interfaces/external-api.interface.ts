@@ -27,6 +27,38 @@ export interface SearchResult {
   platforms?: string[];
 }
 
+/** How a browse listing is ordered. */
+export const DISCOVER_SORTS = ['popular', 'top_rated', 'newest', 'oldest'] as const;
+export type DiscoverSort = (typeof DISCOVER_SORTS)[number];
+
+export interface DiscoverOptions {
+  genreId?: number;
+  /** Inclusive release-year range; either end may be left open. */
+  yearFrom?: number;
+  yearTo?: number;
+  sort?: DiscoverSort;
+  page?: number;
+}
+
+/** Games can also be listed by name, which is the one order that includes unrated games. */
+export const GAME_DISCOVER_SORTS = [...DISCOVER_SORTS, 'title'] as const;
+export type GameDiscoverSort = (typeof GAME_DISCOVER_SORTS)[number];
+
+export interface GameDiscoverOptions extends Omit<DiscoverOptions, 'sort'> {
+  /** A supported platform name ("PC", "SNES"); omit for every supported platform. */
+  platform?: string;
+  sort?: GameDiscoverSort;
+}
+
+/** One page of a browse listing, with enough to know whether more follow. */
+export interface DiscoverPage {
+  results: SearchResult[];
+  page: number;
+  totalPages: number;
+  /** Absent when the source could not say how many titles match. */
+  totalResults?: number;
+}
+
 /** A cast or crew member on a title, for "Cast & crew" rows. `id` is the TMDB person id. */
 export interface CreditPerson {
   id: string;

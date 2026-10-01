@@ -7,6 +7,7 @@ import { RequestedTorrentsService } from '../torrents/services/requested-torrent
 
 import { PrismaService } from '../database/prisma.service';
 import { RequestStatus } from '../../generated/prisma';
+import { toAria2Path } from '../common/utils/aria2-paths';
 
 @Injectable()
 export class DownloadService {
@@ -25,7 +26,7 @@ export class DownloadService {
     const { url, type, destination, name, mediaType, mediaTitle, mediaYear, mediaPoster, mediaOverview } = createDownloadDto;
 
     const options = {
-      dir: this.translatePathForAria2(destination || '/downloads'),
+      dir: toAria2Path(destination),
       out: name,
     };
 
@@ -492,24 +493,5 @@ export class DownloadService {
       this.logger.error('Error creating torrent download record:', error);
       // Don't throw - we don't want to fail the download if record creation fails
     }
-  }
-
-  /**
-   * Translate API container paths to Aria2 container paths
-   * API container: /app/downloads -> Aria2 container: /downloads
-   */
-  private translatePathForAria2(apiPath: string): string {
-    // If the path starts with /app/downloads, translate it to /downloads for Aria2
-    if (apiPath.startsWith('/app/downloads')) {
-      return apiPath.replace('/app/downloads', '/downloads');
-    }
-
-    // If it's already a /downloads path, use it as-is
-    if (apiPath.startsWith('/downloads')) {
-      return apiPath;
-    }
-
-    // For any other path, assume it's relative to /downloads in Aria2
-    return `/downloads${apiPath.startsWith('/') ? '' : '/'}${apiPath}`;
   }
 }

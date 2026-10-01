@@ -8,6 +8,7 @@ import { PrismaService } from '../../database/prisma.service';
 import { OrganizationRulesService } from '../../organization/services/organization-rules.service';
 import { FileOrganizationService } from '../../organization/services/file-organization.service';
 import { RequestStatus, ContentType } from '../../../generated/prisma';
+import { fromAria2Path } from '../../common/utils/aria2-paths';
 
 @Injectable()
 export class DownloadProgressTrackerService {
@@ -468,9 +469,8 @@ export class DownloadProgressTrackerService {
         }
 
         try {
-          // Convert Aria2 path to API container path
-          // Aria2 reports paths as /downloads/... but in API container they're at /app/downloads/...
-          const actualFilePath = this.convertAria2PathToContainerPath(file.path);
+          // aria2 may see the download folder at another path than this server does.
+          const actualFilePath = fromAria2Path(file.path);
           this.logger.log(`Converted path: ${file.path} -> ${actualFilePath}`);
 
           // Create organization context
@@ -557,25 +557,6 @@ export class DownloadProgressTrackerService {
     }
 
     return isMetadata;
-  }
-
-  /**
-   * Convert Aria2 path to API container path
-   * Aria2 reports paths as /downloads/... but in API container they're at /app/downloads/...
-   */
-  private convertAria2PathToContainerPath(aria2Path: string): string {
-    // If the path starts with /downloads, replace it with /app/downloads
-    if (aria2Path.startsWith('/downloads')) {
-      return aria2Path.replace('/downloads', '/app/downloads');
-    }
-
-    // If it's already an absolute path starting with /app/downloads, return as-is
-    if (aria2Path.startsWith('/app/downloads')) {
-      return aria2Path;
-    }
-
-    // If it's a relative path, assume it's relative to /app/downloads
-    return `/app/downloads/${aria2Path}`;
   }
 
   /**

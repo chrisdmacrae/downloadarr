@@ -24,17 +24,20 @@ const REFRESH_MARGIN_MS = 60 * 1000;
 
 /**
  * The callback sends the browser back to `returnTo`, so it must be one of the
- * UI's own origins — otherwise the callback would redirect anywhere.
+ * UI's own origins — otherwise the callback would redirect anywhere. The UI is
+ * served by the API, so the callback's own origin (`redirectUri`) is one.
  */
-export function isAllowedReturnTo(value: string, allowed: string[] | true): boolean {
+export function isAllowedReturnTo(value: string, allowed: string[] | true, redirectUri?: string): boolean {
   let url: URL;
+  let own: string | undefined;
   try {
     url = new URL(value);
+    own = redirectUri ? new URL(redirectUri).origin : undefined;
   } catch {
     return false;
   }
   if (!['http:', 'https:'].includes(url.protocol)) return false;
-  return allowed === true || allowed.includes(url.origin);
+  return allowed === true || url.origin === own || allowed.includes(url.origin);
 }
 
 const RECONNECT = 'Reconnect it in Settings › Recommendations.';
@@ -66,7 +69,7 @@ export class SpotifyAuthService {
     }
     const profile = await this.prisma.recommendationProfile.findUnique({ where: { id: input.profileId } });
     if (!profile) throw new BadRequestException('No such profile');
-    if (!isAllowedReturnTo(input.returnTo, corsOrigins())) {
+    if (!isAllowedReturnTo(input.returnTo, corsOrigins(), redirectUri)) {
       throw new BadRequestException(
         `${input.returnTo} isn’t an allowed Downloadarr address. Add its origin to FRONTEND_URL or CORS_ORIGINS.`,
       );

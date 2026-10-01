@@ -14,16 +14,19 @@ services:
     volumes:
       - postgres_data_dev:/var/lib/postgresql/data
 
-  # Development-specific overrides for API
-  api:
+  # Development-specific overrides for Downloadarr: one container running the
+  # API (nest --watch) and the UI (Vite), both with hot reload
+  downloadarr:
     # A local tag, so the dev build is what runs. Without it the base file's
     # ghcr.io/...:latest tag wins and a pulled release image runs instead.
-    image: downloadarr-api:dev
+    image: downloadarr:dev
     build:
-      dockerfile: packages/api/Dockerfile.dev
+      dockerfile: Dockerfile.dev
       args:
         APP_VERSION: ${APP_VERSION:-dev}
-    container_name: downloadarr-api-dev
+    container_name: downloadarr-dev
+    ports:
+      - "3000:3000" # Vite dev server: the UI with hot reload
     environment:
       NODE_ENV: development
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
@@ -36,20 +39,6 @@ services:
       # Add development-specific volumes
       - ./packages/api/src:/app/packages/api/src:ro
       - ./packages/api/prisma:/app/packages/api/prisma
-
-  # Development-specific overrides for Frontend
-  frontend:
-    image: downloadarr-ui:dev
-    build:
-      dockerfile: packages/ui/Dockerfile.dev
-      args:
-        APP_VERSION: ${APP_VERSION:-dev}
-    container_name: downloadarr-frontend-dev
-    environment:
-      DOCKER_ENV: "true"
-      VITE_API_URL: ${VITE_API_URL:-http://localhost:3001}
-    volumes:
-      # Mount source code for hot reloading
       - ./packages/ui/src:/app/packages/ui/src:ro
 
   # Development-specific overrides for Prowlarr

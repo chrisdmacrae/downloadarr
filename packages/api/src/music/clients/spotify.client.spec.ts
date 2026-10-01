@@ -18,7 +18,7 @@ describe('buildAuthorizeUrl', () => {
     const url = new URL(
       buildAuthorizeUrl({
         clientId: 'abc',
-        redirectUri: 'https://media.example.com/api/music/spotify/callback',
+        redirectUri: 'https://media.example.com/api/v1/music/spotify/callback',
         state: 's1',
         challenge: 'c1',
       }),
@@ -27,7 +27,7 @@ describe('buildAuthorizeUrl', () => {
     expect(Object.fromEntries(url.searchParams)).toEqual({
       client_id: 'abc',
       response_type: 'code',
-      redirect_uri: 'https://media.example.com/api/music/spotify/callback',
+      redirect_uri: 'https://media.example.com/api/v1/music/spotify/callback',
       state: 's1',
       scope: SPOTIFY_SCOPES.join(' '),
       code_challenge_method: 'S256',

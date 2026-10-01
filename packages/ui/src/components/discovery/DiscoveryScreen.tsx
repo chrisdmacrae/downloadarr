@@ -35,6 +35,14 @@ interface DiscoveryScreenProps {
   popular: SearchResult[]
   popularTitle: string
   genreRails: DiscoveryRail[]
+  /**
+   * Opens the full listing for a genre, or for everything when called without
+   * one. When set, rails gain "See all" and the genre pills open listings
+   * instead of scrolling to a rail.
+   */
+  onBrowse?: (genreId?: string) => void
+  /** Every genre that can be browsed — more than the handful that get a rail. */
+  browseGenres?: Array<{ id: string; title: string }>
   /** The picked profile's recommendations, shown above everything else. */
   personalRails?: DiscoveryRail[]
   onDismiss?: (item: SearchResult) => void
@@ -75,6 +83,8 @@ export function DiscoveryScreen({
   popular,
   popularTitle,
   genreRails,
+  onBrowse,
+  browseGenres,
   personalRails = [],
   onDismiss,
   isLoading,
@@ -107,20 +117,24 @@ export function DiscoveryScreen({
   }
 
   // Genre pills ride in the top nav's second row.
+  const canBrowse = !!onBrowse
   const railFilters = React.useMemo(
-    () => [{ id: 'all', title: 'All' }, ...genreRails.map((r) => ({ id: r.id, title: r.title }))],
-    [genreRails]
+    () => [
+      { id: 'all', title: 'All' },
+      ...((canBrowse && browseGenres) || genreRails.map((r) => ({ id: r.id, title: r.title }))),
+    ],
+    [genreRails, browseGenres, canBrowse]
   )
 
   useSubnav(
-    genreRails.length > 0 || tabs ? (
+    railFilters.length > 1 || tabs ? (
       <>
         {tabs?.map((tab) => (
           <NavPill key={tab.id} active={activeTab === tab.id} onClick={() => onTabChange?.(tab.id)}>
             {tab.label}
           </NavPill>
         ))}
-        {tabs && genreRails.length > 0 && (
+        {tabs && railFilters.length > 1 && (
           <span aria-hidden className="mx-1 h-5 w-px shrink-0 bg-[color:var(--border-hairline)]" />
         )}
         {railFilters.map((filter) => (
@@ -128,6 +142,10 @@ export function DiscoveryScreen({
             key={filter.id}
             active={activeRail === filter.id}
             onClick={() => {
+              if (onBrowse && filter.id !== 'all') {
+                onBrowse(filter.id)
+                return
+              }
               setActiveRail(filter.id)
               if (filter.id !== 'all') {
                 document
@@ -288,14 +306,24 @@ export function DiscoveryScreen({
         )}
 
         {popular.length > 0 && (
-          <Rail title={popularTitle} count={popular.length}>
+          <Rail
+            title={popularTitle}
+            count={popular.length}
+            moreLabel={onBrowse ? 'See all' : undefined}
+            onMore={() => onBrowse?.()}
+          >
             {popular.map((item, i) => renderCard(item, i, popular.length))}
           </Rail>
         )}
 
         {genreRails.map((rail) => (
           <div key={rail.id} id={`rail-${rail.id}`}>
-            <Rail title={rail.title} count={rail.items.length}>
+            <Rail
+              title={rail.title}
+              count={rail.items.length}
+              moreLabel={onBrowse ? 'See all' : undefined}
+              onMore={() => onBrowse?.(rail.id)}
+            >
               {rail.items.map((item, i) => renderCard(item, i, rail.items.length))}
             </Rail>
           </div>

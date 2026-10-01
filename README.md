@@ -38,10 +38,30 @@ The setup script will:
 - 🔒 Set up VPN support (optional)
 - 🚀 Start all services with Docker Compose
 
-After setup, visit http://localhost:3000 to complete the onboarding wizard where you'll:
+After setup, visit http://localhost:3001 to complete the onboarding wizard where you'll:
 - Configure your Prowlarr API key
 - Set up file organization preferences
 - Complete your Downloadarr setup
+
+### Upgrading from separate API and frontend containers
+
+Downloadarr used to run as two containers: `api` on port 3001 and `frontend` (nginx) on port 3000.
+It is now one, `downloadarr`, which serves the web UI and the API from port **3001**.
+
+After pulling the new `docker-compose.yml` (re-run `setup.sh`, or download it again):
+
+1. Start it with `docker compose up -d --remove-orphans`, which also removes the old `api` and
+   `frontend` containers. Your database, downloads and library are untouched.
+2. Open the web UI at http://localhost:3001 rather than port 3000.
+3. Anything that calls the API needs its new address: every route moved under `/api/v1`, so
+   `http://localhost:3001/movies/popular` is now `http://localhost:3001/api/v1/movies/popular`.
+   The API docs are at `/api/docs`.
+4. If you connected Spotify, its redirect URI is now `https://<your address>/api/v1/music/spotify/callback`.
+   Change it in your Spotify app and under **Settings → Recommendations → App credentials**.
+
+The image is now `ghcr.io/chrisdmacrae/downloadarr`; the `downloadarr/api` and `downloadarr/ui`
+images are no longer published. `FRONTEND_URL` and `VITE_API_URL` are no longer needed: the UI is on
+the API's own origin. `CORS_ORIGINS` still lists other apps allowed to call the API from a browser.
 
 ### Upgrading from a Jackett install
 
@@ -64,13 +84,14 @@ The old `jackett_config` Docker volume is left untouched, so nothing is deleted;
 
 ### LAN discovery
 
-The API answers `who is Downloadarr?` UDP broadcasts on port **7360** (one above Jellyfin's 7359), so
+Downloadarr answers `who is Downloadarr?` UDP broadcasts on port **7360** (one above Jellyfin's 7359), so
 clients on your network, like the TV and J Fire TV app, can find it without typing an address. The reply
-is JSON: `{ Id, Name, Version, Port }`. Clients combine `Port` with the address the reply came from.
+is JSON: `{ Id, Name, Version, Port }`. Clients combine `Port` with the address the reply came from,
+and find the API under `/api/v1` there.
 
 - `docker-compose.yml` publishes `7360:7360/udp`; keep it published or broadcasts won't reach the container.
 - `LAN_DISCOVERY_ENABLED=false` turns it off.
-- `LAN_DISCOVERY_ADVERTISED_URL` advertises a full API URL instead (for example behind a reverse proxy).
+- `LAN_DISCOVERY_ADVERTISED_URL` advertises a full address instead (for example behind a reverse proxy).
 
 ### Development
 
@@ -82,6 +103,9 @@ npm run dev
 # npm run dev:detached
 ```
 
+The UI is at http://localhost:3000, served by Vite with hot reload; it proxies `/api` to the API on
+http://localhost:3001, which reloads on changes too.
+
 To spin up a dockerized development environment with VPN support, run:
 
 ```
@@ -92,8 +116,7 @@ npm run dev:vpn
 
 ## Services
 
-- **API Server**: http://localhost:3001
-- **Frontend**: http://localhost:3000
+- **Downloadarr**: http://localhost:3001 (web UI; the API is under `/api/v1`, its docs at `/api/docs`)
 - **Prowlarr**: http://localhost:9696
 - **FlareSolverr**: http://localhost:8191 (Cloudflare bypass)
 - **AriaNG**: http://localhost:6880 (Download manager UI)
@@ -105,7 +128,7 @@ Copy `.env.example` to `.env` and configure:
 - `VPN_ENABLED` - Enable/disable VPN integration
 - `VPN_CONFIG_PATH` - Path to OpenVPN configuration
 - `DOWNLOAD_PATH` - Directory for downloaded files
-- `FRONTEND_URL` - Allowed frontend origins for CORS (see [CORS Configuration](docs/CORS_CONFIGURATION.md))
+- `CORS_ORIGINS` - Other origins allowed to call the API from a browser (see [CORS Configuration](docs/CORS_CONFIGURATION.md))
 - `FLARESOLVERR_URL` - FlareSolverr URL for Cloudflare bypass
 - `OMDB_API_KEY` - OMDb API key for movie search
 - `TMDB_API_KEY` - TMDB API key for TV show search
@@ -116,7 +139,8 @@ Copy `.env.example` to `.env` and configure:
 
 ### CORS Issues
 
-If you encounter "Origin not allowed by Access-Control-Allow-Origin" errors, see the [CORS Configuration Guide](docs/CORS_CONFIGURATION.md) for detailed setup instructions.
+The web UI is served from the API's own address and needs no CORS setup. If another app that calls the API
+shows "Origin not allowed by Access-Control-Allow-Origin" errors, see the [CORS Configuration Guide](docs/CORS_CONFIGURATION.md) for detailed setup instructions.
 
 ## License
 

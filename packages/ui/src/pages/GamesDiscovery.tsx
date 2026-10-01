@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 
 import { DiscoveryScreen, type DiscoveryRail } from '@/components/discovery/DiscoveryScreen'
 import { GameDetailModal } from '@/components/GameDetailModal'
@@ -30,8 +30,9 @@ const TARGET_PLATFORMS = [
   'Xbox 360',
 ]
 
+/** PC genres this screen builds rails from, by the names IGDB's genre list uses. */
 const PC_GENRES = [
-  'Action',
+  'Fighting',
   'Adventure',
   'Strategy',
   'RPG',
@@ -49,6 +50,8 @@ export default function GamesDiscovery() {
   const [featured, setFeatured] = useState<SearchResult[]>([])
   const [popular, setPopular] = useState<SearchResult[]>([])
   const [rails, setRails] = useState<DiscoveryRail[]>([])
+  const [allGenres, setAllGenres] = useState<Array<{ id: string; title: string }>>([])
+  const navigate = useNavigate()
   const [selectedGame, setSelectedGame] = useState<{ id: string; title: string } | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
@@ -80,12 +83,20 @@ export default function GamesDiscovery() {
             setPopular(first.data.slice(5))
           }
 
+          // Rails are keyed by genre id, which is what the browse page filters on.
+          const genresResponse = await apiService.getGameGenres()
+          const genres = (genresResponse.success && genresResponse.data) || []
+          if (!cancelled) {
+            setAllGenres(genres.map((genre) => ({ id: String(genre.id), title: genre.name })))
+          }
+
           const built: DiscoveryRail[] = []
           for (const genre of PC_GENRES) {
             try {
               const response = await apiService.getPcGamesByGenre(genre, 20)
               if (response.success && response.data?.length) {
-                built.push({ id: genre, title: genre, items: response.data.slice(0, 20) })
+                const id = genres.find((g) => g.name === genre)?.id
+                built.push({ id: String(id ?? genre), title: genre, items: response.data.slice(0, 20) })
               }
             } catch (err) {
               console.error(`Failed to load PC games for genre ${genre}:`, err)
@@ -156,6 +167,20 @@ export default function GamesDiscovery() {
         popular={popular}
         popularTitle={activeTab === 'pc' ? 'Popular PC games' : 'Popular ROMs'}
         genreRails={rails}
+        // PC rails are genres and ROM rails are platforms, so "See all" opens
+        // a PC genre listing or a platform listing to match.
+        browseGenres={activeTab === 'pc' && allGenres.length > 0 ? allGenres : undefined}
+        onBrowse={(id) => {
+          const params = new URLSearchParams()
+          if (activeTab === 'pc') {
+            params.set('platform', 'PC')
+            if (id && /^\d+$/.test(id)) params.set('genre', id)
+          } else if (id) {
+            params.set('platform', id)
+          }
+          const query = params.toString()
+          navigate(`/games/browse${query ? `?${query}` : ''}`)
+        }}
         isLoading={isLoading}
         tabs={[
           { id: 'pc', label: 'PC' },

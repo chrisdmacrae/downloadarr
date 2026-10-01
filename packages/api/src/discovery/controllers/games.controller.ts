@@ -1,7 +1,7 @@
 import { Controller, Get, Query, Param, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { IgdbService } from '../services/igdb.service';
-import { GameSearchDto, PopularContentDto } from '../dto/search.dto';
+import { GameSearchDto, PopularContentDto, GameDiscoverDto } from '../dto/search.dto';
 import { SearchResult, GameDetails } from '../interfaces/external-api.interface';
 
 @ApiTags('Games')
@@ -124,6 +124,81 @@ export class GamesController {
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
+  }
+
+  @Get('discover')
+  @ApiOperation({
+    summary: 'Browse games',
+    description: 'Page through games from IGDB, optionally narrowed to a platform, a genre and a span of release years',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'A page of games, with the total page and result counts',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid browse parameters',
+  })
+  @ApiResponse({
+    status: 503,
+    description: 'External API service unavailable',
+  })
+  async discoverGames(@Query() discoverDto: GameDiscoverDto): Promise<{
+    success: boolean;
+    data?: SearchResult[];
+    page?: number;
+    totalPages?: number;
+    totalResults?: number;
+    error?: string;
+  }> {
+    try {
+      this.logger.log(`Browsing games: ${JSON.stringify(discoverDto)}`);
+
+      if (discoverDto.yearFrom && discoverDto.yearTo && discoverDto.yearFrom > discoverDto.yearTo) {
+        throw new HttpException('yearFrom must not be later than yearTo', HttpStatus.BAD_REQUEST);
+      }
+
+      const result = await this.igdbService.discoverGames(discoverDto);
+
+      if (!result.success || !result.data) {
+        throw new HttpException(
+          result.error || 'Failed to browse games',
+          result.statusCode || HttpStatus.SERVICE_UNAVAILABLE,
+        );
+      }
+
+      return {
+        success: true,
+        data: result.data.results,
+        page: result.data.page,
+        totalPages: result.data.totalPages,
+        totalResults: result.data.totalResults,
+      };
+    } catch (error) {
+      this.logger.error(`Error browsing games: ${error.message}`, error.stack);
+
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      throw new HttpException(
+        'Internal server error while browsing games',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Get('genres/list')
+  @ApiOperation({
+    summary: 'Get game genres',
+    description: 'Get the list of game genres that can be browsed',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Game genres retrieved successfully',
+  })
+  getGameGenres(): { success: boolean; data: Array<{ id: number; name: string }> } {
+    return { success: true, data: this.igdbService.getGameGenres() };
   }
 
   @Get('pc/genres/:genreName')

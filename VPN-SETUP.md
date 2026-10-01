@@ -53,7 +53,7 @@ If your VPN requires username/password authentication:
 
 Check VPN status via the API:
 ```bash
-curl http://localhost:3001/vpn/status
+curl http://localhost:3001/api/v1/vpn/status
 ```
 
 Should return:
@@ -110,7 +110,7 @@ docker logs downloadarr-vpn
 docker logs downloadarr-aria2-vpn
 
 # Check VPN status
-curl http://localhost:3001/vpn/status
+curl http://localhost:3001/api/v1/vpn/status
 ```
 
 ### Performance issues
