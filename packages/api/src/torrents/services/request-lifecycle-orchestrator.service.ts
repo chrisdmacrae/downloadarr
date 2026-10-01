@@ -198,20 +198,23 @@ export class RequestLifecycleOrchestrator {
       const needsMoreContent = await this.gapAnalysisService.needsMoreContent(requestId);
       if (needsMoreContent) {
         this.logger.warn(`Cannot mark TV show ${request.title} as completed - still needs more content`);
-        // Reset to PENDING to continue searching
+        // Reset to PENDING to continue searching, and straight away: the next
+        // season should not wait out what is left of the search interval
         return this.transitionRequest({
           requestId,
           targetStatus: RequestStatus.PENDING,
           reason: 'TV show still needs more content',
+          metadata: { nextSearchAt: new Date() },
         });
       }
     }
 
     // For non-TV shows or complete TV shows, verify downloads are complete
     if (request.torrentDownloads.length > 0) {
-      // Check if all downloads are actually complete
+      // Check if all downloads are actually complete. Finished and failed ones
+      // are settled, and aria2 has usually forgotten them by now.
       for (const torrentDownload of request.torrentDownloads) {
-        if (torrentDownload.aria2Gid) {
+        if (torrentDownload.aria2Gid && torrentDownload.status === 'DOWNLOADING') {
           const isComplete = await this.downloadAggregationService.isDownloadComplete(torrentDownload.aria2Gid);
           if (!isComplete) {
             throw new Error('Cannot mark as completed: not all downloads are actually complete');

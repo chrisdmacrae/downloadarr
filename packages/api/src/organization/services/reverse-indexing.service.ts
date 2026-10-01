@@ -6,8 +6,9 @@ import { FileOrganizationService } from './file-organization.service';
 import { SeasonScanningService } from '../../torrents/services/season-scanning.service';
 import { TmdbService } from '../../discovery/services/tmdb.service';
 import { IgdbService } from '../../discovery/services/igdb.service';
-import { ContentType } from '../../../generated/prisma';
+import { ContentType, RequestStatus } from '../../../generated/prisma';
 import { OrganizationContext } from '../interfaces/organization.interface';
+import { normalizeShowTitle } from '../../common/utils/episode-files';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
@@ -841,6 +842,10 @@ export class ReverseIndexingService {
    * Find a matching torrent request for the given metadata
    */
   private async findMatchingRequest(metadata: any, contentType: ContentType): Promise<any> {
+    if (contentType === ContentType.TV_SHOW) {
+      return this.findMatchingTvShowRequest(metadata);
+    }
+
     const whereClause: any = {
       contentType,
       title: {
@@ -852,16 +857,6 @@ export class ReverseIndexingService {
     // Add year filter if available
     if (metadata.year) {
       whereClause.year = metadata.year;
-    }
-
-    // Add season/episode filters for TV shows
-    if (contentType === ContentType.TV_SHOW) {
-      if (metadata.season) {
-        whereClause.season = metadata.season;
-      }
-      if (metadata.episode) {
-        whereClause.episode = metadata.episode;
-      }
     }
 
     // Add platform filter for games
@@ -879,16 +874,72 @@ export class ReverseIndexingService {
   }
 
   /**
+   * The request a show in the library belongs to. A show is one request however
+   * many of its seasons are on disk, so the season found in the folder is not
+   * part of the match: requests made in the app have none.
+   */
+  private async findMatchingTvShowRequest(metadata: any, options: { openOnly?: boolean } = {}): Promise<any> {
+    const requests = await this.prisma.requestedTorrent.findMany({
+      where: {
+        contentType: ContentType.TV_SHOW,
+        ...(options.openOnly
+          ? { status: { notIn: [RequestStatus.CANCELLED, RequestStatus.FAILED, RequestStatus.EXPIRED] } }
+          : {}),
+      },
+      // The whole-show request first, then the newest
+      orderBy: [{ isOngoing: 'desc' }, { createdAt: 'desc' }],
+    });
+
+    const tmdbId = Number(metadata.tmdbId);
+    if (Number.isInteger(tmdbId) && tmdbId > 0) {
+      const byTmdb = requests.find(request => request.tmdbId === tmdbId);
+      if (byTmdb) return byTmdb;
+    }
+
+    if (metadata.imdbId) {
+      const byImdb = requests.find(request => request.imdbId === metadata.imdbId);
+      if (byImdb) return byImdb;
+    }
+
+    const title = metadata.title && metadata.title !== 'Unknown' ? normalizeShowTitle(metadata.title) : '';
+    if (!title) {
+      return null;
+    }
+
+    return requests.find(request =>
+      normalizeShowTitle(request.title) === title &&
+      (!metadata.year || !request.year || request.year === metadata.year),
+    ) ?? null;
+  }
+
+  /**
    * Create a request for reverse-indexed content with proper metadata
    * TV shows are created as PENDING to search for missing episodes
    * Other content types are created as COMPLETED
    */
   private async createCompletedRequest(metadata: any, contentType: ContentType): Promise<any> {
     const now = new Date();
-    const expiresAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000); // 30 days from now
+    // TV shows are ongoing requests, which live for a year (as when requested in the app)
+    const lifetimeDays = contentType === ContentType.TV_SHOW ? 365 : 30;
+    const expiresAt = new Date(now.getTime() + lifetimeDays * 24 * 60 * 60 * 1000);
 
     // Try to fetch proper metadata from external APIs
     const enrichedMetadata = await this.fetchExternalMetadata(metadata, contentType);
+
+    // A show that already has a request gets its files counted against that
+    // one, rather than a second request for the same show
+    if (contentType === ContentType.TV_SHOW) {
+      const existingRequest = await this.findMatchingTvShowRequest({ ...metadata, ...enrichedMetadata }, { openOnly: true });
+      if (existingRequest) {
+        this.logger.log(`Reverse-indexed show ${existingRequest.title} already has request ${existingRequest.id}, scanning it instead of creating another`);
+        try {
+          await this.seasonScanningService.scanTvShowRequest(existingRequest.id);
+        } catch (error) {
+          this.logger.warn(`Failed to scan episodes for TV show ${existingRequest.title}:`, error);
+        }
+        return existingRequest;
+      }
+    }
 
     // TV shows should be PENDING to search for missing episodes
     const isCompleted = contentType !== ContentType.TV_SHOW;
@@ -906,7 +957,7 @@ export class ReverseIndexingService {
       blacklistedWords: [],
       trustedIndexers: [],
       searchAttempts: 0,
-      maxSearchAttempts: contentType === ContentType.TV_SHOW ? 10 : 1,
+      maxSearchAttempts: contentType === ContentType.TV_SHOW ? 1000 : 1,
       searchIntervalMins: 30,
       expiresAt,
       foundTorrentTitle: enrichedMetadata.title || metadata.title || 'Unknown',
@@ -1026,13 +1077,20 @@ export class ReverseIndexingService {
    * Fetch TV show metadata from TMDB
    */
   private async fetchTvShowMetadata(metadata: any): Promise<any> {
-    const searchResponse = await this.tmdbService.searchTvShows(metadata.title, metadata.year);
+    // A show picked by hand in the organize queue is that show, whatever a
+    // search for its title would put first
+    let tmdbId: string | undefined = metadata.tmdbId ? String(metadata.tmdbId) : undefined;
 
-    if (searchResponse.success && searchResponse.data && searchResponse.data.length > 0) {
-      const tvShow = searchResponse.data[0];
+    if (!tmdbId) {
+      const searchResponse = await this.tmdbService.searchTvShows(metadata.title, metadata.year);
+      if (searchResponse.success && searchResponse.data && searchResponse.data.length > 0) {
+        tmdbId = searchResponse.data[0].id;
+      }
+    }
 
+    if (tmdbId) {
       // Get detailed metadata
-      const detailsResponse = await this.tmdbService.getTvShowDetails(tvShow.id);
+      const detailsResponse = await this.tmdbService.getTvShowDetails(tmdbId);
       if (detailsResponse.success && detailsResponse.data) {
         return {
           ...metadata,
@@ -1181,6 +1239,7 @@ export class ReverseIndexingService {
 
       // Create a completed request with the selected metadata
       const metadata = {
+        tmdbId: item.contentType === ContentType.TV_SHOW ? data.selectedTmdbId : undefined,
         title: data.selectedTitle || item.detectedTitle,
         year: data.selectedYear || item.detectedYear,
         season: item.detectedSeason,
@@ -1195,6 +1254,15 @@ export class ReverseIndexingService {
 
       // Re-organize files in the folder to match organization rules
       await this.reorganizeFilesInFolder(item.folderPath, metadata, item.contentType, createdRequest.id);
+
+      // The files may have moved, so count the episodes where they are now
+      if (item.contentType === ContentType.TV_SHOW) {
+        try {
+          await this.seasonScanningService.scanTvShowRequest(createdRequest.id);
+        } catch (error) {
+          this.logger.warn(`Failed to scan episodes for TV show ${createdRequest.title}:`, error);
+        }
+      }
 
       // Mark as completed
       await this.prisma.organizeQueue.update({
@@ -1321,8 +1389,10 @@ export class ReverseIndexingService {
             contentType,
             title: metadata.title || enhancedMetadata.title || 'Unknown',
             year: metadata.year || enhancedMetadata.year,
-            season: metadata.season || enhancedMetadata.season,
-            episode: metadata.episode || enhancedMetadata.episode,
+            // Each file's own season and episode come first: the queue item
+            // only carries the first season folder that was found
+            season: enhancedMetadata.season || metadata.season,
+            episode: enhancedMetadata.episode || metadata.episode,
             platform: metadata.platform || enhancedMetadata.platform,
             quality: metadata.quality || enhancedMetadata.quality,
             format: metadata.format || enhancedMetadata.format,

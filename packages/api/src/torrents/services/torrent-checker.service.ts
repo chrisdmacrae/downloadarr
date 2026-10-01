@@ -7,12 +7,12 @@ import { ProwlarrService } from '../../discovery/services/prowlarr.service';
 import { TorrentFilterService, FilterCriteria } from '../../discovery/services/torrent-filter.service';
 import { RequestLifecycleOrchestrator } from './request-lifecycle-orchestrator.service';
 import { DownloadService } from '../../download/download.service';
-import { Aria2Service } from '../../download/aria2.service';
+import { Aria2Service, isGidNotFoundError } from '../../download/aria2.service';
 import { DownloadType } from '../../download/dto/create-download.dto';
 import { PrismaService } from '../../database/prisma.service';
 import { RequestedTorrent, ContentType, RequestStatus } from '../../../generated/prisma';
 import { TorrentResult } from '../../discovery/interfaces/external-api.interface';
-import { TvShowTorrentSelectionService } from './tv-show-torrent-selection.service';
+import { TvShowTorrentSelectionService, MissingContent } from './tv-show-torrent-selection.service';
 import { TvShowGapAnalysisService } from './tv-show-gap-analysis.service';
 
 import { rankMusicReleases } from '../../discovery/services/music-release-ranker';
@@ -127,6 +127,12 @@ export class TorrentCheckerService {
   private async processOngoingTvShowRequest(request: RequestedTorrent): Promise<void> {
     this.logger.log(`Processing ongoing TV show request: ${request.title}`);
 
+    // A show downloads one torrent at a time: the next season starts when
+    // this one has finished
+    if (await this.resumeActiveTvDownload(request)) {
+      return;
+    }
+
     // Check if we need more content for this show
     const needsMoreContent = await this.tvShowGapAnalysis.needsMoreContent(request.id);
     if (!needsMoreContent) {
@@ -135,13 +141,36 @@ export class TorrentCheckerService {
       return;
     }
 
-    // Use general query (show title only) to search for torrents
+    const missingContent = this.scopeToRequest(
+      request,
+      await this.tvShowTorrentSelection.analyzeMissingContent(request.id),
+    );
+    const nextSeason = this.tvShowTorrentSelection.getNeededSeasons(missingContent)[0];
+
+    // Use general query (show title only) to search for torrents. A request
+    // for the whole show searches without a season of its own.
     const generalQuery = request.title;
     this.logger.log(`Searching with general query: "${generalQuery}"`);
 
-    const searchResult = await this.searchForTorrents(request, generalQuery);
+    let { torrents } = await this.searchForTorrents(
+      request,
+      generalQuery,
+      request.isOngoing ? {} : { season: request.season, episode: request.episode },
+    );
+    let bestMatch = await this.tvShowTorrentSelection.selectBestTorrent(torrents, missingContent, request.title);
 
-    if (searchResult.torrents.length === 0) {
+    // A search for the show alone mostly returns its newest releases. Ask for
+    // the earliest missing season by name before settling for a later one.
+    const coversNextSeason = bestMatch && this.tvShowTorrentSelection.getEarliestSeasonFromMatch(bestMatch) === nextSeason;
+    if (request.isOngoing && nextSeason !== undefined && !coversNextSeason) {
+      this.logger.log(`Nothing for season ${nextSeason} of ${request.title} in the general results, searching for it by name`);
+      const seasonSearch = await this.searchForTorrents(request, generalQuery, { season: nextSeason });
+      const seen = new Set(torrents.map(torrent => `${torrent.indexer}|${torrent.title}`));
+      torrents = [...torrents, ...seasonSearch.torrents.filter(torrent => !seen.has(`${torrent.indexer}|${torrent.title}`))];
+      bestMatch = await this.tvShowTorrentSelection.selectBestTorrent(torrents, missingContent, request.title);
+    }
+
+    if (torrents.length === 0) {
       this.logger.log(`No torrents found for: ${request.title}`);
       await this.orchestrator.transitionRequest({
         requestId: request.id,
@@ -150,14 +179,6 @@ export class TorrentCheckerService {
       });
       return;
     }
-
-    // Analyze missing content and select the best torrent
-    const missingContent = await this.tvShowTorrentSelection.analyzeMissingContent(request.id);
-    const bestMatch = await this.tvShowTorrentSelection.selectBestTorrent(
-      searchResult.torrents,
-      missingContent,
-      request.title
-    );
 
     if (!bestMatch) {
       this.logger.log(`No suitable torrent found for missing content: ${request.title}`);
@@ -188,6 +209,81 @@ export class TorrentCheckerService {
     if (downloadInfo) {
       await this.orchestrator.startDownload(request.id, downloadInfo);
     }
+  }
+
+  /**
+   * A request for one season (or episode) of a show only wants that much,
+   * though every season of the show is tracked under it.
+   */
+  private scopeToRequest(request: RequestedTorrent, missingContent: MissingContent): MissingContent {
+    if (request.isOngoing || !request.season) {
+      return missingContent;
+    }
+
+    return {
+      missingSeasons: missingContent.missingSeasons.filter(season => season === request.season),
+      incompleteSeasons: missingContent.incompleteSeasons.filter(season => season.seasonNumber === request.season),
+    };
+  }
+
+  /**
+   * If the show already has a download running, go back to tracking it
+   * instead of starting another. Returns true when it took the request over.
+   */
+  private async resumeActiveTvDownload(request: RequestedTorrent): Promise<boolean> {
+    const downloads = await this.prisma.torrentDownload.findMany({
+      where: { requestedTorrentId: request.id, status: 'DOWNLOADING', aria2Gid: { not: null } },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    for (const download of downloads) {
+      let lost = false;
+      try {
+        const status = await this.aria2Service.getStatus(download.aria2Gid!);
+        lost = status.status === 'error' || status.status === 'removed';
+      } catch (error) {
+        if (!isGidNotFoundError(error)) {
+          // aria2 cannot be asked right now. The download is most likely
+          // still running, so wait rather than risk a second one.
+          this.logger.warn(`Could not check download ${download.aria2Gid} for ${request.title}, not starting another: ${error.message}`);
+          await this.orchestrator.transitionRequest({
+            requestId: request.id,
+            targetStatus: RequestStatus.PENDING,
+            reason: 'Could not check the download in progress',
+          });
+          return true;
+        }
+        lost = true;
+      }
+
+      if (lost) {
+        await this.prisma.torrentDownload.update({
+          where: { id: download.id },
+          data: { status: 'FAILED', updatedAt: new Date() },
+        });
+        this.logger.warn(`Download ${download.aria2Gid} for ${request.title} is gone from aria2 or failed, marked as failed`);
+        continue;
+      }
+
+      const torrentInfo = {
+        title: download.torrentTitle,
+        link: download.torrentLink || '',
+        magnetUri: download.magnetUri || undefined,
+        size: download.torrentSize || 'Unknown',
+        seeders: download.seeders || 0,
+        indexer: download.indexer || 'Unknown',
+      };
+      await this.orchestrator.markAsFound(request.id, torrentInfo);
+      await this.orchestrator.startDownload(request.id, {
+        downloadJobId: download.downloadJobId || '',
+        aria2Gid: download.aria2Gid!,
+        torrentInfo,
+      });
+      this.logger.log(`${request.title} is still downloading ${download.torrentTitle}, waiting for it before searching for more`);
+      return true;
+    }
+
+    return false;
   }
 
   private async processRegularRequest(request: RequestedTorrent): Promise<void> {
@@ -233,7 +329,11 @@ export class TorrentCheckerService {
 
 
 
-  private async searchForTorrents(request: RequestedTorrent, searchQuery: string): Promise<{
+  private async searchForTorrents(
+    request: RequestedTorrent,
+    searchQuery: string,
+    tvTarget: { season?: number | null; episode?: number | null } = { season: request.season, episode: request.episode },
+  ): Promise<{
     torrents: TorrentResult[];
     bestTorrent?: TorrentResult;
   }> {
@@ -257,8 +357,8 @@ export class TorrentCheckerService {
       } else if (request.contentType === ContentType.TV_SHOW) {
         searchResult = await this.prowlarrService.searchTvTorrents({
           query: searchQuery,
-          season: request.season,
-          episode: request.episode,
+          season: tvTarget.season ?? undefined,
+          episode: tvTarget.episode ?? undefined,
           imdbId: request.imdbId,
           indexers: request.trustedIndexers.length > 0 ? request.trustedIndexers : undefined,
           minSeeders: request.minSeeders,
@@ -395,7 +495,7 @@ export class TorrentCheckerService {
         type: downloadType,
         name: this.sanitizeFilename(torrent.title),
         destination: this.getDownloadDestination(request),
-      });
+      }, { matchRequests: false });
 
       const downloadJobId = downloadJob.id.toString();
       aria2Gid = downloadJob.aria2Gid;
@@ -473,7 +573,7 @@ export class TorrentCheckerService {
         type: downloadType,
         name: this.sanitizeFilename(torrent.title),
         destination: this.getDownloadDestination(request),
-      });
+      }, { matchRequests: false });
 
       const downloadJobId = downloadJob.id.toString();
       const aria2Gid = downloadJob.aria2Gid;

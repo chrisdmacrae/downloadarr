@@ -3,11 +3,17 @@ import { PrismaService } from '../../database/prisma.service';
 import { OrganizationRulesService } from '../../organization/services/organization-rules.service';
 import { AppConfigurationService } from '../../config/services/app-configuration.service';
 import { TvShowMetadataService } from './tv-show-metadata.service';
-import { TorrentTitleMatcherService } from './torrent-title-matcher.service';
 import { ContentType, EpisodeStatus } from '../../../generated/prisma';
 import { promises as fs } from 'fs';
 import * as path from 'path';
-import { generateDirectoryNameVariations } from '../../common/utils/filesystem.utils';
+import {
+  normalizeShowTitle,
+  parseEpisodesFromFileName,
+  parseSeasonFromFolderName,
+  parseYearFromFolderName,
+} from '../../common/utils/episode-files';
+
+const MEDIA_EXTENSIONS = ['.mkv', '.mp4', '.avi', '.mov', '.wmv', '.flv', '.webm', '.m4v'];
 
 interface TMDBEpisode {
   id: number;
@@ -28,7 +34,6 @@ export class SeasonScanningService {
     private readonly appConfigService: AppConfigurationService,
     @Inject(forwardRef(() => TvShowMetadataService))
     private readonly tvShowMetadataService: TvShowMetadataService,
-    private readonly titleMatcher: TorrentTitleMatcherService,
   ) {}
 
   /**
@@ -85,332 +90,260 @@ export class SeasonScanningService {
   }
 
   /**
-   * Scan a specific season and update episode progress
+   * Scan a specific TV show request
+   * First ensures seasons and episodes are populated, then scans for completed episodes
    */
-  async scanSeason(request: any, season: any): Promise<{ episodesUpdated: number; episodesMarkedMissing: number }> {
+  async scanTvShowRequest(requestId: string): Promise<{ episodesUpdated: number; episodesMarkedMissing: number }> {
     const results = { episodesUpdated: 0, episodesMarkedMissing: 0 };
 
     try {
-      // Get the expected season directory path
-      const seasonPath = await this.getSeasonDirectoryPath(request, season.seasonNumber);
+      const include = { tvShowSeasons: { include: { episodes: true } } };
+      let request = await this.prisma.requestedTorrent.findUnique({ where: { id: requestId }, include });
 
-      if (!seasonPath) {
-        this.logger.debug(`No season directory found for ${request.title} Season ${season.seasonNumber}`);
-
-        // Even if we can't find the directory, check for missing episodes
-        for (const episode of season.episodes) {
-          if (episode.status === EpisodeStatus.COMPLETED) {
-            // Episode was completed but directory path not found, mark as pending
-            await this.prisma.tvShowEpisode.update({
-              where: { id: episode.id },
-              data: {
-                status: EpisodeStatus.PENDING,
-                updatedAt: new Date(),
-              },
-            });
-
-            this.logger.log(`Episode ${episode.episodeNumber} of ${request.title} S${season.seasonNumber} directory not found, marked as PENDING`);
-            results.episodesUpdated++;
-            results.episodesMarkedMissing++;
-          }
-        }
-
+      if (!request || request.contentType !== ContentType.TV_SHOW) {
+        this.logger.warn(`Request ${requestId} is not a TV show or not found`);
         return results;
       }
 
-      // Check if season directory exists
-      try {
-        await fs.access(seasonPath);
-      } catch {
-        this.logger.debug(`Season directory does not exist: ${seasonPath}`);
+      // If no seasons exist, populate them first
+      if (request.tvShowSeasons.length === 0 && request.tmdbId) {
+        this.logger.log(`No seasons found for ${request.title}, populating season data first`);
+        await this.tvShowMetadataService.populateSeasonData(requestId);
+        request = (await this.prisma.requestedTorrent.findUnique({ where: { id: requestId }, include }))!;
+      }
 
-        // Even if directory doesn't exist, we should check for missing episodes
-        // that were previously completed
-        for (const episode of season.episodes) {
-          if (episode.status === EpisodeStatus.COMPLETED) {
-            // Episode was completed but directory is missing, mark as pending
-            await this.prisma.tvShowEpisode.update({
-              where: { id: episode.id },
-              data: {
-                status: EpisodeStatus.PENDING,
-                updatedAt: new Date(),
-              },
-            });
+      const showDirectories = await this.findShowDirectories(request);
 
-            this.logger.log(`Episode ${episode.episodeNumber} of ${request.title} S${season.seasonNumber} directory is missing, marked as PENDING`);
-            results.episodesUpdated++;
-            results.episodesMarkedMissing++;
-          }
-        }
-
+      // Not finding the show (or finding its folder empty) is not evidence that
+      // episodes were deleted: the folder may be named some way we don't expect,
+      // or the library may not be mounted. Only a show we can see is compared.
+      if (showDirectories.length === 0) {
+        this.logger.debug(`No library folder found for ${request.title}, leaving its episodes as they are`);
         return results;
       }
 
-      this.logger.debug(`Scanning season directory: ${seasonPath}`);
-
-      // Auto-detect all episodes in the directory
-      const detectedEpisodes = await this.detectAllEpisodesInDirectory(seasonPath, season.seasonNumber);
-
-      if (detectedEpisodes.length === 0) {
-        this.logger.debug(`No episodes detected in season directory: ${seasonPath}`);
+      const episodesOnDisk = await this.detectEpisodes(showDirectories);
+      if (episodesOnDisk.size === 0) {
+        this.logger.debug(`No episode files found for ${request.title} in ${showDirectories.join(', ')}, leaving its episodes as they are`);
         return results;
       }
 
-      this.logger.debug(`Detected ${detectedEpisodes.length} episodes in ${seasonPath}`);
-
-      // Validate episodes against TMDB if available
-      const validEpisodes = await this.validateEpisodesWithTMDB(request, season.seasonNumber, season.episodes);
-
-      // Create a set of detected episode numbers for quick lookup
-      const detectedEpisodeNumbers = new Set(detectedEpisodes.map(ep => ep.episodeNumber));
-
-      // Process detected episodes
-      for (const detectedEpisode of detectedEpisodes) {
-        // Find corresponding episode record
-        const episode = season.episodes.find(ep => ep.episodeNumber === detectedEpisode.episodeNumber);
-
-        if (episode) {
-          // Check if this episode is valid according to TMDB
-          const isValidEpisode = validEpisodes.some(validEp => validEp.episode_number === episode.episodeNumber);
-
-          if (isValidEpisode) {
-            // Episode has organized files and is valid, mark as completed if not already
-            if (episode.status !== EpisodeStatus.COMPLETED) {
-              await this.prisma.tvShowEpisode.update({
-                where: { id: episode.id },
-                data: {
-                  status: EpisodeStatus.COMPLETED,
-                  updatedAt: new Date(),
-                },
-              });
-
-              this.logger.debug(`Updated episode ${episode.episodeNumber} of ${request.title} S${season.seasonNumber} to COMPLETED`);
-              results.episodesUpdated++;
-            }
-          } else {
-            this.logger.warn(`Found file for episode ${episode.episodeNumber} of ${request.title} S${season.seasonNumber}, but episode not found in TMDB. Skipping.`);
-          }
-        } else {
-          // Episode file found but no episode record exists - create it if valid
-          const isValidEpisode = validEpisodes.some(validEp => validEp.episode_number === detectedEpisode.episodeNumber);
-
-          if (isValidEpisode) {
-            const validEpisodeData = validEpisodes.find(validEp => validEp.episode_number === detectedEpisode.episodeNumber);
-
-            await this.prisma.tvShowEpisode.create({
-              data: {
-                tvShowSeasonId: season.id,
-                episodeNumber: detectedEpisode.episodeNumber,
-                title: validEpisodeData?.name || null,
-                airDate: validEpisodeData?.air_date ? new Date(validEpisodeData.air_date) : null,
-                status: EpisodeStatus.COMPLETED,
-              },
+      // Without a TMDB ID there is no season list to start from, so the
+      // seasons on disk are the seasons
+      if (!request.tmdbId) {
+        for (const seasonNumber of episodesOnDisk.keys()) {
+          if (seasonNumber > 0 && !request.tvShowSeasons.some(season => season.seasonNumber === seasonNumber)) {
+            const created = await this.prisma.tvShowSeason.create({
+              data: { requestedTorrentId: request.id, seasonNumber },
             });
-
-            this.logger.log(`Created and completed episode ${detectedEpisode.episodeNumber} for ${request.title} S${season.seasonNumber}`);
-            results.episodesUpdated++;
+            request.tvShowSeasons.push({ ...created, episodes: [] });
           }
         }
       }
 
-      // Check for episodes that were previously completed but no longer have files
-      this.logger.debug(`Checking ${season.episodes.length} episodes for missing files in ${request.title} S${season.seasonNumber}`);
-
-      for (const episode of season.episodes) {
-        if (episode.status === EpisodeStatus.COMPLETED && !detectedEpisodeNumbers.has(episode.episodeNumber)) {
-          // Episode was completed but file is missing, mark as pending
-          await this.prisma.tvShowEpisode.update({
-            where: { id: episode.id },
-            data: {
-              status: EpisodeStatus.PENDING,
-              updatedAt: new Date(),
-            },
-          });
-
-          this.logger.log(`Episode ${episode.episodeNumber} of ${request.title} S${season.seasonNumber} file is missing, marked as PENDING`);
-          results.episodesUpdated++;
-          results.episodesMarkedMissing++;
-        } else if (episode.status === EpisodeStatus.COMPLETED) {
-          this.logger.debug(`Episode ${episode.episodeNumber} of ${request.title} S${season.seasonNumber} is completed and file exists`);
-        } else {
-          this.logger.debug(`Episode ${episode.episodeNumber} of ${request.title} S${season.seasonNumber} has status ${episode.status}`);
-        }
+      for (const season of request.tvShowSeasons) {
+        const seasonResults = await this.applySeasonScan(request, season, episodesOnDisk.get(season.seasonNumber) ?? new Set());
+        results.episodesUpdated += seasonResults.episodesUpdated;
+        results.episodesMarkedMissing += seasonResults.episodesMarkedMissing;
       }
-
-      // Update season status based on episode completion
-      await this.updateSeasonStatusFromEpisodes(season.id);
 
       return results;
     } catch (error) {
-      this.logger.error(`Error scanning season ${season.seasonNumber} for ${request.title}:`, error);
+      this.logger.error(`Error scanning TV show request ${requestId}:`, error);
       throw error;
     }
   }
 
   /**
-   * Get the expected directory path for a season
+   * Bring one season's episodes in line with the episode numbers found on disk
    */
-  private async getSeasonDirectoryPath(request: any, seasonNumber: number): Promise<string | null> {
-    try {
-      const settings = await this.organizationRulesService.getSettings();
-      const tvShowsPath = settings.tvShowsPath || `${settings.libraryPath}/tv-shows`;
+  private async applySeasonScan(request: any, season: any, detected: Set<number>): Promise<{ episodesUpdated: number; episodesMarkedMissing: number }> {
+    const results = { episodesUpdated: 0, episodesMarkedMissing: 0 };
 
-      this.logger.debug(`Looking for season directory for ${request.title} S${seasonNumber} in ${tvShowsPath}`);
+    const toComplete = [...detected].filter(episodeNumber => {
+      const episode = season.episodes.find(ep => ep.episodeNumber === episodeNumber);
+      return !episode || episode.status !== EpisodeStatus.COMPLETED;
+    });
 
-      // Generate directory name variations using shared utility
-      const uniqueDirectoryNames = generateDirectoryNameVariations(request.title, request.year);
-      this.logger.debug(`Generated ${uniqueDirectoryNames.length} directory name variations for "${request.title}": ${uniqueDirectoryNames.join(', ')}`);
+    if (toComplete.length > 0) {
+      const knownEpisodes = await this.getKnownEpisodes(request, season.seasonNumber);
 
-      // Try different possible season directory patterns
-      const seasonPatterns = [
-        `Season ${seasonNumber}`,
-        `Season ${seasonNumber.toString().padStart(2, '0')}`,
-        `S${seasonNumber.toString().padStart(2, '0')}`,
-        `s${seasonNumber.toString().padStart(2, '0')}`,
-      ];
-
-      // Check all combinations
-      for (const showDir of uniqueDirectoryNames) {
-        for (const seasonPattern of seasonPatterns) {
-          const possiblePath = path.join(tvShowsPath, showDir, seasonPattern);
-          this.logger.debug(`Checking path: ${possiblePath}`);
-          try {
-            await fs.access(possiblePath);
-            this.logger.debug(`Found season directory: ${possiblePath}`);
-            return possiblePath;
-          } catch {
-            // Path doesn't exist, try next one
-          }
+      for (const episodeNumber of toComplete) {
+        if (knownEpisodes && !knownEpisodes.has(episodeNumber)) {
+          this.logger.warn(`Found file for episode ${episodeNumber} of ${request.title} S${season.seasonNumber}, but episode not found in TMDB. Skipping.`);
+          continue;
         }
-      }
 
-      return null;
-    } catch (error) {
-      this.logger.error(`Error getting season directory path for ${request.title} S${seasonNumber}:`, error);
-      return null;
+        const episode = season.episodes.find(ep => ep.episodeNumber === episodeNumber);
+        if (episode) {
+          await this.prisma.tvShowEpisode.update({
+            where: { id: episode.id },
+            data: { status: EpisodeStatus.COMPLETED, updatedAt: new Date() },
+          });
+          this.logger.debug(`Updated episode ${episodeNumber} of ${request.title} S${season.seasonNumber} to COMPLETED`);
+        } else {
+          const known = knownEpisodes?.get(episodeNumber);
+          await this.prisma.tvShowEpisode.create({
+            data: {
+              tvShowSeasonId: season.id,
+              episodeNumber,
+              title: known?.name || null,
+              airDate: known?.air_date ? new Date(known.air_date) : null,
+              status: EpisodeStatus.COMPLETED,
+            },
+          });
+          this.logger.log(`Created and completed episode ${episodeNumber} for ${request.title} S${season.seasonNumber}`);
+        }
+        results.episodesUpdated++;
+      }
     }
+
+    // Episodes that were completed but no longer have a file
+    for (const episode of season.episodes) {
+      if (episode.status === EpisodeStatus.COMPLETED && !detected.has(episode.episodeNumber)) {
+        await this.prisma.tvShowEpisode.update({
+          where: { id: episode.id },
+          data: { status: EpisodeStatus.PENDING, updatedAt: new Date() },
+        });
+
+        this.logger.log(`Episode ${episode.episodeNumber} of ${request.title} S${season.seasonNumber} file is missing, marked as PENDING`);
+        results.episodesUpdated++;
+        results.episodesMarkedMissing++;
+      }
+    }
+
+    await this.updateSeasonStatusFromEpisodes(season.id);
+
+    return results;
   }
 
   /**
-   * Get all media files in a directory recursively
+   * Every library folder that holds this show: where the organization rule
+   * puts it, where its files were actually organized to, and any folder in
+   * the TV library named after it.
    */
-  private async getMediaFilesInDirectory(dirPath: string): Promise<string[]> {
-    const mediaExtensions = ['.mkv', '.mp4', '.avi', '.mov', '.wmv', '.flv', '.webm', '.m4v'];
-    const files: string[] = [];
+  private async findShowDirectories(request: any): Promise<string[]> {
+    const settings = await this.organizationRulesService.getSettings();
+    const tvShowsPath = path.resolve(settings.tvShowsPath || `${settings.libraryPath}/tv-shows`);
+    const candidates = new Set<string>();
 
     try {
-      const entries = await fs.readdir(dirPath, { withFileTypes: true });
+      const organized = await this.organizationRulesService.generateOrganizedPath({
+        contentType: ContentType.TV_SHOW,
+        title: request.title,
+        year: request.year ?? undefined,
+        originalPath: '',
+        fileName: '',
+      });
+      candidates.add(path.resolve(organized.folderPath));
+    } catch (error) {
+      this.logger.debug(`No organization rule path for ${request.title}: ${error.message}`);
+    }
+
+    const organizedFiles = await this.prisma.organizedFile.findMany({
+      where: { requestedTorrentId: request.id, contentType: ContentType.TV_SHOW },
+      select: { organizedPath: true },
+    });
+    for (const file of organizedFiles) {
+      let directory = path.dirname(path.resolve(file.organizedPath));
+      if (parseSeasonFromFolderName(path.basename(directory)) !== null) {
+        directory = path.dirname(directory);
+      }
+      candidates.add(directory);
+    }
+
+    const wantedTitle = normalizeShowTitle(request.title);
+    if (wantedTitle) {
+      let entries: import('fs').Dirent[] = [];
+      try {
+        entries = await fs.readdir(tvShowsPath, { withFileTypes: true });
+      } catch {
+        this.logger.debug(`TV library is not readable: ${tvShowsPath}`);
+      }
 
       for (const entry of entries) {
-        const fullPath = path.join(dirPath, entry.name);
-
-        if (entry.isDirectory()) {
-          const subFiles = await this.getMediaFilesInDirectory(fullPath);
-          files.push(...subFiles);
-        } else {
-          const ext = path.extname(entry.name).toLowerCase();
-          if (mediaExtensions.includes(ext)) {
-            files.push(fullPath);
-          }
+        if (!entry.isDirectory() || normalizeShowTitle(entry.name) !== wantedTitle) {
+          continue;
         }
+        // "Show (2004)" is not the "Show" requested from 2019
+        const folderYear = parseYearFromFolderName(entry.name);
+        if (folderYear && request.year && folderYear !== request.year) {
+          continue;
+        }
+        candidates.add(path.join(tvShowsPath, entry.name));
       }
-    } catch (error) {
-      this.logger.error(`Error reading directory ${dirPath}:`, error);
+    }
+
+    const directories: string[] = [];
+    for (const candidate of candidates) {
+      // A file organized straight into the library root does not make the
+      // whole library this show
+      if (candidate === tvShowsPath || tvShowsPath.startsWith(candidate + path.sep)) {
+        continue;
+      }
+      try {
+        if ((await fs.stat(candidate)).isDirectory()) {
+          directories.push(candidate);
+        }
+      } catch {
+        // Not there
+      }
+    }
+
+    return directories;
+  }
+
+  /**
+   * The episodes present in a show's folders, by season. Files are read by
+   * their own name first, then by the season folder they sit in.
+   */
+  private async detectEpisodes(showDirectories: string[]): Promise<Map<number, Set<number>>> {
+    const episodesBySeason = new Map<number, Set<number>>();
+
+    for (const showDirectory of showDirectories) {
+      for (const filePath of await this.getMediaFilesInDirectory(showDirectory)) {
+        const fileName = path.basename(filePath);
+        if (/sample/i.test(fileName)) {
+          continue;
+        }
+
+        const folders = path.relative(showDirectory, path.dirname(filePath)).split(path.sep).reverse();
+        const folderSeason = folders.map(parseSeasonFromFolderName).find(season => season !== null) ?? null;
+
+        const parsed = parseEpisodesFromFileName(fileName, folderSeason);
+        if (!parsed) {
+          this.logger.debug(`Could not tell which episode this is: ${filePath}`);
+          continue;
+        }
+
+        const episodes = episodesBySeason.get(parsed.season) ?? new Set<number>();
+        parsed.episodes.forEach(episode => episodes.add(episode));
+        episodesBySeason.set(parsed.season, episodes);
+      }
+    }
+
+    return episodesBySeason;
+  }
+
+  /**
+   * Get all media files in a directory recursively. A folder that cannot be
+   * read throws: a partial listing would look like deleted episodes.
+   */
+  private async getMediaFilesInDirectory(dirPath: string): Promise<string[]> {
+    const files: string[] = [];
+    const entries = await fs.readdir(dirPath, { withFileTypes: true });
+
+    for (const entry of entries) {
+      const fullPath = path.join(dirPath, entry.name);
+
+      if (entry.isDirectory()) {
+        files.push(...(await this.getMediaFilesInDirectory(fullPath)));
+      } else if (MEDIA_EXTENSIONS.includes(path.extname(entry.name).toLowerCase())) {
+        files.push(fullPath);
+      }
     }
 
     return files;
-  }
-
-  /**
-   * Find files that match a specific season and episode using enhanced patterns
-   */
-  private findMatchingFiles(files: string[], seasonNumber: number, episodeNumber: number): string[] {
-    const matchingFiles: string[] = [];
-
-    // Enhanced patterns to match season and episode
-    const patterns = [
-      // Standard patterns: S01E01, S1E1
-      new RegExp(`s${seasonNumber.toString().padStart(2, '0')}e${episodeNumber.toString().padStart(2, '0')}`, 'i'),
-      new RegExp(`s${seasonNumber}e${episodeNumber}`, 'i'),
-
-      // With separators: S01.E01, S01-E01, S01_E01
-      new RegExp(`s${seasonNumber.toString().padStart(2, '0')}[._-]e${episodeNumber.toString().padStart(2, '0')}`, 'i'),
-      new RegExp(`s${seasonNumber}[._-]e${episodeNumber}`, 'i'),
-
-      // With spaces: S01 E01, S1 E1
-      new RegExp(`s${seasonNumber.toString().padStart(2, '0')}\\s+e${episodeNumber.toString().padStart(2, '0')}`, 'i'),
-      new RegExp(`s${seasonNumber}\\s+e${episodeNumber}`, 'i'),
-
-      // Alternative format: 1x01, 01x01
-      new RegExp(`${seasonNumber.toString().padStart(2, '0')}x${episodeNumber.toString().padStart(2, '0')}`, 'i'),
-      new RegExp(`${seasonNumber}x${episodeNumber.toString().padStart(2, '0')}`, 'i'),
-
-      // Season/Episode format: Season 1 Episode 1
-      new RegExp(`season\\s*${seasonNumber}.*episode\\s*${episodeNumber}`, 'i'),
-
-      // Bracket format: [S01E01], (S01E01)
-      new RegExp(`[\\[\\(]s${seasonNumber.toString().padStart(2, '0')}e${episodeNumber.toString().padStart(2, '0')}[\\]\\)]`, 'i'),
-
-      // Episode only format (when in season-specific directory): E01, Episode 1
-      new RegExp(`^e${episodeNumber.toString().padStart(2, '0')}`, 'i'),
-      new RegExp(`episode\\s*${episodeNumber}`, 'i'),
-    ];
-
-    for (const file of files) {
-      const fileName = path.basename(file);
-
-      for (const pattern of patterns) {
-        if (pattern.test(fileName)) {
-          matchingFiles.push(file);
-          this.logger.debug(`Matched file ${fileName} with pattern ${pattern.source}`);
-          break; // Found a match, no need to test other patterns
-        }
-      }
-    }
-
-    return matchingFiles;
-  }
-
-  /**
-   * Extract episode information from filename using the title matcher
-   */
-  private extractEpisodeInfoFromFile(filePath: string): { season?: number; episode?: number } | null {
-    const fileName = path.basename(filePath);
-    const titleMatch = this.titleMatcher.analyzeTorrentTitle(fileName);
-
-    if (titleMatch.type === 'individual-episode' && titleMatch.details.season && titleMatch.details.episode) {
-      return {
-        season: titleMatch.details.season,
-        episode: titleMatch.details.episode,
-      };
-    }
-
-    return null;
-  }
-
-  /**
-   * Scan directory for all episodes and automatically detect them
-   */
-  private async detectAllEpisodesInDirectory(dirPath: string, seasonNumber: number): Promise<Array<{ episodeNumber: number; filePath: string }>> {
-    const mediaFiles = await this.getMediaFilesInDirectory(dirPath);
-    const detectedEpisodes: Array<{ episodeNumber: number; filePath: string }> = [];
-
-    for (const filePath of mediaFiles) {
-      const episodeInfo = this.extractEpisodeInfoFromFile(filePath);
-
-      if (episodeInfo && episodeInfo.season === seasonNumber && episodeInfo.episode) {
-        detectedEpisodes.push({
-          episodeNumber: episodeInfo.episode,
-          filePath,
-        });
-      }
-    }
-
-    // Sort by episode number
-    detectedEpisodes.sort((a, b) => a.episodeNumber - b.episodeNumber);
-
-    this.logger.debug(`Detected ${detectedEpisodes.length} episodes in ${dirPath}`);
-    return detectedEpisodes;
   }
 
   /**
@@ -457,51 +390,28 @@ export class SeasonScanningService {
   }
 
   /**
-   * Validate episodes against TMDB to ensure we have correct episode data
+   * The episodes TMDB lists for a season, by number. Null when that cannot be
+   * checked (no TMDB ID or key, or the request failed), in which case a file
+   * on disk is taken at its word.
    */
-  private async validateEpisodesWithTMDB(request: any, seasonNumber: number, episodes: any[]): Promise<TMDBEpisode[]> {
+  private async getKnownEpisodes(request: any, seasonNumber: number): Promise<Map<number, TMDBEpisode> | null> {
     try {
-      // Check if TMDB API key is configured
       const apiKeysConfig = await this.appConfigService.getApiKeysConfig();
       if (!apiKeysConfig.tmdbApiKey || !request.tmdbId) {
         this.logger.debug(`TMDB API key or TMDB ID not available for ${request.title}. Skipping TMDB validation.`);
-        // Return all episodes as valid if we can't validate
-        return episodes.map(ep => ({
-          id: ep.id,
-          episode_number: ep.episodeNumber,
-          name: ep.title || '',
-          air_date: ep.airDate || '',
-          season_number: seasonNumber,
-        }));
+        return null;
       }
 
-      // Fetch season details from TMDB
       const seasonDetails = await this.fetchSeasonDetailsFromTMDB(request.tmdbId, seasonNumber, apiKeysConfig.tmdbApiKey);
-
-      if (!seasonDetails) {
+      if (!seasonDetails?.episodes) {
         this.logger.warn(`Could not fetch season ${seasonNumber} details from TMDB for ${request.title}`);
-        // Return all episodes as valid if we can't validate
-        return episodes.map(ep => ({
-          id: ep.id,
-          episode_number: ep.episodeNumber,
-          name: ep.title || '',
-          air_date: ep.airDate || '',
-          season_number: seasonNumber,
-        }));
+        return null;
       }
 
-      this.logger.debug(`Validated ${seasonDetails.episodes.length} episodes for ${request.title} S${seasonNumber} with TMDB`);
-      return seasonDetails.episodes;
+      return new Map(seasonDetails.episodes.map(episode => [episode.episode_number, episode]));
     } catch (error) {
       this.logger.error(`Error validating episodes with TMDB for ${request.title} S${seasonNumber}:`, error);
-      // Return all episodes as valid if validation fails
-      return episodes.map(ep => ({
-        id: ep.id,
-        episode_number: ep.episodeNumber,
-        name: ep.title || '',
-        air_date: ep.airDate || '',
-        season_number: seasonNumber,
-      }));
+      return null;
     }
   }
 
@@ -523,67 +433,6 @@ export class SeasonScanningService {
     } catch (error) {
       this.logger.error(`Error fetching season details from TMDB: ${error.message}`);
       return null;
-    }
-  }
-
-  /**
-   * Scan a specific TV show request
-   * First ensures seasons and episodes are populated, then scans for completed episodes
-   */
-  async scanTvShowRequest(requestId: string): Promise<{ episodesUpdated: number; episodesMarkedMissing: number }> {
-    const results = { episodesUpdated: 0, episodesMarkedMissing: 0 };
-
-    try {
-      let request = await this.prisma.requestedTorrent.findUnique({
-        where: { id: requestId },
-        include: {
-          tvShowSeasons: {
-            include: {
-              episodes: true,
-            },
-          },
-        },
-      });
-
-      if (!request || request.contentType !== ContentType.TV_SHOW) {
-        this.logger.warn(`Request ${requestId} is not a TV show or not found`);
-        return results;
-      }
-
-      // If no seasons exist, populate them first
-      if (!request.tvShowSeasons || request.tvShowSeasons.length === 0) {
-        this.logger.log(`No seasons found for ${request.title}, populating season data first`);
-        await this.tvShowMetadataService.populateSeasonData(requestId);
-
-        // Refetch the request with populated seasons
-        request = await this.prisma.requestedTorrent.findUnique({
-          where: { id: requestId },
-          include: {
-            tvShowSeasons: {
-              include: {
-                episodes: true,
-              },
-            },
-          },
-        });
-
-        if (!request || !request.tvShowSeasons || request.tvShowSeasons.length === 0) {
-          this.logger.warn(`Still no seasons found for ${request.title} after populating metadata`);
-          return results;
-        }
-      }
-
-      // Now scan all seasons for completed episodes
-      for (const season of request.tvShowSeasons) {
-        const seasonResults = await this.scanSeason(request, season);
-        results.episodesUpdated += seasonResults.episodesUpdated;
-        results.episodesMarkedMissing += seasonResults.episodesMarkedMissing;
-      }
-
-      return results;
-    } catch (error) {
-      this.logger.error(`Error scanning TV show request ${requestId}:`, error);
-      throw error;
     }
   }
 }
