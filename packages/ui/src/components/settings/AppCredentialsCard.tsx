@@ -112,7 +112,7 @@ export function AppCredentialsCard() {
               <p className="text-xs text-fg-muted">
                 {httpsRedirect
                   ? 'Must reach this API over HTTPS, and match the app’s redirect URI exactly.'
-                  : 'Spotify only redirects to HTTPS. Use the https:// address of your tunnel or proxy, ending in /music/spotify/callback.'}
+                  : 'Spotify only redirects to HTTPS. Use the https:// address of your tunnel or proxy, ending in /api/v1/music/spotify/callback.'}
               </p>
             </div>
           </div>

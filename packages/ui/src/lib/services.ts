@@ -2,9 +2,9 @@
  * Links to the services Downloadarr sits on top of.
  *
  * The self-hosted ones (Prowlarr, AriaNg, FlareSolverr) are published on the
- * same host as the frontend, so their URLs are derived from whatever hostname
+ * same host as Downloadarr, so their URLs are derived from whatever hostname
  * the browser is already using — `localhost:9696` when you are on localhost,
- * `nas.local:9696` when you reached the app at `nas.local:3000`. The values
+ * `nas.local:9696` when you reached the app at `nas.local:3001`. The values
  * configured for the API (`http://prowlarr:9696`) are Docker-internal service
  * names that resolve inside the compose network but never in a browser.
  */
@@ -15,8 +15,7 @@ const DOCKER_INTERNAL_HOSTS = new Set([
   'aria2',
   'ariang',
   'flaresolverr',
-  'api',
-  'frontend',
+  'downloadarr',
   'postgres',
   'redis',
   'vpn',

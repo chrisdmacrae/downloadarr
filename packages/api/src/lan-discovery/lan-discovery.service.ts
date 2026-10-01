@@ -9,7 +9,7 @@ export const DEFAULT_DISCOVERY_PORT = 7360; // one above Jellyfin's 7359
 
 /**
  * Reply payload. There's deliberately no host address by default: inside
- * Docker the API can't know the host's LAN IP, so clients combine the
+ * Docker the server can't know the host's LAN IP, so clients combine the
  * address the reply came from with `Port`. Set LAN_DISCOVERY_ADVERTISED_URL
  * to override that (e.g. behind a reverse proxy).
  */
@@ -17,9 +17,9 @@ export interface DiscoveryReply {
   Id: string;
   Name: string;
   Version: string;
-  /** Port the HTTP API listens on. */
+  /** Port the server listens on; the API is under /api/v1 there. */
   Port: number;
-  /** Full API base URL, only when explicitly configured. */
+  /** The server's full address, only when explicitly configured. */
   Address?: string;
 }
 

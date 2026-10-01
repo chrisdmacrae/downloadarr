@@ -28,16 +28,16 @@ services:
     networks:
       - downloadarr
 
-  # NestJS API Server
-  api:
-    image: ghcr.io/chrisdmacrae/downloadarr/api:${APP_VERSION:-latest}
-    container_name: downloadarr-api
+  # Downloadarr: the API, which also serves the web UI
+  downloadarr:
+    image: ghcr.io/chrisdmacrae/downloadarr:${APP_VERSION:-latest}
+    container_name: downloadarr
     restart: unless-stopped
     # Run tini as PID 1 so SIGTERM reaches node; otherwise every recreate waits
-    # out the 10s stop timeout before Docker SIGKILLs the API.
+    # out the 10s stop timeout before Docker SIGKILLs the app.
     init: true
     ports:
-      - "3001:3001"
+      - "3001:3001" # web UI, and the API under /api/v1
       - "7360:7360/udp" # LAN discovery (lets TV apps find downloadarr)
     environment:
       NODE_ENV: production
@@ -55,7 +55,8 @@ services:
       FLARESOLVERR_URL: http://flaresolverr:8191
       DOWNLOAD_PATH: /app/downloads
       LIBRARY_PATH: /app/library
-      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      # Other origins allowed to call the API (the UI is on this one and needs none)
+      FRONTEND_URL: ${FRONTEND_URL:-}
       CORS_ORIGINS: ${CORS_ORIGINS:-}
       APP_VERSION: ${APP_VERSION:-latest}
       PUID: 1000
@@ -69,21 +70,6 @@ services:
       - postgres
       - aria2
       - flaresolverr
-    networks:
-      - downloadarr
-
-  # React Frontend
-  frontend:
-    image: ghcr.io/chrisdmacrae/downloadarr/ui:${APP_VERSION:-latest}
-    container_name: downloadarr-frontend
-    restart: unless-stopped
-    ports:
-      - "3000:3000"
-    environment:
-      VITE_API_URL: ${VITE_API_URL:-/api}
-      APP_VERSION: ${APP_VERSION:-latest}
-    depends_on:
-      - api
     networks:
       - downloadarr
 

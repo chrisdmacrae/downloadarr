@@ -1,4 +1,4 @@
-name: Build and Deploy Docker Images
+name: Build and Deploy Docker Image
 
 on:
   push:
@@ -39,7 +39,7 @@ jobs:
       - name: Test API
         run: npm run test --workspace=@app/api
 
-  # One job per image per architecture, each on a native runner. Building
+  # One job per architecture, each on a native runner. Building
   # linux/arm64 under QEMU on an amd64 runner made a single `npm install` take
   # 18 minutes; native arm64 runners are free for public repositories.
   build:
@@ -51,7 +51,6 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        image: [api, ui]
         platform:
           - { tag: linux/amd64, runner: ubuntu-latest, arch: amd64 }
           - { tag: linux/arm64, runner: ubuntu-24.04-arm, arch: arm64 }
@@ -84,15 +83,15 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./packages/${{ matrix.image }}/Dockerfile
+          file: ./Dockerfile
           platforms: ${{ matrix.platform.tag }}
           build-args: |
             APP_VERSION=${{ steps.version.outputs.version }}
-          outputs: ${{ github.event_name != 'pull_request' && format('type=image,name={0}/{1}/{2},push-by-digest=true,name-canonical=true,push=true', env.REGISTRY, github.repository, matrix.image) || 'type=cacheonly' }}
-          # A scope per image and architecture; sharing the default scope made
-          # the jobs overwrite each other's cache.
-          cache-from: type=gha,scope=${{ matrix.image }}-${{ matrix.platform.arch }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.image }}-${{ matrix.platform.arch }}
+          outputs: ${{ github.event_name != 'pull_request' && format('type=image,name={0}/{1},push-by-digest=true,name-canonical=true,push=true', env.REGISTRY, github.repository) || 'type=cacheonly' }}
+          # A scope per architecture; sharing the default scope made the jobs
+          # overwrite each other's cache.
+          cache-from: type=gha,scope=downloadarr-${{ matrix.platform.arch }}
+          cache-to: type=gha,mode=max,scope=downloadarr-${{ matrix.platform.arch }}
 
       - name: Export digest
         if: github.event_name != 'pull_request'
@@ -105,7 +104,7 @@ jobs:
         if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
-          name: digest-${{ matrix.image }}-${{ matrix.platform.arch }}
+          name: digest-${{ matrix.platform.arch }}
           path: /tmp/digests/*
           if-no-files-found: error
           retention-days: 1
@@ -119,14 +118,11 @@ jobs:
     permissions:
       contents: read
       packages: write
-    strategy:
-      matrix:
-        image: [api, ui]
     steps:
       - name: Download digests
         uses: actions/download-artifact@v4
         with:
-          pattern: digest-${{ matrix.image }}-*
+          pattern: digest-*
           merge-multiple: true
           path: /tmp/digests
 
@@ -145,7 +141,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ github.repository }}/${{ matrix.image }}
+          images: ${{ env.REGISTRY }}/${{ github.repository }}
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
@@ -157,9 +153,9 @@ jobs:
         run: |
           docker buildx imagetools create \
             $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
-            $(printf "${{ env.REGISTRY }}/${{ github.repository }}/${{ matrix.image }}@sha256:%s " *)
+            $(printf "${{ env.REGISTRY }}/${{ github.repository }}@sha256:%s " *)
 
       - name: Inspect image
         run: |
           docker buildx imagetools inspect \
-            ${{ env.REGISTRY }}/${{ github.repository }}/${{ matrix.image }}:${{ steps.meta.outputs.version }}
+            ${{ env.REGISTRY }}/${{ github.repository }}:${{ steps.meta.outputs.version }}

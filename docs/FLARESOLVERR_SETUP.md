@@ -30,7 +30,7 @@ The URL it uses comes from **Settings → Indexing → FlareSolverr URL** in the
 Check what it found with:
 
 ```bash
-curl http://localhost:3001/prowlarr/status
+curl http://localhost:3001/api/v1/prowlarr/status
 ```
 
 ## Turning FlareSolverr on for an indexer
@@ -73,7 +73,7 @@ To confirm the proxy itself is registered, look under **Settings → Indexers �
 Downloadarr skips configuration when it cannot reach Prowlarr or has no API key for it. Both are reported by `/prowlarr/status`; fix whichever is false, then re-trigger with:
 
 ```bash
-curl -X POST http://localhost:3001/prowlarr/configure
+curl -X POST http://localhost:3001/api/v1/prowlarr/configure
 ```
 
 ### Slow Response Times

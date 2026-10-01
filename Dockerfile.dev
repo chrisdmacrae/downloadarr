@@ -1,0 +1,56 @@
+FROM node:20-alpine
+
+# Install system dependencies for VPN, downloading, and Docker
+RUN apk add --no-cache \
+    openvpn \
+    curl \
+    wget \
+    aria2 \
+    docker-cli \
+    shadow \
+    netcat-openbsd
+
+WORKDIR /app
+
+# Copy package files for dependency installation
+COPY package.json ./
+COPY packages/api/package.json ./packages/api/
+COPY packages/ui/package.json ./packages/ui/
+
+# Install all dependencies (including dev dependencies for development)
+RUN npm install && npm cache clean --force
+
+# Copy the source code
+COPY packages/api ./packages/api
+COPY packages/ui ./packages/ui
+
+# Copy startup script
+COPY packages/api/scripts/start.sh /start.sh
+RUN chmod +x /start.sh
+
+# Create directories
+RUN mkdir -p /downloads /app/vpn
+
+# Set permissions and Docker access
+RUN chown -R node:node /app /downloads
+
+# Add node user to docker group for Docker socket access
+RUN addgroup -g 999 docker || true
+RUN adduser node docker || true
+
+USER node
+
+WORKDIR /app/packages/api
+
+# 3001 is the app, as in production. 3000 is Vite's dev server, which serves
+# the UI with hot reload and proxies /api to 3001.
+EXPOSE 3000 3001
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:3001/api/v1 || exit 1
+
+# Both dev servers, with hot reloading, after migrations. prisma/ is mounted,
+# so regenerate the client on start: otherwise a schema change leaves the
+# image's client stale until the next --build.
+CMD ["sh", "-c", "npx prisma generate && exec /start.sh npx concurrently -k -n api,ui 'npm run dev' 'npm run dev --prefix ../ui'"]

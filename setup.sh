@@ -184,20 +184,8 @@ configure_environment() {
     update_env_var "PUID" "1000"
     update_env_var "PGID" "1000"
 
-    # Configure CORS/Frontend URL
-    local lan_ip=$(get_lan_ip)
-
-    if [[ "$lan_ip" == "localhost" ]]; then
-        local frontend_urls="http://localhost:3000,http://downloadarr:3000"
-    else
-        local frontend_urls="http://localhost:3000,http://${lan_ip}:3000,http://downloadarr:3000"
-    fi
-
-    update_env_var "FRONTEND_URL" "$frontend_urls"
-
-    # Configure API URL for frontend
-    # For Docker deployments, use nginx proxy
-    update_env_var "VITE_API_URL" "/api"
+    # The web UI is served by Downloadarr itself, on the same address as the
+    # API, so there is no frontend URL or CORS origin to configure for it.
 
     print_status "Environment variables configured"
 }
@@ -283,36 +271,26 @@ show_final_info() {
     echo "==================="
     echo
     echo "Downloadarr services are now running:"
-    echo "  • Frontend:     http://localhost:3000"
+    echo "  • Downloadarr:  http://localhost:3001"
     if [[ "$lan_ip" != "localhost" ]]; then
-        echo "  • Frontend (LAN): http://${lan_ip}:3000"
+        echo "  • Downloadarr (LAN): http://${lan_ip}:3001"
     fi
-    echo "  • API Server:   http://localhost:3001"
+    echo "  • API:          http://localhost:3001/api/v1 (docs at /api/docs)"
     echo "  • Prowlarr:     http://localhost:9696"
     echo "  • AriaNG:       http://localhost:6880"
     echo "  • FlareSolverr:  http://localhost:8191"
     echo
     echo "Access Options:"
-    echo "  • Local:        http://localhost:3000"
+    echo "  • Local:        http://localhost:3001"
     if [[ "$lan_ip" != "localhost" ]]; then
-        echo "  • From LAN:     http://${lan_ip}:3000"
+        echo "  • From LAN:     http://${lan_ip}:3001"
     fi
     echo
 
     # CORS Configuration Information
     echo -e "${BLUE}CORS Configuration:${NC}"
-    if [[ "$lan_ip" == "localhost" ]]; then
-        print_warning "Could not detect LAN IP address"
-        echo "  • Configured for localhost access only"
-        echo "  • If you need LAN access, manually set FRONTEND_URL in .env"
-    else
-        print_status "Detected LAN IP: $lan_ip"
-        echo "  • Configured to allow access from:"
-        echo "    - http://localhost:3000 (local access)"
-        echo "    - http://${lan_ip}:3000 (LAN access)"
-        echo "    - http://downloadarr:3000 (Docker internal)"
-        echo "  • This resolves CORS errors when accessing from different devices"
-    fi
+    echo "  • The web UI needs none: it is served from the same address as the API"
+    echo "  • For other apps that call the API from a browser, set CORS_ORIGINS in .env"
     echo
 
     # User Permissions Information
@@ -329,9 +307,9 @@ show_final_info() {
     echo
 
     echo "Next steps:"
-    echo "  1. Open http://localhost:3000 in your browser"
+    echo "  1. Open http://localhost:3001 in your browser"
     if [[ "$lan_ip" != "localhost" ]]; then
-        echo "     (or http://${lan_ip}:3000 from other devices on your network)"
+        echo "     (or http://${lan_ip}:3001 from other devices on your network)"
     fi
     echo "  2. Complete the onboarding process"
     echo "  3. Configure API keys for enhanced discovery (optional)"
@@ -359,9 +337,7 @@ show_final_info() {
     echo -e "${BLUE}Technical Notes:${NC}"
     echo "  • Latest Docker images have been pulled automatically"
     echo "  • All services are configured with consistent user permissions"
-    echo "  • CORS is configured to allow access from detected network interfaces"
-    echo "  • Frontend uses runtime configuration for flexible API URL handling"
-    echo "  • API communication uses nginx proxy for optimal Docker networking"
+    echo "  • The web UI and the API are one service, on port 3001"
     echo "  • Check logs if any services fail to start: docker compose logs -f"
 }
 

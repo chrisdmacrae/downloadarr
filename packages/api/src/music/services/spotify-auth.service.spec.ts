@@ -2,14 +2,14 @@ import { isAllowedReturnTo, isValidRedirectUri, SpotifyAuthService } from './spo
 
 describe('isValidRedirectUri', () => {
   it.each([
-    'https://media.example.com/api/music/spotify/callback',
-    'https://tunnel.example.com:8443/music/spotify/callback',
-    'http://127.0.0.1:3001/music/spotify/callback',
+    'https://media.example.com/api/v1/music/spotify/callback',
+    'https://tunnel.example.com:8443/api/v1/music/spotify/callback',
+    'http://127.0.0.1:3001/api/v1/music/spotify/callback',
   ])('accepts %s', (uri) => {
     expect(isValidRedirectUri(uri)).toBe(true);
   });
 
-  it.each(['http://192.168.1.10:3001/music/spotify/callback', 'http://localhost:3001/callback', 'not a url', ''])(
+  it.each(['http://192.168.1.10:3001/api/v1/music/spotify/callback', 'http://localhost:3001/callback', 'not a url', ''])(
     'rejects %p',
     (uri) => {
       expect(isValidRedirectUri(uri)).toBe(false);
@@ -31,6 +31,12 @@ describe('isAllowedReturnTo', () => {
     expect(isAllowedReturnTo('http://localhost:3001/', allowed)).toBe(false);
   });
 
+  it('accepts the origin the callback is on, where the UI is served', () => {
+    const callback = 'https://tunnel.example.com/api/v1/music/spotify/callback';
+    expect(isAllowedReturnTo('https://tunnel.example.com/settings/music', allowed, callback)).toBe(true);
+    expect(isAllowedReturnTo('https://evil.example/settings/music', allowed, callback)).toBe(false);
+  });
+
   it('rejects non-web schemes even when any origin is allowed', () => {
     expect(isAllowedReturnTo('javascript:alert(1)', true)).toBe(false);
     expect(isAllowedReturnTo('https://anywhere.example/', true)).toBe(true);
@@ -39,7 +45,7 @@ describe('isAllowedReturnTo', () => {
 
 describe('SpotifyAuthService', () => {
   const clientId = '0123456789abcdef0123456789abcdef';
-  const redirectUri = 'https://media.example.com/api/music/spotify/callback';
+  const redirectUri = 'https://media.example.com/api/v1/music/spotify/callback';
   const returnTo = 'http://localhost:3000/settings/recommendations';
   const profileId = 'p1';
 

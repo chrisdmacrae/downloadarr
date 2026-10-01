@@ -1,5 +1,8 @@
 # syntax=docker/dockerfile:1
 
+# One image for the whole app: the NestJS server, with the built UI inside it
+# to serve from the same port.
+#
 # ---------------------------------------------------------------------------
 # Dependency stages
 #
@@ -12,9 +15,11 @@ FROM node:20-alpine AS deps
 WORKDIR /app
 COPY package.json ./
 COPY packages/api/package.json ./packages/api/
+COPY packages/ui/package.json ./packages/ui/
 RUN npm install --no-audit --no-fund && npm cache clean --force
 
 # Production dependencies only, resolved once and reused by the final stage.
+# The UI is built to static files, so only the API's are needed at runtime.
 FROM node:20-alpine AS prod-deps
 WORKDIR /app
 COPY package.json ./
@@ -22,10 +27,9 @@ COPY packages/api/package.json ./packages/api/
 RUN npm install --omit=dev --no-audit --no-fund && npm cache clean --force
 
 # ---------------------------------------------------------------------------
-# Build stage
+# Build stages
 # ---------------------------------------------------------------------------
-FROM node:20-alpine AS builder
-ARG APP_VERSION=latest
+FROM node:20-alpine AS api-builder
 WORKDIR /app
 
 COPY --from=deps /app/node_modules ./node_modules
@@ -34,6 +38,18 @@ COPY packages/api ./packages/api
 
 WORKDIR /app/packages/api
 RUN npx prisma generate
+RUN npm run build
+
+FROM node:20-alpine AS ui-builder
+ARG APP_VERSION=latest
+WORKDIR /app
+
+COPY --from=deps /app/node_modules ./node_modules
+COPY package.json ./
+COPY packages/ui ./packages/ui
+
+WORKDIR /app/packages/ui
+ENV VITE_APP_VERSION=${APP_VERSION}
 RUN npm run build
 
 # ---------------------------------------------------------------------------
@@ -61,37 +77,25 @@ COPY package.json ./
 COPY packages/api/package.json ./packages/api/
 
 COPY --from=prod-deps /app/node_modules ./node_modules
-COPY --from=builder /app/packages/api/dist ./packages/api/dist
-COPY --from=builder /app/packages/api/generated ./packages/api/generated
-COPY --from=builder /app/packages/api/prisma ./packages/api/prisma
+COPY --from=api-builder /app/packages/api/dist ./packages/api/dist
+COPY --from=api-builder /app/packages/api/generated ./packages/api/generated
+COPY --from=api-builder /app/packages/api/prisma ./packages/api/prisma
+# main.ts serves this from the API's port.
+COPY --from=ui-builder /app/packages/ui/dist ./packages/ui/dist
+# The game platforms list. Compose mounts ./config over it, so it can be edited
+# without a rebuild.
+COPY config ./config
 
 COPY packages/api/scripts/start.sh /start.sh
 RUN chmod +x /start.sh
 
 RUN mkdir -p /downloads /library /app/vpn
 
-# Entrypoint maps the container user onto the host's PUID/PGID, then hands over
-# to start.sh, which waits for the database and applies migrations before the
-# app boots.
-#
-# The download and library roots are created and chowned here, as root, using
-# the paths the app will actually read from its env — the app itself runs as
-# `node` and cannot create directories at the filesystem root. Only those roots
-# are chowned: recursing into a large mounted library would add seconds to
-# every start.
-RUN printf '%s\n' \
-    '#!/bin/sh' \
-    'set -e' \
-    'PUID=${PUID:-1000}' \
-    'PGID=${PGID:-1000}' \
-    'groupmod -o -g "$PGID" node' \
-    'usermod -o -u "$PUID" node' \
-    'for dir in "${DOWNLOAD_PATH:-/downloads}" "${LIBRARY_PATH:-/library}" /app/vpn; do' \
-    '  mkdir -p "$dir" 2>/dev/null || true' \
-    '  chown node:node "$dir" 2>/dev/null || true' \
-    'done' \
-    'exec su-exec node /start.sh "$@"' \
-    > /entrypoint.sh && chmod +x /entrypoint.sh
+# The entrypoint runs as root: it maps the container user onto the host's
+# PUID/PGID, makes the download and library roots the app's own, then hands
+# over to start.sh as `node`.
+COPY packages/api/scripts/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
 # Docker socket access for container control.
 RUN addgroup -g 999 docker || true
@@ -102,7 +106,7 @@ WORKDIR /app/packages/api
 EXPOSE 3001
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:3001/ || exit 1
+    CMD curl -f http://localhost:${PORT:-3001}/api/v1 || exit 1
 
 # ENTRYPOINT was previously missing, so start.sh never ran and migrations were
 # never applied on boot.

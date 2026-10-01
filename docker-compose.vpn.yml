@@ -55,9 +55,9 @@ services:
       retries: 3
       start_period: 60s
 
-  # Override API service to connect to VPN-routed Aria2
-  api:
-    container_name: downloadarr-api-vpn
+  # Override Downloadarr to connect to VPN-routed Aria2
+  downloadarr:
+    container_name: downloadarr-app-vpn
     environment:
       NODE_ENV: production
       VPN_ENABLED: "true"
@@ -73,7 +73,7 @@ services:
       FLARESOLVERR_URL: http://flaresolverr:8191
       DOWNLOAD_PATH: /app/downloads
       LIBRARY_PATH: /app/library
-      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      FRONTEND_URL: ${FRONTEND_URL:-}
       CORS_ORIGINS: ${CORS_ORIGINS:-}
     volumes:
       - ${DOWNLOAD_PATH}:/app/downloads
@@ -159,12 +159,6 @@ services:
     # AriaNG will connect to Aria2 via the VPN container's exposed port
     # No additional configuration needed as it connects via browser
 
-  # Override frontend configuration
-  frontend:
-    container_name: downloadarr-frontend-vpn
-    environment:
-      VITE_API_URL: ${VITE_API_URL:-/api}
-
   # Override other services with VPN-specific container names
   redis:
     container_name: downloadarr-redis-vpn
@@ -172,8 +166,8 @@ services:
   postgres:
     container_name: downloadarr-postgres-vpn
 
-  # FlareSolverr is registered with Prowlarr over its API by the Downloadarr
-  # API on start-up, so there is nothing to configure here.
+  # FlareSolverr is registered with Prowlarr over its API by Downloadarr
+  # on start-up, so there is nothing to configure here.
   prowlarr:
     container_name: downloadarr-prowlarr-vpn
 

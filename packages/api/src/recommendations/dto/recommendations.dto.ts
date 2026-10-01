@@ -52,7 +52,7 @@ export class UpdateRecommendationAppsDto {
 
   @ApiPropertyOptional({
     description: 'HTTPS address of the API\'s Spotify callback, as registered in your Spotify app',
-    example: 'https://media.example.com/api/music/spotify/callback',
+    example: 'https://media.example.com/api/v1/music/spotify/callback',
   })
   @IsOptional()
   @IsString()

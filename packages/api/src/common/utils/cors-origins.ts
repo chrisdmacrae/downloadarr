@@ -8,11 +8,12 @@ function parseList(value: string | undefined): string[] {
 }
 
 /**
- * The origins allowed to call the API, shared by the HTTP server and the
- * WebSocket gateway so the two never drift.
+ * The other origins allowed to call the API, shared by the HTTP server and the
+ * WebSocket gateway so the two never drift. The UI is served from the API's
+ * own origin and needs none; the default is the Vite dev server.
  *
- * FRONTEND_URL lists the UI's own addresses. CORS_ORIGINS optionally adds
- * more, and a `*` in either allows any origin. That returns `true`, which
+ * FRONTEND_URL and CORS_ORIGINS both list origins (the first predates the UI
+ * being served from here), and a `*` in either allows any origin. That returns `true`, which
  * reflects the caller's origin back: a literal `*` header is rejected by
  * browsers on credentialed requests.
  */

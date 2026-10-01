@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Downloadarr is a self-hosted, all-in-one media and ROM downloading tool (for content the user owns) — a NestJS API plus React frontend orchestrating a fleet of Docker services: Prowlarr (torrent indexing), aria2 (downloading), FlareSolverr (Cloudflare bypass), Redis, and PostgreSQL. Optional OpenVPN integration routes download traffic through a VPN.
+Downloadarr is a self-hosted, all-in-one media and ROM downloading tool (for content the user owns) — one NestJS server that serves its API under `/api/v1` and the built React frontend from the same port (3001), orchestrating a fleet of Docker services: Prowlarr (torrent indexing), aria2 (downloading), FlareSolverr (Cloudflare bypass), Redis, and PostgreSQL. Optional OpenVPN integration routes download traffic through a VPN.
 
 ## Commands
 
-Development happens **inside Docker Compose** — the API and UI are not normally run bare on the host. Source dirs are volume-mounted into the dev containers for hot reload.
+Development happens **inside Docker Compose** — the API and UI are not normally run bare on the host. One `downloadarr` dev container (`Dockerfile.dev`) runs both `nest --watch` (port 3001) and Vite (port 3000, proxying `/api` to 3001), with both source dirs volume-mounted for hot reload.
 
 ```bash
 npm run dev              # start full dev stack (docker-compose.yml + docker-compose.dev.yml)
@@ -74,17 +74,19 @@ Background work is **cron-driven via @nestjs/schedule**, not BullMQ (despite REA
 - `recommendations/` — per-person **recommendation profiles** (`RecommendationProfile`). Each profile connects its own accounts (`RecommendationSource`, one per provider per profile), and recommendations and dismissals belong to a profile. API reads take an optional `profileId`; without one they merge every profile (`recommendations/merge.ts`). The Spotify and Trakt app credentials are install-level, on `AppConfiguration`. Trakt connects by device login (`trakt-auth.service.ts`; its refresh tokens are single-use) and feeds `VideoRecommendation` (recommended + watchlist, with artwork from TMDB via `TmdbService.getMovieSummary/getTvSummary`), shown as rails on the Movies and TV pages. `RecommendationsModule` also provides everything in `music/` (one module avoids a dependency cycle)
 - `music/` — music discovery: ListenBrainz/Last.fm listening history, a public Deezer profile (read by user ID, no OAuth) and Spotify (OAuth with PKCE via `music/spotify/callback`, which needs an HTTPS address) → taste profile → cached recommendation lists per profile (`MusicRecommendation`, built by `music-lists.service.ts`); Deezer's public API supplies related artists and 30s previews. Artist radio (`GET /music/radio`, `music-radio.service.ts`) is built on demand and never stored: Deezer's artist mix, plus an LB Radio playlist when a ListenBrainz token is set. The Music page requests albums as `ContentType.MUSIC` (`title` is the album, `artist` is set), searched in Prowlarr's Audio category and ranked by `discovery/services/music-release-ranker.ts`
 
-Swagger docs are served at `/api` on the API (port 3001). Global `ValidationPipe` with `whitelist: true, forbidNonWhitelisted: true` — DTO properties must be declared or requests 400.
+Every route has the global prefix `/api/v1` (`API_PREFIX` in `common/utils/serve-ui.ts`, set in `main.ts`); controllers declare paths without it, and controller specs that build their own app call them unprefixed. `main.ts` also serves the built UI (`packages/ui/dist`, or `UI_DIST_PATH`): static files, and `index.html` for any other GET outside `/api` and `/socket.io`. Swagger docs are served at `/api/docs` (port 3001). Global `ValidationPipe` with `whitelist: true, forbidNonWhitelisted: true` — DTO properties must be declared or requests 400.
 
 ### Frontend (packages/ui)
 
-Single axios client in `src/services/api.ts` (base URL from `VITE_API_URL`, default `http://localhost:3001`). Pages in `src/pages/` (Dashboard, Downloads, Requests, per-type Discovery pages, Settings, Onboarding). `OnboardingGuard` blocks the app until onboarding is completed (checked against the API). Real-time download progress comes over the `/downloads` Socket.IO namespace.
+Single axios client in `src/services/api.ts` (base URL `API_BASE_URL`: `/api/v1` on the page's own origin, or `VITE_API_URL` at build time for an API elsewhere). There is no nginx and no runtime config file; in development Vite proxies `/api` (to `VITE_API_PROXY`, default `http://localhost:3001`). Pages in `src/pages/` (Dashboard, Downloads, Requests, per-type Discovery pages, Settings, Onboarding). `OnboardingGuard` blocks the app until onboarding is completed (checked against the API). Real-time download progress comes over the `/downloads` Socket.IO namespace.
 
 ## Product constraints
 
 - **VPN posture**: with the VPN overlay (`docker-compose.vpn.yml`), only **aria2** (and the vpn-ip-monitor) run with `network_mode: service:vpn` — download traffic goes through the VPN; the API, frontend, Prowlarr, etc. keep normal networking.
 - **Onboarding is mandatory**: features assume `AppConfiguration.onboardingCompleted`; API keys for discovery services come from the DB config, with env vars as fallback.
 - **File organization naming** is specified in `docs/prompts/ORGANIZATION-RULES.md`: movies `{title} ({year})/`, TV `{title} ({year})/Season {n}/{title} - SxxExx - ...`, games `{title} ({platform})/`, music `{artist}/{title} ({year})/` (music patterns may contain `/` to nest folders). Organization rules per content type are user-editable (`OrganizationRule` model); games platforms come from `config/game-platforms.yml`.
-- **CORS**: allowed origins are `FRONTEND_URL` plus optional `CORS_ORIGINS` (both comma-separated; `*` allows any), resolved by `common/utils/cors-origins.ts` for both `main.ts` and the WebSocket gateway (see `docs/CORS_CONFIGURATION.md`).
-- **Deployment**: images are published to GHCR by `.github/workflows/build-and-deploy.yml` on pushes to `main` and `v*` tags; end users install via `setup.sh` + `docker-compose.yml`. Changes to compose files affect real installs.
+- **CORS**: the UI is same-origin and needs none. Other clients (the Vite dev server, TV and J) are allowed by `CORS_ORIGINS`, plus the older `FRONTEND_URL` (both comma-separated; `*` allows any), resolved by `common/utils/cors-origins.ts` for both `main.ts` and the WebSocket gateway (see `docs/CORS_CONFIGURATION.md`).
+- **Deployment**: one image, `ghcr.io/chrisdmacrae/downloadarr` (root `Dockerfile`: API plus built UI), is published to GHCR by `.github/workflows/build-and-deploy.yml` on pushes to `main` and `v*` tags; end users install via `setup.sh` + `docker-compose.yml`, where it is the `downloadarr` service. Changes to compose files affect real installs.
+- **API clients**: TV and J (`../tv-and-j`, `packages/core/downloadarr/client.ts`, mocked by its `scripts/dev-downloadarr.mjs`) calls this API. A route moved or renamed here has to move there too.
+- **aria2 paths**: aria2 may see the download folder at another path than the server (`/downloads` vs `DOWNLOAD_PATH` in Compose). `common/utils/aria2-paths.ts` translates both ways, from `DOWNLOAD_PATH` and `ARIA2_DOWNLOAD_PATH`; don't hardcode either.
 - `docs/prompts/` contains design docs (requests system, organization rules, reverse indexing) that explain intent behind these subsystems.
