@@ -1,7 +1,7 @@
 import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../database/prisma.service';
-import { Aria2Service } from './aria2.service';
+import { Aria2Service, DownloadStatus } from './aria2.service';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
@@ -28,6 +28,8 @@ export interface GroupedDownload {
   }>;
   createdAt: Date;
   updatedAt: Date;
+  /** aria2 is running it, but nothing here started it or has a record of it; `id` is its aria2 GID. */
+  untracked?: boolean;
 }
 
 @Injectable()
@@ -154,11 +156,16 @@ export class DownloadMetadataService {
     });
 
     const groupedDownloads: GroupedDownload[] = [];
+    const knownGids = new Set<string>();
 
     for (const metadata of metadataList) {
+      knownGids.add(metadata.aria2Gid);
+      metadata.aria2ChildGids.forEach((gid) => knownGids.add(gid));
+
       try {
         // Get status of main torrent
         const mainStatus = await this.aria2Service.getStatus(metadata.aria2Gid);
+        (mainStatus.followedBy ?? []).forEach((gid) => knownGids.add(gid));
         
         // Get status of all child files
         const childStatuses = await Promise.all(
@@ -322,7 +329,67 @@ export class DownloadMetadataService {
       }
     }
 
+    groupedDownloads.push(...(await this.getUntrackedDownloads(knownGids)));
+
     return groupedDownloads;
+  }
+
+  /**
+   * What aria2 is running that has no entry here: a download whose entry was
+   * removed while it carried on, or one added to aria2 directly. Without these
+   * the list could say nothing is downloading while aria2 fills the disk.
+   */
+  private async getUntrackedDownloads(knownGids: Set<string>): Promise<GroupedDownload[]> {
+    let running: DownloadStatus[];
+    try {
+      const [active, waiting] = await Promise.all([
+        this.aria2Service.getActiveDownloads(),
+        this.aria2Service.getWaitingDownloads(),
+      ]);
+      running = [...active, ...waiting];
+    } catch (error) {
+      this.logger.debug(`Could not ask aria2 for its downloads: ${error.message}`);
+      return [];
+    }
+
+    const now = new Date();
+    return running
+      .filter((download) =>
+        !knownGids.has(download.gid) &&
+        // The second half of a download that is listed
+        !(download.following && knownGids.has(download.following)) &&
+        !(download.belongsTo && knownGids.has(download.belongsTo)),
+      )
+      .map((download) => {
+        const totalSize = parseInt(download.totalLength || '0');
+        const completedSize = parseInt(download.completedLength || '0');
+        const firstFile = download.files?.[0];
+
+        return {
+          id: download.gid,
+          name: download.bittorrent?.info?.name || firstFile?.path?.split('/').pop() || download.gid,
+          originalUrl: firstFile?.uris?.[0]?.uri || '',
+          type: download.bittorrent ? 'TORRENT' : 'HTTP',
+          status: download.status,
+          totalSize,
+          completedSize,
+          progress: totalSize > 0 ? Math.round((completedSize / totalSize) * 100) : 0,
+          downloadSpeed: download.status === 'active' ? parseInt(download.downloadSpeed || '0') : 0,
+          files: (download.files ?? []).map((file) => {
+            const size = parseInt(file.length || '0');
+            const completed = parseInt(file.completedLength || '0');
+            return {
+              name: file.path?.split('/').pop() || 'Unknown',
+              size,
+              completed,
+              progress: size > 0 ? Math.round((completed / size) * 100) : 0,
+            };
+          }),
+          createdAt: now,
+          updatedAt: now,
+          untracked: true,
+        };
+      });
   }
 
   private async handleDownloadCompletion(downloadMetadataId: string, aria2Gid: string): Promise<void> {
@@ -398,10 +465,13 @@ export class DownloadMetadataService {
 
     // Collect file paths before removing from Aria2
     const filesToDelete: string[] = [];
+    // The stored child GIDs can be behind what aria2 has started since
+    const childGids = new Set(metadata.aria2ChildGids);
 
     try {
       // Get main download file paths
       const mainStatus = await this.aria2Service.getStatus(metadata.aria2Gid);
+      (mainStatus?.followedBy ?? []).forEach((gid) => childGids.add(gid));
       if (mainStatus && mainStatus.files) {
         for (const file of mainStatus.files) {
           if (file.path) {
@@ -414,7 +484,7 @@ export class DownloadMetadataService {
     }
 
     // Get child download file paths
-    for (const childGid of metadata.aria2ChildGids) {
+    for (const childGid of childGids) {
       try {
         const childStatus = await this.aria2Service.getStatus(childGid);
         if (childStatus && childStatus.files) {
@@ -436,7 +506,7 @@ export class DownloadMetadataService {
       this.logger.debug(`Could not remove main download ${metadata.aria2Gid}: ${error.message}`);
     }
 
-    for (const childGid of metadata.aria2ChildGids) {
+    for (const childGid of childGids) {
       try {
         await this.aria2Service.forceRemove(childGid);
       } catch (error) {

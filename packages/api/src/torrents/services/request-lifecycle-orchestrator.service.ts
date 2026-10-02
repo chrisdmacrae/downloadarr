@@ -610,25 +610,19 @@ export class RequestLifecycleOrchestrator {
             this.logger.warn(`Failed to delete download metadata ${torrentDownload.downloadJobId}: ${error.message}`);
           }
         }
-
-        // Also try to cancel by aria2Gid if no downloadJobId
-        if (!torrentDownload.downloadJobId && torrentDownload.aria2Gid) {
-          try {
-            await this.aria2Service.forceRemove(torrentDownload.aria2Gid);
-            this.logger.log(`Cancelled aria2 download ${torrentDownload.aria2Gid} for torrent download ${torrentDownload.id}`);
-          } catch (error) {
-            this.logger.warn(`Failed to cancel aria2 download ${torrentDownload.aria2Gid}: ${error.message}`);
-          }
-        }
       }
 
-      // Also cancel by aria2Gid from the main request if no downloadJobId
-      if (!request.downloadJobId && request.aria2Gid) {
-        try {
-          await this.aria2Service.forceRemove(request.aria2Gid);
-          this.logger.log(`Cancelled aria2 download ${request.aria2Gid} for request ${requestId}`);
-        } catch (error) {
-          this.logger.warn(`Failed to cancel aria2 download ${request.aria2Gid}: ${error.message}`);
+      // The metadata entry can be missing, or behind what aria2 is running, so
+      // whatever aria2 still has under the request's own GIDs is stopped too.
+      const gids = new Set<string>();
+      if (request.aria2Gid) gids.add(request.aria2Gid);
+      for (const torrentDownload of request.torrentDownloads) {
+        if (torrentDownload.aria2Gid) gids.add(torrentDownload.aria2Gid);
+      }
+      for (const gid of gids) {
+        const removed = await this.aria2Service.removeWithFollowers(gid).catch(() => [] as string[]);
+        if (removed.length > 0) {
+          this.logger.log(`Removed aria2 download ${removed.join(', ')} for request ${requestId}`);
         }
       }
 

@@ -110,6 +110,8 @@ export interface DownloadJob {
   }>;
   createdAt: string;
   updatedAt: string;
+  /** aria2 is running it without a record here; `id` is its aria2 GID. */
+  untracked?: boolean;
 }
 
 // Discovery service types

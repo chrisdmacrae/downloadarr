@@ -175,12 +175,16 @@ export default function Downloads() {
                   width={CARD_WIDTH}
                   title={download.mediaTitle || download.name}
                   backdrop={download.mediaPoster}
-                  meta={[download.mediaYear ?? '—', tone.label]}
+                  meta={
+                    download.untracked
+                      ? ['Running in aria2 with no record here']
+                      : [download.mediaYear ?? '—', tone.label]
+                  }
                   subtitle={download.name}
                   status={<StatusBadge status={download.status} onArtwork size="sm" />}
                   typeBadge={
                     <Badge variant="glass" size="sm">
-                      {tone.short}
+                      {download.untracked ? 'Untracked' : tone.short}
                     </Badge>
                   }
                   progress={download.progress}

@@ -317,6 +317,31 @@ export class Aria2Service implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  /**
+   * Stop a download and whatever aria2 started from it: a magnet or a link to
+   * a .torrent becomes a second download with a GID of its own, and removing
+   * the first leaves that one running. Returns the GIDs removed.
+   */
+  async removeWithFollowers(gid: string): Promise<string[]> {
+    let status: DownloadStatus;
+    try {
+      status = await this.getStatus(gid);
+    } catch {
+      return []; // aria2 has nothing under this GID
+    }
+
+    const removed: string[] = [];
+    for (const target of [gid, ...(status.followedBy ?? [])]) {
+      try {
+        await this.forceRemove(target);
+        removed.push(target);
+      } catch {
+        // Already gone
+      }
+    }
+    return removed;
+  }
+
   async getGlobalStat() {
     if (!this.isConnected) {
       throw new Error('Aria2 RPC not connected');
