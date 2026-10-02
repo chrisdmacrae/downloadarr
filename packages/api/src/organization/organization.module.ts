@@ -9,6 +9,8 @@ import { TorrentsModule } from '../torrents/torrents.module';
 import { OrganizationRulesService } from './services/organization-rules.service';
 import { FileOrganizationService } from './services/file-organization.service';
 import { ReverseIndexingService } from './services/reverse-indexing.service';
+import { DownloadOrganizationService } from './services/download-organization.service';
+import { DownloadsFolderService } from './services/downloads-folder.service';
 import { AppConfigurationService } from '../config/services/app-configuration.service';
 
 // Controllers
@@ -26,6 +28,8 @@ import { AppConfigurationController } from '../config/controllers/app-configurat
   providers: [
     OrganizationRulesService,
     FileOrganizationService,
+    DownloadOrganizationService,
+    DownloadsFolderService,
     ReverseIndexingService,
     AppConfigurationService,
   ],
@@ -36,6 +40,7 @@ import { AppConfigurationController } from '../config/controllers/app-configurat
   exports: [
     OrganizationRulesService,
     FileOrganizationService,
+    DownloadOrganizationService,
     ReverseIndexingService,
   ],
 })

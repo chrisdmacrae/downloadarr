@@ -40,7 +40,7 @@ if [[ -n "$PREVIOUS_TAG" ]]; then
       compose_changes+="> - [\`${file}\`](https://github.com/${REPOSITORY}/blob/${TAG}/${file}) ([what changed](https://github.com/${REPOSITORY}/compare/${PREVIOUS_TAG}...${TAG}#files_bucket))"$'\n'
     done
     compose_changes+=">"$'\n'
-    compose_changes+="> Download the new compose files over yours, and copy any new settings from \`.env.example\` into your \`.env\` (do not replace \`.env\`: it holds your passwords and paths)."$'\n\n'
+    compose_changes+="> Run \`upgrade.sh\` with \`--compose\` to download the new compose files over yours, and copy any new settings from \`.env.example\` into your \`.env\` (do not replace \`.env\`: it holds your passwords and paths)."$'\n\n'
   fi
 fi
 

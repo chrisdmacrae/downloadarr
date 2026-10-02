@@ -217,15 +217,23 @@ export class TvShowMetadataService {
         },
       });
 
+      const airDate = episode.air_date ? new Date(episode.air_date) : null;
+
       if (!existingEpisode) {
         await this.prisma.tvShowEpisode.create({
           data: {
             tvShowSeasonId: season.id,
             episodeNumber: episode.episode_number,
             title: episode.name,
-            airDate: episode.air_date ? new Date(episode.air_date) : null,
+            airDate,
             status: EpisodeStatus.PENDING,
           },
+        });
+      } else if ((existingEpisode.airDate?.getTime() ?? null) !== (airDate?.getTime() ?? null)) {
+        // Air dates get announced and moved; what counts as missing depends on them
+        await this.prisma.tvShowEpisode.update({
+          where: { id: existingEpisode.id },
+          data: { airDate },
         });
       }
     }

@@ -1,15 +1,24 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { RequestedTorrentsService } from './requested-torrents.service';
 import { RequestLifecycleOrchestrator } from './request-lifecycle-orchestrator.service';
 import { DownloadAggregationService } from './download-aggregation.service';
-import { Aria2Service, isGidNotFoundError } from '../../download/aria2.service';
+import { Aria2Service } from '../../download/aria2.service';
 import { PrismaService } from '../../database/prisma.service';
 import { OrganizationRulesService } from '../../organization/services/organization-rules.service';
-import { FileOrganizationService } from '../../organization/services/file-organization.service';
+import { DownloadOrganizationService, OrganizeTarget } from '../../organization/services/download-organization.service';
 import { SeasonScanningService } from './season-scanning.service';
-import { RequestStatus, ContentType } from '../../../generated/prisma';
+import { DownloadService } from '../../download/download.service';
+import { DownloadType } from '../../download/dto/create-download.dto';
+import { RequestStatus, ContentType, RequestedTorrent, TorrentDownload } from '../../../generated/prisma';
 import { fromAria2Path } from '../../common/utils/aria2-paths';
+import { downloadDestinationFor, sanitizeDownloadName } from '../utils/download-target';
+
+/** What came of moving a download's files: the ones still stuck, or why none could be tried. */
+interface OrganizeAttempt {
+  failed: Array<{ path: string; error: string }>;
+  error?: string;
+}
 
 @Injectable()
 export class DownloadProgressTrackerService {
@@ -23,8 +32,10 @@ export class DownloadProgressTrackerService {
     private readonly aria2Service: Aria2Service,
     private readonly prisma: PrismaService,
     private readonly organizationRulesService: OrganizationRulesService,
-    private readonly fileOrganizationService: FileOrganizationService,
+    private readonly downloadOrganizationService: DownloadOrganizationService,
     private readonly seasonScanningService: SeasonScanningService,
+    @Inject(forwardRef(() => DownloadService))
+    private readonly downloadService: DownloadService,
   ) {}
 
   @Cron(CronExpression.EVERY_30_SECONDS)
@@ -40,27 +51,147 @@ export class DownloadProgressTrackerService {
 
     this.isTracking = true;
     try {
+      await this.trackDownloads();
       await this.recoverStrandedFoundRequests();
-
-      // Get all downloading requests
-      const downloadingRequests = await this.requestedTorrentsService.getRequestsByStatus(RequestStatus.DOWNLOADING);
-
-      if (downloadingRequests.length === 0) {
-        return;
-      }
-
-      this.logger.debug(`Tracking status for ${downloadingRequests.length} downloads`);
-
-      for (const request of downloadingRequests) {
-        if (request.aria2Gid) {
-          await this.checkDownloadStatus(request.id, request.aria2Gid);
-        }
-      }
     } catch (error) {
       this.logger.error('Error tracking download status:', error);
     } finally {
       this.isTracking = false;
     }
+  }
+
+  /**
+   * Follows every download that is still running, whatever state its request
+   * is in. Tracking by request missed a download that finished after its
+   * request had failed or gone back to pending: nothing looked at it again,
+   * and its files stayed in the downloads folder.
+   */
+  private async trackDownloads(): Promise<void> {
+    const downloads = await this.prisma.torrentDownload.findMany({
+      where: { status: 'DOWNLOADING', aria2Gid: { not: null } },
+      include: { requestedTorrent: true },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    // A download can have more than one record; it is handled once
+    const tracked = new Set<string>();
+    for (const download of downloads) {
+      const key = `${download.requestedTorrentId}:${download.aria2Gid}`;
+      if (tracked.has(key)) continue;
+      tracked.add(key);
+
+      try {
+        await this.checkDownload(download.requestedTorrent, download.aria2Gid!, download);
+      } catch (error) {
+        this.logger.error(`Error checking download ${download.aria2Gid} for request ${download.requestedTorrentId}:`, error);
+      }
+    }
+
+    // Requests that are downloading with no record of the download (linked by hand, or older data)
+    const downloadingRequests = await this.requestedTorrentsService.getRequestsByStatus(RequestStatus.DOWNLOADING);
+    for (const request of downloadingRequests) {
+      if (!request.aria2Gid || tracked.has(`${request.id}:${request.aria2Gid}`)) continue;
+
+      try {
+        await this.checkDownload(request, request.aria2Gid);
+      } catch (error) {
+        this.logger.error(`Error checking status for request ${request.id}:`, error);
+      }
+    }
+  }
+
+  private async checkDownload(request: RequestedTorrent, aria2Gid: string, download?: TorrentDownload): Promise<void> {
+    if (await this.downloadAggregationService.isDownloadComplete(aria2Gid)) {
+      await this.handleDownloadCompletion(request, aria2Gid);
+      return;
+    }
+
+    const failure = await this.downloadAggregationService.isDownloadFailed(aria2Gid);
+    if (failure.failed) {
+      // aria2 forgets its downloads when it loses its session. The link is
+      // still here, and the partial files are still on disk, so hand it back.
+      if (failure.lost && download && (await this.readdLostDownload(request, download))) {
+        return;
+      }
+      await this.handleDownloadFailure(request, aria2Gid, failure.reason);
+      return;
+    }
+
+    // Still running. A request that was marked failed while its download
+    // carried on goes back to downloading rather than sit failed until it lands.
+    if (download && request.status === RequestStatus.FAILED) {
+      await this.reviveRequest(request, download);
+    }
+  }
+
+  /**
+   * Give a download aria2 no longer knows about back to aria2. It resumes
+   * from what is already in the downloads folder.
+   */
+  private async readdLostDownload(request: RequestedTorrent, download: TorrentDownload): Promise<boolean> {
+    const url = download.magnetUri || download.torrentLink;
+    // Nothing to restart it from, or nobody is waiting for it any more
+    if (!url || request.status === RequestStatus.CANCELLED || request.status === RequestStatus.COMPLETED) {
+      return false;
+    }
+
+    const lostGid = download.aria2Gid!;
+    try {
+      const job = await this.downloadService.createDownload({
+        url,
+        type: download.magnetUri ? DownloadType.MAGNET : DownloadType.TORRENT,
+        name: sanitizeDownloadName(download.torrentTitle),
+        destination: downloadDestinationFor(request.contentType),
+      }, { matchRequests: false });
+      const downloadJobId = job.id.toString();
+
+      await this.prisma.torrentDownload.updateMany({
+        where: { aria2Gid: lostGid, status: 'DOWNLOADING' },
+        data: { aria2Gid: job.aria2Gid, downloadJobId },
+      });
+      if (request.aria2Gid === lostGid) {
+        await this.prisma.requestedTorrent.update({
+          where: { id: request.id },
+          data: { aria2Gid: job.aria2Gid, downloadJobId },
+        });
+      }
+      // The entry for the lost download would otherwise linger on the Downloads page
+      await this.prisma.downloadMetadata.deleteMany({ where: { aria2Gid: lostGid } });
+
+      this.logger.warn(`aria2 lost download ${lostGid} for ${request.title}; started it again as ${job.aria2Gid}`);
+      return true;
+    } catch (error) {
+      this.logger.warn(`Could not restart lost download ${lostGid} for ${request.title}: ${error.message}`);
+      return false;
+    }
+  }
+
+  private async reviveRequest(request: RequestedTorrent, download: TorrentDownload): Promise<void> {
+    try {
+      const torrentInfo = this.torrentInfoFor(download);
+      await this.orchestrator.startSearch(request.id);
+      await this.orchestrator.markAsFound(request.id, torrentInfo);
+      await this.orchestrator.startDownload(request.id, {
+        downloadJobId: download.downloadJobId || '',
+        aria2Gid: download.aria2Gid!,
+        torrentInfo,
+      });
+      this.logger.warn(`Request ${request.id} (${request.title}) was failed while ${download.aria2Gid} is still downloading; put back to downloading`);
+    } catch (error) {
+      // The download is tracked either way and will be organized when it lands
+      this.logger.debug(`Could not put request ${request.id} back to downloading: ${error.message}`);
+    }
+  }
+
+  private torrentInfoFor(download: TorrentDownload) {
+    return {
+      title: download.torrentTitle,
+      link: download.torrentLink || '',
+      magnetUri: download.magnetUri || undefined,
+      size: download.torrentSize || 'Unknown',
+      seeders: download.seeders || 0,
+      indexer: download.indexer || 'Unknown',
+    };
   }
 
   /**
@@ -97,16 +228,8 @@ export class DownloadProgressTrackerService {
         try {
           // Only adopt downloads aria2 still knows about
           await this.aria2Service.getStatus(torrentDownload.aria2Gid!);
-        } catch (error) {
-          // aria2 no longer has this download (it lost its session), so it will
-          // never finish: stop treating it as active, or it is polled forever
-          if (isGidNotFoundError(error)) {
-            await this.prisma.torrentDownload.update({
-              where: { id: torrentDownload.id },
-              data: { status: 'FAILED', updatedAt: new Date() },
-            });
-            this.logger.warn(`Download ${torrentDownload.aria2Gid} for request ${request.id} (${request.title}) is gone from aria2, marked as failed`);
-          }
+        } catch {
+          // A download aria2 has lost is restarted or failed by trackDownloads
           continue;
         }
 
@@ -114,14 +237,7 @@ export class DownloadProgressTrackerService {
           await this.orchestrator.startDownload(request.id, {
             downloadJobId: torrentDownload.downloadJobId || '',
             aria2Gid: torrentDownload.aria2Gid!,
-            torrentInfo: {
-              title: torrentDownload.torrentTitle,
-              link: torrentDownload.torrentLink || '',
-              magnetUri: torrentDownload.magnetUri || undefined,
-              size: torrentDownload.torrentSize || 'Unknown',
-              seeders: torrentDownload.seeders || 0,
-              indexer: torrentDownload.indexer || 'Unknown',
-            },
+            torrentInfo: this.torrentInfoFor(torrentDownload),
           });
           this.logger.warn(`Recovered request ${request.id} (${request.title}) stuck in FOUND with active download ${torrentDownload.aria2Gid}`);
         } catch (error) {
@@ -129,23 +245,6 @@ export class DownloadProgressTrackerService {
         }
         break;
       }
-    }
-  }
-
-  private async checkDownloadStatus(requestId: string, aria2Gid: string): Promise<void> {
-    try {
-      // Use aggregation service to check completion status
-      const isComplete = await this.downloadAggregationService.isDownloadComplete(aria2Gid);
-      const failureStatus = await this.downloadAggregationService.isDownloadFailed(aria2Gid);
-
-      if (isComplete) {
-        await this.handleDownloadCompletion(requestId, aria2Gid);
-      } else if (failureStatus.failed) {
-        await this.handleDownloadFailure(requestId, aria2Gid, failureStatus.reason);
-      }
-
-    } catch (error) {
-      this.logger.error(`Error checking status for request ${requestId}:`, error);
     }
   }
 
@@ -191,92 +290,190 @@ export class DownloadProgressTrackerService {
         return;
       }
 
-      await this.checkDownloadStatus(requestId, request.aria2Gid);
+      await this.checkDownload(request, request.aria2Gid);
     } catch (error) {
       this.logger.error(`Error syncing download status for ${requestId}:`, error);
       throw error;
     }
   }
 
-  private async handleDownloadCompletion(requestId: string, aria2Gid: string): Promise<void> {
+  private async handleDownloadCompletion(request: RequestedTorrent, aria2Gid: string): Promise<void> {
+    const requestId = request.id;
     try {
-      // Find any TorrentDownload records associated with this aria2Gid
-      const torrentDownloads = await this.prisma.torrentDownload.findMany({
-        where: {
-          aria2Gid: aria2Gid,
-          status: 'DOWNLOADING',
-        },
+      // Mid-search, the checker is about to change this request's state.
+      // The download is still here on the next run.
+      if (request.status === RequestStatus.SEARCHING) {
+        return;
+      }
+
+      const settled = request.status === RequestStatus.CANCELLED ? 'CANCELLED' : 'COMPLETED';
+      await this.prisma.torrentDownload.updateMany({
+        where: { aria2Gid, status: 'DOWNLOADING' },
+        data: { status: settled, completedAt: new Date(), updatedAt: new Date() },
       });
 
-      if (torrentDownloads.length > 0) {
-        // Handle TorrentDownload completion (TV shows with detailed tracking)
-        for (const torrentDownload of torrentDownloads) {
-          await this.completeTorrentDownload(torrentDownload);
-        }
-      } else {
-        // Handle simple request completion (movies, games, or legacy downloads)
-        // First, try to organize the downloaded files
-        await this.organizeDownloadedFiles(requestId, aria2Gid);
-        await this.countDownloadedEpisodes(requestId);
-
-        await this.orchestrator.markAsCompleted(requestId);
-        this.logger.log(`Download completed for request ${requestId}`);
+      // A cancelled request does not want its files. They stay in the
+      // downloads folder, where they can be organized by hand or deleted.
+      if (request.status === RequestStatus.CANCELLED) {
+        this.logger.log(`Download ${aria2Gid} finished for cancelled request ${requestId}, leaving its files`);
+        return;
       }
+
+      const attempt = await this.organizeDownloadedFiles(requestId, aria2Gid);
+      if (attempt.error || attempt.failed.length > 0) {
+        await this.holdForManualOrganize(request, attempt);
+        return;
+      }
+
+      await this.countDownloadedEpisodes(requestId);
+      await this.settleRequest(request);
+      this.logger.log(`Download completed for request ${requestId}`);
     } catch (error) {
       this.logger.error(`Error handling download completion for request ${requestId}:`, error);
     }
   }
 
-  private async handleDownloadFailure(requestId: string, aria2Gid: string, errorMessage?: string): Promise<void> {
-    try {
-      // Find any TorrentDownload records associated with this aria2Gid
-      const torrentDownloads = await this.prisma.torrentDownload.findMany({
-        where: {
-          aria2Gid: aria2Gid,
-          status: 'DOWNLOADING',
-        },
+  /**
+   * Move the request on now that its download is in the library. A request
+   * that was not waiting on this download (it had failed, or gone back to
+   * pending) is caught up rather than left behind.
+   */
+  private async settleRequest(request: RequestedTorrent): Promise<void> {
+    switch (request.status) {
+      case RequestStatus.DOWNLOADING:
+      case RequestStatus.ORGANIZE_FAILED:
+        await this.orchestrator.markAsCompleted(request.id);
+        return;
 
-      });
+      case RequestStatus.COMPLETED:
+        return;
 
-      if (torrentDownloads.length > 0) {
-        // Handle TorrentDownload failure (TV shows with detailed tracking)
-        for (const torrentDownload of torrentDownloads) {
-          await this.failTorrentDownload(torrentDownload);
+      default:
+        if (request.contentType !== ContentType.TV_SHOW) {
+          await this.orchestrator.markAsManuallyOrganized(request.id);
+        } else if (request.status === RequestStatus.FAILED) {
+          // The show has what this download brought; let it look for the rest
+          await this.orchestrator.startSearch(request.id);
+          await this.orchestrator.transitionRequest({
+            requestId: request.id,
+            targetStatus: RequestStatus.PENDING,
+            reason: 'A download for this show finished after it was marked failed',
+            metadata: { nextSearchAt: new Date() },
+          });
         }
-      } else {
-        // Handle simple request failure (movies, games, or legacy downloads)
-        await this.orchestrator.markAsFailed(requestId, errorMessage || 'Download failed');
-        this.logger.warn(`Download failed for request ${requestId}: ${errorMessage || 'Unknown error'}`);
-      }
-    } catch (error) {
-      this.logger.error(`Error handling download failure for request ${requestId}:`, error);
     }
   }
 
-  private async completeTorrentDownload(torrentDownload: any): Promise<void> {
-    try {
-      // Mark TorrentDownload as complete
-      await this.prisma.torrentDownload.update({
-        where: { id: torrentDownload.id },
-        data: {
-          status: 'COMPLETED',
-          completedAt: new Date(),
-          updatedAt: new Date(),
-        },
+  /**
+   * A download whose files could not all be moved stops here. The request
+   * does not complete and, for a show, does not go on to its next season:
+   * it waits in ORGANIZE_FAILED, with the stuck files listed, until someone
+   * retries the move.
+   */
+  private async holdForManualOrganize(request: RequestedTorrent, attempt: OrganizeAttempt): Promise<void> {
+    const requestId = request.id;
+    const reason = this.describeFailure(attempt);
+
+    // A completed request cannot be held. Its stuck files show up in the
+    // downloads folder list instead.
+    if (request.status === RequestStatus.COMPLETED) {
+      this.logger.warn(`Could not move files of an extra download for completed request ${requestId}: ${reason}`);
+      return;
+    }
+
+    await this.prisma.requestedTorrent.update({
+      where: { id: requestId },
+      data: {
+        organizeError: reason,
+        unorganizedFiles: attempt.failed.map(file => file.path),
+      },
+    });
+    await this.orchestrator.markAsOrganizeFailed(requestId, reason);
+
+    this.logger.warn(`Request ${requestId} is held for a manual retry: ${reason}`);
+  }
+
+  private describeFailure(attempt: OrganizeAttempt): string {
+    if (attempt.error) {
+      return attempt.error;
+    }
+    const [first] = attempt.failed;
+    return attempt.failed.length === 1
+      ? `Could not move ${first.path.split('/').pop()}: ${first.error}`
+      : `${attempt.failed.length} files could not be moved. First: ${first.path.split('/').pop()}: ${first.error}`;
+  }
+
+  /**
+   * Try again to move the files of a request held in ORGANIZE_FAILED. Files
+   * that are no longer in the downloads folder count as dealt with, so moving
+   * them by hand and retrying releases the request too.
+   */
+  async retryOrganize(requestId: string): Promise<{ success: boolean; message: string; failed: Array<{ path: string; error: string }> }> {
+    const request = await this.prisma.requestedTorrent.findUnique({ where: { id: requestId } });
+
+    if (!request) {
+      throw new Error(`Request ${requestId} not found`);
+    }
+    if (request.status !== RequestStatus.ORGANIZE_FAILED) {
+      throw new Error(`Request is ${request.status}: there is no failed move to retry`);
+    }
+
+    let attempt: OrganizeAttempt = { failed: [] };
+    if (request.unorganizedFiles.length > 0) {
+      const outcome = await this.downloadOrganizationService.organizeFiles(request.unorganizedFiles, this.targetFor(request));
+      attempt = { failed: outcome.failed };
+    } else if (request.aria2Gid) {
+      // The first attempt never got as far as a list of files
+      attempt = await this.organizeDownloadedFiles(requestId, request.aria2Gid);
+    }
+
+    if (attempt.error || attempt.failed.length > 0) {
+      const reason = this.describeFailure(attempt);
+      await this.prisma.requestedTorrent.update({
+        where: { id: requestId },
+        data: { organizeError: reason, unorganizedFiles: attempt.failed.map(file => file.path) },
       });
+      return { success: false, message: reason, failed: attempt.failed };
+    }
 
-      this.logger.log(`TorrentDownload completed: ${torrentDownload.torrentTitle}`);
+    await this.prisma.requestedTorrent.update({
+      where: { id: requestId },
+      data: { organizeError: null, unorganizedFiles: [] },
+    });
+    await this.countDownloadedEpisodes(requestId);
+    await this.orchestrator.markAsCompleted(requestId);
 
-      // Organize downloaded files if aria2Gid is available
-      if (torrentDownload.aria2Gid) {
-        await this.organizeDownloadedFiles(torrentDownload.requestedTorrentId, torrentDownload.aria2Gid);
+    this.logger.log(`Retried organizing request ${requestId}: files moved`);
+    return { success: true, message: 'Files moved to the library', failed: [] };
+  }
+
+  private targetFor(request: { id: string; contentType: ContentType; title: string; year: number | null; season: number | null; episode: number | null; platform: string | null; artist: string | null }): OrganizeTarget {
+    return {
+      contentType: request.contentType,
+      title: request.title,
+      year: request.year || undefined,
+      season: request.season || undefined,
+      episode: request.episode || undefined,
+      platform: request.platform || undefined,
+      artist: request.artist || undefined,
+      requestId: request.id,
+    };
+  }
+
+  private async handleDownloadFailure(request: RequestedTorrent, aria2Gid: string, errorMessage?: string): Promise<void> {
+    try {
+      await this.prisma.torrentDownload.updateMany({
+        where: { aria2Gid, status: 'DOWNLOADING' },
+        data: { status: 'FAILED', updatedAt: new Date() },
+      });
+      this.logger.warn(`Download ${aria2Gid} failed for request ${request.id}: ${errorMessage || 'Unknown error'}`);
+
+      // Only a request that is waiting on this download fails with it
+      if (request.status === RequestStatus.DOWNLOADING && request.aria2Gid === aria2Gid) {
+        await this.orchestrator.markAsFailed(request.id, errorMessage || 'Download failed');
       }
-      await this.countDownloadedEpisodes(torrentDownload.requestedTorrentId);
-
-      // Mark the request as completed
-      await this.orchestrator.markAsCompleted(torrentDownload.requestedTorrentId);
     } catch (error) {
-      this.logger.error(`Error completing TorrentDownload ${torrentDownload.id}:`, error);
+      this.logger.error(`Error handling download failure for request ${request.id}:`, error);
     }
   }
 
@@ -298,26 +495,6 @@ export class DownloadProgressTrackerService {
       await this.seasonScanningService.scanTvShowRequest(requestId);
     } catch (error) {
       this.logger.warn(`Could not scan episodes for request ${requestId} after its download: ${error.message}`);
-    }
-  }
-
-  private async failTorrentDownload(torrentDownload: any): Promise<void> {
-    try {
-      // Mark TorrentDownload as failed
-      await this.prisma.torrentDownload.update({
-        where: { id: torrentDownload.id },
-        data: {
-          status: 'FAILED',
-          updatedAt: new Date(),
-        },
-      });
-
-      this.logger.warn(`TorrentDownload failed: ${torrentDownload.torrentTitle}`);
-
-      // Mark the request as failed
-      await this.orchestrator.markAsFailed(torrentDownload.requestedTorrentId, 'Download failed');
-    } catch (error) {
-      this.logger.error(`Error failing TorrentDownload ${torrentDownload.id}:`, error);
     }
   }
 
@@ -425,287 +602,61 @@ export class DownloadProgressTrackerService {
   /**
    * Organize downloaded files based on organization rules
    */
-  private async organizeDownloadedFiles(requestId: string, aria2Gid: string): Promise<void> {
+  private async organizeDownloadedFiles(requestId: string, aria2Gid: string): Promise<OrganizeAttempt> {
+    this.logger.log(`Starting organization for request ${requestId} with aria2Gid ${aria2Gid}`);
+
+    // Check if organization is enabled
+    const settings = await this.organizationRulesService.getSettings();
+    if (!settings.organizeOnComplete) {
+      this.logger.warn(`Organization on completion is disabled for request ${requestId}`);
+      return { failed: [] };
+    }
+
+    // Get the request details
+    const request = await this.prisma.requestedTorrent.findUnique({
+      where: { id: requestId },
+    });
+
+    if (!request) {
+      this.logger.warn(`Request ${requestId} not found for organization`);
+      return { failed: [] };
+    }
+
+    // Collect all files to organize (from main download and child downloads)
+    const allFiles: string[] = [];
     try {
-      this.logger.log(`Starting organization for request ${requestId} with aria2Gid ${aria2Gid}`);
-
-      // Check if organization is enabled
-      const settings = await this.organizationRulesService.getSettings();
-      this.logger.log(`Organization settings - organizeOnComplete: ${settings.organizeOnComplete}`);
-
-      if (!settings.organizeOnComplete) {
-        this.logger.warn(`Organization on completion is disabled for request ${requestId}`);
-        return;
-      }
-
-      // Get the request details
-      const request = await this.prisma.requestedTorrent.findUnique({
-        where: { id: requestId },
-      });
-
-      if (!request) {
-        this.logger.warn(`Request ${requestId} not found for organization`);
-        return;
-      }
-
-      this.logger.log(`Found request: ${request.title} (${request.contentType})`);
-
-      // Check if organization rules exist for this content type
-      try {
-        const rule = await this.organizationRulesService.getRuleForContentType(request.contentType as ContentType, request.platform);
-        this.logger.log(`Found organization rule for ${request.contentType}: ${rule.folderNamePattern} / ${rule.fileNamePattern}`);
-      } catch (error) {
-        this.logger.error(`No organization rule found for ${request.contentType}:`, error);
-        return;
-      }
-
-      // Get download status and files from Aria2
       const downloadStatus = await this.aria2Service.getStatus(aria2Gid);
-      this.logger.log(`Download status for ${aria2Gid}: ${downloadStatus.status}`);
+      const statuses = [downloadStatus];
 
-      // Collect all files to organize (from main download and child downloads)
-      const allFiles: Array<{ path: string; length: string; completedLength: string }> = [];
-
-      // Add files from main download (if any)
-      if (downloadStatus.files && downloadStatus.files.length > 0) {
-        this.logger.log(`Found ${downloadStatus.files.length} files in main download`);
-        allFiles.push(...downloadStatus.files);
-      }
-
-      // For torrents, check child downloads for actual content files
-      if (downloadStatus.followedBy && downloadStatus.followedBy.length > 0) {
-        this.logger.log(`Checking ${downloadStatus.followedBy.length} child downloads for files to organize`);
-
-        for (const childGid of downloadStatus.followedBy) {
-          try {
-            const childStatus = await this.aria2Service.getStatus(childGid);
-            if (childStatus.files && childStatus.files.length > 0) {
-              this.logger.log(`Found ${childStatus.files.length} files in child download ${childGid}`);
-              allFiles.push(...childStatus.files);
-            }
-          } catch (childError) {
-            this.logger.debug(`Error getting child download files for ${childGid}:`, childError);
-          }
-        }
-      }
-
-      if (allFiles.length === 0) {
-        this.logger.warn(`No files found for download ${aria2Gid} (including child downloads)`);
-        return;
-      }
-
-      this.logger.log(`Found ${allFiles.length} total files for request: ${request.title}`);
-
-      // Process each file
-      let organizedCount = 0;
-      let skippedCount = 0;
-
-      for (const file of allFiles) {
-        if (!file.path) {
-          this.logger.debug(`Skipping file with no path`);
-          continue;
-        }
-
-        this.logger.log(`Processing file: ${file.path}`);
-
-        // Skip metadata files - they should not be organized
-        if (this.isMetadataFile(file.path)) {
-          this.logger.log(`Skipping metadata file: ${file.path}`);
-          skippedCount++;
-          continue;
-        }
-
+      // For torrents, the actual content files belong to child downloads
+      for (const childGid of downloadStatus.followedBy ?? []) {
         try {
+          statuses.push(await this.aria2Service.getStatus(childGid));
+        } catch (childError) {
+          this.logger.debug(`Error getting child download files for ${childGid}:`, childError);
+        }
+      }
+
+      for (const status of statuses) {
+        for (const file of status.files ?? []) {
           // aria2 may see the download folder at another path than this server does.
-          const actualFilePath = fromAria2Path(file.path);
-          this.logger.log(`Converted path: ${file.path} -> ${actualFilePath}`);
-
-          // Create organization context
-          // For TV shows, extract season/episode from file path if not available in request
-          const extractedSeasonEpisode = this.extractSeasonEpisodeFromPath(file.path);
-
-          const context = {
-            contentType: request.contentType as ContentType,
-            title: request.title,
-            year: request.year || undefined,
-            // The file knows which episode it is. The request's own season is
-            // only where it started (a show found in the library carries the
-            // first season folder), so it must not file season 2 under season 1.
-            season: extractedSeasonEpisode.season || request.season || undefined,
-            episode: extractedSeasonEpisode.episode || request.episode || undefined,
-            platform: request.platform || undefined,
-            artist: request.artist || undefined,
-            subfolder: request.contentType === ContentType.MUSIC ? this.discFolderFromPath(file.path) : undefined,
-            quality: this.extractQualityFromPath(file.path),
-            format: this.extractFormatFromPath(file.path),
-            edition: this.extractEditionFromPath(file.path),
-            originalPath: actualFilePath,
-            fileName: file.path.split('/').pop() || 'unknown',
-          };
-
-          this.logger.log(`Organization context: ${JSON.stringify(context, null, 2)}`);
-
-          // Organize the file
-          const result = await this.fileOrganizationService.organizeFile(context, requestId);
-
-          if (result.success) {
-            this.logger.log(`Successfully organized: ${actualFilePath} -> ${result.organizedPath}`);
-            organizedCount++;
-          } else {
-            this.logger.warn(`Failed to organize ${actualFilePath}: ${result.error}`);
-          }
-
-        } catch (error) {
-          this.logger.error(`Error organizing file ${file.path}:`, error);
+          if (file.path) allFiles.push(fromAria2Path(file.path));
         }
       }
-
-      this.logger.log(`Organization complete for request ${requestId}: ${organizedCount} organized, ${skippedCount} skipped`);
-
     } catch (error) {
-      this.logger.error(`Error organizing files for request ${requestId}:`, error);
-    }
-  }
-
-  /**
-   * Check if a file is a metadata file that should not be organized
-   */
-  private isMetadataFile(filePath: string): boolean {
-    const fileName = filePath.split('/').pop() || '';
-    const fileNameLower = fileName.toLowerCase();
-
-    // Check for metadata file patterns
-    const isMetadata = (
-      // Aria2 metadata files
-      fileName.startsWith('[METADATA]') ||
-      // Common metadata/info files (be more specific with .txt files)
-      fileNameLower.endsWith('.nfo') ||
-      fileNameLower.endsWith('.torrent') ||
-      // Only exclude specific .txt files, not all
-      fileNameLower.includes('readme') ||
-      fileNameLower.includes('info.txt') ||
-      fileNameLower.includes('description.txt') ||
-      fileNameLower.includes('instructions.txt') ||
-      // Subtitle files (usually organized separately)
-      fileNameLower.endsWith('.srt') ||
-      fileNameLower.endsWith('.sub') ||
-      fileNameLower.endsWith('.idx') ||
-      fileNameLower.endsWith('.ass') ||
-      fileNameLower.endsWith('.ssa') ||
-      fileNameLower.endsWith('.vtt') ||
-      // Sample files
-      fileNameLower.includes('sample') ||
-      // Other metadata
-      fileNameLower.endsWith('.sfv') ||
-      fileNameLower.endsWith('.md5') ||
-      fileNameLower.endsWith('.sha') ||
-      fileNameLower.endsWith('.par2')
-    );
-
-    if (isMetadata) {
-      this.logger.debug(`File ${fileName} identified as metadata file`);
+      return { failed: [], error: `Could not read the download's files from aria2: ${error.message}` };
     }
 
-    return isMetadata;
-  }
-
-  /**
-   * Extract quality information from file path
-   */
-  private extractQualityFromPath(filePath: string): string | undefined {
-    const fileName = filePath.toLowerCase();
-
-    if (fileName.includes('2160p') || fileName.includes('4k')) return '2160p';
-    if (fileName.includes('1080p')) return '1080p';
-    if (fileName.includes('720p')) return '720p';
-    if (fileName.includes('480p')) return '480p';
-
-    return undefined;
-  }
-
-  /**
-   * Extract format information from file path
-   */
-  private extractFormatFromPath(filePath: string): string | undefined {
-    const fileName = filePath.toLowerCase();
-
-    if (fileName.includes('x265') || fileName.includes('hevc')) return 'x265';
-    if (fileName.includes('x264')) return 'x264';
-    if (fileName.includes('av1')) return 'AV1';
-
-    return undefined;
-  }
-
-  /**
-   * Extract edition information from file path
-   */
-  private extractEditionFromPath(filePath: string): string | undefined {
-    const fileName = filePath.toLowerCase();
-
-    if (fileName.includes('bluray') || fileName.includes('brrip')) return 'BluRay';
-    if (fileName.includes('webrip')) return 'WEBRip';
-    if (fileName.includes('webdl') || fileName.includes('web-dl')) return 'WEB-DL';
-    if (fileName.includes('hdtv')) return 'HDTV';
-    if (fileName.includes('dvdrip')) return 'DVDRip';
-
-    return undefined;
-  }
-
-  /**
-   * Extract season and episode information from file path
-   */
-  /**
-   * Multi-disc albums ship as "CD1/01 - Track.flac", "CD2/01 - Track.flac".
-   * Keeping the disc folder stops disc 2 overwriting disc 1.
-   */
-  private discFolderFromPath(filePath: string): string | undefined {
-    const parent = filePath.split('/').slice(-2, -1)[0];
-    return parent && /^(cd|disc|disk)[\s._-]*\d+$/i.test(parent.trim()) ? parent.trim() : undefined;
-  }
-
-  private extractSeasonEpisodeFromPath(filePath: string): { season?: number; episode?: number } {
-    const fileName = filePath.toLowerCase();
-
-    // Common TV show patterns
-    const patterns = [
-      /s(\d+)e(\d+)/i,           // S01E01, s01e01
-      /s(\d+)\s*e(\d+)/i,        // S01 E01
-      /season\s*(\d+).*episode\s*(\d+)/i, // Season 1 Episode 1
-      /(\d+)x(\d+)/,             // 1x01
-      /s(\d+)\.e(\d+)/i,         // S01.E01
-      /season[\s\._-]*(\d+)[\s\._-]*episode[\s\._-]*(\d+)/i, // Various season/episode formats
-    ];
-
-    for (const pattern of patterns) {
-      const match = fileName.match(pattern);
-      if (match) {
-        const season = parseInt(match[1], 10);
-        const episode = parseInt(match[2], 10);
-
-        // Validate reasonable ranges
-        if (season >= 1 && season <= 50 && episode >= 1 && episode <= 999) {
-          return { season, episode };
-        }
-      }
+    if (allFiles.length === 0) {
+      this.logger.warn(`No files found for download ${aria2Gid} (including child downloads)`);
+      return { failed: [] };
     }
 
-    // Try to extract just season information from directory structure
-    const seasonOnlyPatterns = [
-      /season[\s\._-]*(\d+)/i,   // Season 1, season_1, etc.
-      /s(\d+)/i,                 // S01, s1, etc.
-    ];
+    this.logger.log(`Found ${allFiles.length} total files for request: ${request.title}`);
 
-    for (const pattern of seasonOnlyPatterns) {
-      const match = fileName.match(pattern);
-      if (match) {
-        const season = parseInt(match[1], 10);
+    const outcome = await this.downloadOrganizationService.organizeFiles(allFiles, this.targetFor(request));
+    this.logger.log(`Organization complete for request ${requestId}: ${outcome.organized.length} organized, ${outcome.skipped.length} skipped, ${outcome.failed.length} failed`);
 
-        if (season >= 1 && season <= 50) {
-          return { season };
-        }
-      }
-    }
-
-    return {};
+    return { failed: outcome.failed };
   }
 }

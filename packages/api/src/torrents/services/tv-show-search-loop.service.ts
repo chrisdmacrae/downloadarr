@@ -72,9 +72,10 @@ export class TvShowSearchLoopService {
     const tvShowRequests = await this.prisma.requestedTorrent.findMany({
       where: {
         contentType: ContentType.TV_SHOW,
-        // Only process requests that are not currently downloading or failed
+        // Only process requests that are not currently downloading, failed,
+        // or waiting for someone to retry a failed move
         status: {
-          notIn: [RequestStatus.DOWNLOADING, RequestStatus.FAILED, RequestStatus.CANCELLED],
+          notIn: [RequestStatus.DOWNLOADING, RequestStatus.FAILED, RequestStatus.CANCELLED, RequestStatus.ORGANIZE_FAILED],
         },
       },
       include: {
@@ -108,11 +109,9 @@ export class TvShowSearchLoopService {
       const needsMoreContent = await this.gapAnalysis.needsMoreContent(request.id);
 
       if (!needsMoreContent) {
-        // Show is complete, mark as completed if not already
-        if (request.status !== RequestStatus.COMPLETED) {
-          await this.orchestrator.markAsCompleted(request.id);
-          this.logger.log(`Marked ${request.title} as completed - no more content needed`);
-        }
+        // Nothing that has aired is missing. The request stays as it is: a
+        // download completes it, and an ongoing show waits in pending for
+        // new episodes.
         this.stats.completed++;
         return;
       }

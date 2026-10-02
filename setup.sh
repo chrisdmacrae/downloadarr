@@ -163,6 +163,13 @@ download_config_files() {
         exit 1
     fi
 
+    # Download the upgrade script, for later
+    if curl -fsSL "${GITHUB_RAW_URL}/upgrade.sh" -o upgrade.sh; then
+        chmod +x upgrade.sh
+    else
+        print_warning "Failed to download upgrade.sh"
+    fi
+
     # Download .env.example as .env
     if curl -fsSL "${GITHUB_RAW_URL}/.env.example" -o .env; then
         :  # Silent success
@@ -318,7 +325,7 @@ show_final_info() {
     echo "  • View logs:    docker compose logs -f"
     echo "  • Stop:         docker compose down"
     echo "  • Restart:      docker compose restart"
-    echo "  • Update:       docker compose pull && docker compose up -d"
+    echo "  • Update:       ./upgrade.sh   (keeps the VPN overlay if you use it)"
     echo
 
     # VPN Information

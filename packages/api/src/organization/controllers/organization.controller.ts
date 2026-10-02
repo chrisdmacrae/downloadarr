@@ -1,8 +1,9 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UsePipes, ValidationPipe, Inject, forwardRef } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, UsePipes, ValidationPipe, Inject, forwardRef, HttpException, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery } from '@nestjs/swagger';
 import { OrganizationRulesService } from '../services/organization-rules.service';
 import { FileOrganizationService } from '../services/file-organization.service';
 import { ReverseIndexingService } from '../services/reverse-indexing.service';
+import { DownloadsFolderService, OrganizeDownloadRequest } from '../services/downloads-folder.service';
 import { SeasonScanningService } from '../../torrents/services/season-scanning.service';
 import { CreateOrganizationRuleDto, UpdateOrganizationRuleDto } from '../dto/organization-rule.dto';
 import { UpdateOrganizationSettingsDto } from '../dto/organization-settings.dto';
@@ -15,6 +16,7 @@ export class OrganizationController {
     private readonly organizationRulesService: OrganizationRulesService,
     private readonly fileOrganizationService: FileOrganizationService,
     private readonly reverseIndexingService: ReverseIndexingService,
+    private readonly downloadsFolderService: DownloadsFolderService,
     @Inject(forwardRef(() => SeasonScanningService))
     private readonly seasonScanningService: SeasonScanningService,
   ) {}
@@ -137,6 +139,32 @@ export class OrganizationController {
     };
 
     return this.fileOrganizationService.organizeFile(context, request.requestedTorrentId);
+  }
+
+  // Downloads folder endpoints
+  @Get('downloads')
+  @ApiOperation({
+    summary: 'List what is in the downloads folder',
+    description: 'Every file and folder still in the downloads folder, with a guess at what it is, so it can be organized by hand.',
+  })
+  @ApiResponse({ status: 200, description: 'Downloads folder entries' })
+  async getDownloadsFolder() {
+    return this.downloadsFolderService.list();
+  }
+
+  @Post('downloads/organize')
+  @ApiOperation({
+    summary: 'Organize a download by hand',
+    description: 'Moves a file or folder from the downloads folder into the library as the given content: either an existing request (requestId), or a content type and title, with a season, platform or artist where they apply.',
+  })
+  @ApiResponse({ status: 200, description: 'Organized; success says whether every file moved' })
+  @ApiResponse({ status: 400, description: 'The path or the mapping is not usable' })
+  async organizeDownload(@Body() request: OrganizeDownloadRequest) {
+    try {
+      return await this.downloadsFolderService.organize(request);
+    } catch (error) {
+      throw new HttpException(error.message, HttpStatus.BAD_REQUEST);
+    }
   }
 
   // Metadata extraction endpoint

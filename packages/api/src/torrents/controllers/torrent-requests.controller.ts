@@ -594,6 +594,27 @@ export class TorrentRequestsController {
     }
   }
 
+  @Post(':id/retry-organize')
+  @ApiOperation({
+    summary: 'Retry moving a finished download into the library',
+    description: 'For a request held in ORGANIZE_FAILED: tries the files that could not be moved again. On success the request completes, or a TV show goes on to what it is still missing.',
+  })
+  @ApiParam({ name: 'id', description: 'Torrent request ID' })
+  @ApiResponse({ status: 200, description: 'Retry attempted; success says whether every file moved' })
+  @ApiResponse({ status: 400, description: 'The request is not waiting on a failed move' })
+  @ApiResponse({ status: 404, description: 'Torrent request not found' })
+  async retryOrganize(@Param('id') id: string): Promise<{ success: boolean; message: string; failed: Array<{ path: string; error: string }> }> {
+    try {
+      return await this.downloadProgressTrackerService.retryOrganize(id);
+    } catch (error) {
+      this.logger.error(`Error retrying organization for ${id}: ${error.message}`, error.stack);
+      throw new HttpException(
+        error.message,
+        error.message.includes('not found') ? HttpStatus.NOT_FOUND : HttpStatus.BAD_REQUEST,
+      );
+    }
+  }
+
   @Post(':id/re-search')
   @ApiOperation({
     summary: 'Re-search a cancelled request',

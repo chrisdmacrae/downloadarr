@@ -234,6 +234,30 @@ export class RequestLifecycleOrchestrator {
   }
 
   /**
+   * Hold a request whose download finished but whose files could not be moved
+   */
+  async markAsOrganizeFailed(requestId: string, reason: string): Promise<RequestedTorrent> {
+    return this.transitionRequest({
+      requestId,
+      targetStatus: RequestStatus.ORGANIZE_FAILED,
+      reason,
+    });
+  }
+
+  /**
+   * Complete a request whose files were put in the library by hand, whatever
+   * became of its own download
+   */
+  async markAsManuallyOrganized(requestId: string): Promise<RequestedTorrent> {
+    return this.transitionRequest({
+      requestId,
+      targetStatus: RequestStatus.COMPLETED,
+      reason: 'Files organized by hand',
+      metadata: { manuallyOrganized: true, downloadComplete: true },
+    });
+  }
+
+  /**
    * Mark request as failed
    */
   async markAsFailed(requestId: string, reason: string): Promise<RequestedTorrent> {

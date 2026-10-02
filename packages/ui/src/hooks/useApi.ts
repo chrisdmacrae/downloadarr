@@ -13,6 +13,7 @@ export const queryKeys = {
   organizationRules: ['organization', 'rules'] as const,
   reverseIndexingStatus: ['organization', 'reverse-index', 'status'] as const,
   organizeQueue: ['organization', 'queue'] as const,
+  downloadsFolder: ['organization', 'downloads'] as const,
   organizeQueueStats: ['organization', 'queue', 'stats'] as const,
   gamePlatforms: ['game-platforms'] as const,
   gamePlatformOptions: ['game-platforms', 'options'] as const,
@@ -334,6 +335,28 @@ export const useReverseIndexingStatus = () => {
     queryFn: apiService.getReverseIndexingStatus,
     refetchInterval: 5000, // Check every 5 seconds
     staleTime: 3000,
+  });
+};
+
+// Downloads folder hooks
+export const useDownloadsFolder = () => {
+  return useQuery({
+    queryKey: queryKeys.downloadsFolder,
+    queryFn: apiService.getDownloadsFolder,
+    staleTime: 15 * 1000,
+    refetchInterval: 60 * 1000,
+  });
+};
+
+export const useOrganizeDownload = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: apiService.organizeDownload,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.downloadsFolder });
+      queryClient.invalidateQueries({ queryKey: ['aggregatedRequests'] });
+    },
   });
 };
 

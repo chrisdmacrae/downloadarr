@@ -54,6 +54,9 @@ model RequestedTorrent {
   foundIndexer       String?            // For legacy single torrent requests
   downloadJobId      String?            // For legacy single torrent requests
   aria2Gid           String?            // For legacy single torrent requests
+  // Set while status is ORGANIZE_FAILED: why, and the files still in the downloads folder
+  organizeError      String?
+  unorganizedFiles   String[]           @default([])
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
   completedAt        DateTime?
@@ -253,6 +256,7 @@ enum RequestStatus {
   FAILED
   CANCELLED
   EXPIRED
+  ORGANIZE_FAILED // Downloaded, but files could not be moved to the library; held until retried
 }
 
 enum TorrentQuality {

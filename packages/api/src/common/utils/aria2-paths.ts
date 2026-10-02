@@ -16,6 +16,11 @@ function roots(env: Env) {
   };
 }
 
+/** The download folder, as this server sees it. */
+export function downloadRoot(env: Env = process.env): string {
+  return roots(env).server;
+}
+
 const within = (path: string, root: string) => path === root || path.startsWith(`${root}/`);
 
 /** Where aria2 should put a download, given a path as this server sees it. */

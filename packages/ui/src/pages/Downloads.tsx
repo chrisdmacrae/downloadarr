@@ -9,6 +9,7 @@ import { MediaCard, MediaCardSkeleton } from '@/components/ds/MediaCard'
 import { EmptyState, Page, PageHeader, PageSection } from '@/components/ds/Page'
 import { Rail } from '@/components/ds/Rail'
 import { StatusBadge } from '@/components/ds/StatusBadge'
+import { UnorganizedDownloads } from '@/components/UnorganizedDownloads'
 import {
   useCancelDownload,
   useDownloads,
@@ -251,6 +252,18 @@ export default function Downloads() {
             })
           )}
         </Rail>
+      </PageSection>
+
+      {/* What the app has lost track of: nothing else looks at the folder itself. */}
+      <PageSection>
+        <div className="flex flex-col gap-1.5">
+          <h2 className="text-xl font-semibold leading-tight text-fg-primary">In the downloads folder</h2>
+          <p className="text-sm text-fg-secondary">
+            Files that were downloaded but never moved to the library. One that clearly belongs to a single
+            request is moved on its own after a few minutes; organize the rest by saying what they are.
+          </p>
+        </div>
+        <UnorganizedDownloads />
       </PageSection>
     </Page>
   )

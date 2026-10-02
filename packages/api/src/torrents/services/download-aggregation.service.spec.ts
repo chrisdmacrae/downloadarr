@@ -10,7 +10,7 @@ describe('DownloadAggregationService.isDownloadFailed', () => {
 
   it('reports a download aria2 has forgotten', async () => {
     const service = setup(jest.fn().mockRejectedValue(new Error('GID gid is not found')));
-    expect((await service.isDownloadFailed('gid')).failed).toBe(true);
+    expect(await service.isDownloadFailed('gid')).toMatchObject({ failed: true, lost: true });
   });
 
   it('does not fail a download because aria2 could not be reached', async () => {

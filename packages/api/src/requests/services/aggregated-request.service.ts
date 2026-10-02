@@ -18,6 +18,8 @@ export interface AggregatedRequest {
   url?: string; // For HTTP requests
   filename?: string; // For HTTP requests
   foundTorrentTitle?: string; // For torrent requests
+  // Why a finished download could not be moved (status ORGANIZE_FAILED)
+  organizeError?: string;
   downloadJobId?: string;
   aria2Gid?: string;
   // Metadata fields
@@ -166,6 +168,7 @@ export class AggregatedRequestService {
       createdAt: req.createdAt,
       updatedAt: req.updatedAt,
       foundTorrentTitle: req.foundTorrentTitle,
+      organizeError: req.organizeError ?? undefined,
       downloadJobId: req.downloadJobId,
       aria2Gid: req.aria2Gid,
       imdbId: req.imdbId,
@@ -250,6 +253,7 @@ export class AggregatedRequestService {
           createdAt: req.createdAt,
           updatedAt: req.updatedAt,
           foundTorrentTitle: req.foundTorrentTitle,
+          organizeError: req.organizeError ?? undefined,
           downloadJobId: req.downloadJobId,
           aria2Gid: req.aria2Gid,
           imdbId: req.imdbId,

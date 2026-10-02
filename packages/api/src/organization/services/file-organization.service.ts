@@ -79,7 +79,9 @@ export class FileOrganizationService {
         const fileContext: OrganizationContext = {
           ...context,
           originalPath: filePath,
-          fileName: path.basename(filePath),
+          // The caller may name the file something other than what it is
+          // called on disk; files out of an archive keep their own names
+          fileName: filePath === resolvedOriginalPath ? context.fileName : path.basename(filePath),
         };
 
         const result = await this.organizeIndividualFile(fileContext, requestedTorrentId);

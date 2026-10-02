@@ -27,6 +27,7 @@ interface TMDBEpisode {
 export class SeasonScanningService {
   private readonly logger = new Logger(SeasonScanningService.name);
   private readonly tmdbBaseUrl = 'https://api.themoviedb.org/3';
+  private readonly scansInFlight = new Map<string, Promise<unknown>>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -94,6 +95,24 @@ export class SeasonScanningService {
    * First ensures seasons and episodes are populated, then scans for completed episodes
    */
   async scanTvShowRequest(requestId: string): Promise<{ episodesUpdated: number; episodesMarkedMissing: number }> {
+    // Several things scan a show (the re-index, the metadata refresh, a
+    // finished download, organizing by hand) and they can land together. Two
+    // scans of one show at once both try to create the same seasons and
+    // episodes, so a show's scans run one after the other.
+    const previous = this.scansInFlight.get(requestId) ?? Promise.resolve();
+    const scan = previous.catch(() => undefined).then(() => this.scanTvShowRequestNow(requestId));
+    this.scansInFlight.set(requestId, scan);
+
+    try {
+      return await scan;
+    } finally {
+      if (this.scansInFlight.get(requestId) === scan) {
+        this.scansInFlight.delete(requestId);
+      }
+    }
+  }
+
+  private async scanTvShowRequestNow(requestId: string): Promise<{ episodesUpdated: number; episodesMarkedMissing: number }> {
     const results = { episodesUpdated: 0, episodesMarkedMissing: 0 };
 
     try {

@@ -31,6 +31,7 @@ export type StatusKey =
   | 'PAUSED'
   | 'COMPLETED'
   | 'FAILED'
+  | 'ORGANIZE_FAILED'
   | 'CANCELLED'
   | 'EXPIRED'
   | 'PROCESSING'
@@ -109,6 +110,13 @@ const TONES: Record<StatusKey, StatusTone> = {
   },
   FAILED: {
     label: 'Failed',
+    icon: AlertCircle,
+    color: 'var(--status-failed)',
+    bg: 'var(--status-failed-bg)',
+  },
+  // Downloaded, but its files are still in the downloads folder
+  ORGANIZE_FAILED: {
+    label: 'Move failed',
     icon: AlertCircle,
     color: 'var(--status-failed)',
     bg: 'var(--status-failed-bg)',

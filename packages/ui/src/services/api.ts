@@ -333,7 +333,7 @@ export interface TorrentRequest {
   // Music-specific fields: title is the album
   artist?: string;
   musicbrainzId?: string;
-  status: 'PENDING' | 'SEARCHING' | 'FOUND' | 'DOWNLOADING' | 'COMPLETED' | 'FAILED' | 'CANCELLED' | 'EXPIRED';
+  status: 'PENDING' | 'SEARCHING' | 'FOUND' | 'DOWNLOADING' | 'COMPLETED' | 'FAILED' | 'CANCELLED' | 'EXPIRED' | 'ORGANIZE_FAILED';
   priority: number;
   preferredQualities: string[];
   preferredFormats: string[];
@@ -426,6 +426,8 @@ export interface AggregatedRequest {
   url?: string; // For HTTP requests
   filename?: string; // For HTTP requests
   foundTorrentTitle?: string; // For torrent requests
+  /** Why a finished download could not be moved to the library (status ORGANIZE_FAILED). */
+  organizeError?: string;
   downloadJobId?: string;
   aria2Gid?: string;
   // Metadata fields
@@ -442,6 +444,42 @@ export interface AggregatedRequest {
   isOngoing?: boolean;
   // Per-season / per-episode progress, present on TV-show torrent requests
   tvShowSeasons?: AggregatedTvShowSeason[];
+}
+
+/** A file or folder sitting in the downloads folder. */
+export interface DownloadsFolderEntry {
+  /** Relative to the downloads folder; sent back to organize it. */
+  path: string;
+  name: string;
+  isDirectory: boolean;
+  sizeBytes: number;
+  fileCount: number;
+  mediaFileCount: number;
+  modifiedAt: string;
+  suggestedContentType: 'MOVIE' | 'TV_SHOW' | 'GAME' | 'MUSIC' | null;
+  /** aria2 is still writing it. */
+  inProgress: boolean;
+  detected: { title: string; year?: number; season?: number };
+  suggestedRequestId: string | null;
+}
+
+export interface OrganizeDownloadPayload {
+  path: string;
+  requestId?: string;
+  contentType?: 'MOVIE' | 'TV_SHOW' | 'GAME' | 'MUSIC';
+  title?: string;
+  year?: number;
+  season?: number;
+  platform?: string;
+  artist?: string;
+}
+
+export interface OrganizeDownloadResult {
+  success: boolean;
+  message: string;
+  organized: number;
+  skipped: string[];
+  failed: Array<{ path: string; error: string }>;
 }
 
 export interface AggregatedTvShowSeason {
@@ -943,6 +981,12 @@ export const apiService = {
     return response.data;
   },
 
+  /** Try again to move a finished download whose files could not be organized. */
+  retryOrganizeRequest: async (id: string): Promise<{ success: boolean; message: string; failed: Array<{ path: string; error: string }> }> => {
+    const response = await api.post(`/torrent-requests/${id}/retry-organize`);
+    return response.data;
+  },
+
   triggerAllRequestsSearch: async (): Promise<{ success: boolean; message?: string; searchedCount?: number; error?: string }> => {
     const response = await api.post('/torrent-requests/search-all');
     return response.data;
@@ -1192,6 +1236,17 @@ export const apiService = {
 
   extractMetadata: async (fileName: string, contentType: 'MOVIE' | 'TV_SHOW' | 'GAME' | 'MUSIC'): Promise<FileMetadata> => {
     const response = await api.get(`/organization/extract-metadata?fileName=${encodeURIComponent(fileName)}&contentType=${contentType}`);
+    return response.data;
+  },
+
+  // Downloads folder: what is still there, and organizing it by hand
+  getDownloadsFolder: async (): Promise<DownloadsFolderEntry[]> => {
+    const response = await api.get('/organization/downloads');
+    return response.data;
+  },
+
+  organizeDownload: async (payload: OrganizeDownloadPayload): Promise<OrganizeDownloadResult> => {
+    const response = await api.post('/organization/downloads/organize', payload);
     return response.data;
   },
 

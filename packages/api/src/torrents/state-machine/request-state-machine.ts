@@ -37,15 +37,32 @@ export class RequestStateMachine {
 
   // Define valid state transitions
   private readonly validTransitions: Map<RequestStatus, RequestStatus[]> = new Map([
-    [RequestStatus.PENDING, [RequestStatus.SEARCHING, RequestStatus.CANCELLED, RequestStatus.EXPIRED]],
-    [RequestStatus.SEARCHING, [RequestStatus.FOUND, RequestStatus.PENDING, RequestStatus.CANCELLED, RequestStatus.EXPIRED]],
-    [RequestStatus.FOUND, [RequestStatus.DOWNLOADING, RequestStatus.SEARCHING, RequestStatus.FAILED, RequestStatus.CANCELLED, RequestStatus.EXPIRED]],
-    [RequestStatus.DOWNLOADING, [RequestStatus.COMPLETED, RequestStatus.FAILED, RequestStatus.CANCELLED, RequestStatus.PENDING]],
-    [RequestStatus.FAILED, [RequestStatus.SEARCHING, RequestStatus.CANCELLED, RequestStatus.EXPIRED]],
-    [RequestStatus.CANCELLED, [RequestStatus.PENDING, RequestStatus.SEARCHING]],
-    [RequestStatus.EXPIRED, [RequestStatus.SEARCHING]],
+    [RequestStatus.PENDING, [RequestStatus.SEARCHING, RequestStatus.CANCELLED, RequestStatus.EXPIRED, RequestStatus.COMPLETED, RequestStatus.ORGANIZE_FAILED]],
+    [RequestStatus.SEARCHING, [RequestStatus.FOUND, RequestStatus.PENDING, RequestStatus.CANCELLED, RequestStatus.EXPIRED, RequestStatus.COMPLETED]],
+    [RequestStatus.FOUND, [RequestStatus.DOWNLOADING, RequestStatus.SEARCHING, RequestStatus.FAILED, RequestStatus.CANCELLED, RequestStatus.EXPIRED, RequestStatus.COMPLETED, RequestStatus.ORGANIZE_FAILED]],
+    [RequestStatus.DOWNLOADING, [RequestStatus.COMPLETED, RequestStatus.FAILED, RequestStatus.CANCELLED, RequestStatus.PENDING, RequestStatus.ORGANIZE_FAILED]],
+    [RequestStatus.FAILED, [RequestStatus.SEARCHING, RequestStatus.CANCELLED, RequestStatus.EXPIRED, RequestStatus.COMPLETED, RequestStatus.ORGANIZE_FAILED]],
+    [RequestStatus.CANCELLED, [RequestStatus.PENDING, RequestStatus.SEARCHING, RequestStatus.COMPLETED]],
+    [RequestStatus.EXPIRED, [RequestStatus.SEARCHING, RequestStatus.COMPLETED, RequestStatus.ORGANIZE_FAILED]],
+    // Downloaded, but the files could not be moved (the download may have
+    // finished after its request left DOWNLOADING): waits for a retry, which
+    // completes it or, for a show with more to fetch, sends it back to pending.
+    // Not cancellable: cancelling deletes a download's files.
+    [RequestStatus.ORGANIZE_FAILED, [RequestStatus.COMPLETED, RequestStatus.PENDING]],
     [RequestStatus.COMPLETED, []], // Final state - no transitions allowed
   ]);
+
+  // A request can jump straight to COMPLETED from these states only when its
+  // files reached the library some other way than its own tracked download:
+  // organized by hand, or a download that finished after the request moved on.
+  private readonly manuallyCompletable: RequestStatus[] = [
+    RequestStatus.PENDING,
+    RequestStatus.SEARCHING,
+    RequestStatus.FOUND,
+    RequestStatus.FAILED,
+    RequestStatus.CANCELLED,
+    RequestStatus.EXPIRED,
+  ];
 
   // State transition guards
   private readonly guards: Map<string, TransitionGuard> = new Map();
@@ -153,6 +170,13 @@ export class RequestStateMachine {
   }
 
   private initializeGuards(): void {
+    for (const status of this.manuallyCompletable) {
+      this.registerGuard(status, RequestStatus.COMPLETED, {
+        canTransition: (context) => context.metadata?.manuallyOrganized === true,
+        reason: 'Only a request whose files were organized by hand can complete without a download',
+      });
+    }
+
     // Guard: Can only search if under max attempts
     this.registerGuard(RequestStatus.PENDING, RequestStatus.SEARCHING, {
       canTransition: (context) => {

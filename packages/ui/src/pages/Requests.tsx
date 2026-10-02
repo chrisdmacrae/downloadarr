@@ -65,6 +65,7 @@ const STATUS_FILTERS: Array<{ value: StatusFilter; label: string }> = [
   { value: 'DOWNLOADING', label: 'Downloading' },
   { value: 'COMPLETED', label: 'Completed' },
   { value: 'FAILED', label: 'Failed' },
+  { value: 'ORGANIZE_FAILED', label: 'Move failed' },
   { value: 'CANCELLED', label: 'Cancelled' },
   { value: 'EXPIRED', label: 'Expired' },
   { value: 'PENDING_METADATA', label: 'Needs metadata' },
@@ -73,6 +74,8 @@ const STATUS_FILTERS: Array<{ value: StatusFilter; label: string }> = [
 
 /** Order the state groups follow the lifecycle, so a page reads left to right. */
 const GROUP_ORDER = [
+  // Held until someone acts, so it leads
+  'ORGANIZE_FAILED',
   'DOWNLOADING',
   'FOUND',
   'SEARCHING',
@@ -86,6 +89,7 @@ const GROUP_ORDER = [
 ] as const
 
 const GROUP_LABELS: Record<string, string> = {
+  ORGANIZE_FAILED: 'Downloaded, but not moved to the library',
   DOWNLOADING: 'Downloading',
   FOUND: 'Found',
   SEARCHING: 'Searching',
@@ -110,6 +114,7 @@ export default function Requests() {
   const [isCancelling, setIsCancelling] = useState<string | null>(null)
   const [isSearching, setIsSearching] = useState<string | null>(null)
   const [isReSearching, setIsReSearching] = useState<string | null>(null)
+  const [isRetryingOrganize, setIsRetryingOrganize] = useState<string | null>(null)
   const [isSearchingAll, setIsSearchingAll] = useState(false)
   const [isStartingDownload, setIsStartingDownload] = useState<string | null>(null)
   const [torrentSelectionRequest, setTorrentSelectionRequest] = useState<TorrentRequest | null>(null)
@@ -279,6 +284,31 @@ export default function Requests() {
       })
     } finally {
       setIsSearching(null)
+    }
+  }
+
+  const handleRetryOrganize = async (id: string) => {
+    setIsRetryingOrganize(id)
+    try {
+      const response = await apiService.retryOrganizeRequest(id)
+      if (response.success) {
+        toast({ title: 'Files moved', description: response.message })
+      } else {
+        toast({
+          title: 'Still could not move the files',
+          description: response.message,
+          variant: 'destructive',
+        })
+      }
+      refreshRequests()
+    } catch (err: any) {
+      toast({
+        title: 'Retry failed',
+        description: err?.response?.data?.message || 'An error occurred while retrying the move.',
+        variant: 'destructive',
+      })
+    } finally {
+      setIsRetryingOrganize(null)
     }
   }
 
@@ -541,6 +571,7 @@ export default function Requests() {
                   busy={{
                     searching: isSearching === request.id,
                     reSearching: isReSearching === request.id,
+                    retryingOrganize: isRetryingOrganize === request.id,
                     cancelling: isCancelling === request.id,
                     deleting: isDeleting === request.id,
                     starting: isStartingDownload === request.id,
@@ -548,6 +579,7 @@ export default function Requests() {
                   onOpen={() => handleItemClick(request)}
                   onSearch={() => handleSearchRequest(request)}
                   onReSearch={() => handleReSearch(request.id)}
+                  onRetryOrganize={() => handleRetryOrganize(request.id)}
                   onStartDownload={() => handleStartHttpDownload(request)}
                   onEdit={() => handleEditRequest(request)}
                   onCancel={() => handleCancelRequest(request)}
@@ -665,6 +697,7 @@ interface RequestCardProps {
   busy: {
     searching: boolean
     reSearching: boolean
+    retryingOrganize: boolean
     cancelling: boolean
     deleting: boolean
     starting: boolean
@@ -672,6 +705,7 @@ interface RequestCardProps {
   onOpen: () => void
   onSearch: () => void
   onReSearch: () => void
+  onRetryOrganize: () => void
   onStartDownload: () => void
   onEdit: () => void
   onCancel: () => void
@@ -685,6 +719,7 @@ function RequestCard({
   onOpen,
   onSearch,
   onReSearch,
+  onRetryOrganize,
   onStartDownload,
   onEdit,
   onCancel,
@@ -701,7 +736,7 @@ function RequestCard({
 
   const canDelete =
     request.type === 'torrent'
-      ? ['FOUND', 'FAILED', 'CANCELLED', 'EXPIRED', 'COMPLETED'].includes(request.status)
+      ? ['FOUND', 'FAILED', 'ORGANIZE_FAILED', 'CANCELLED', 'EXPIRED', 'COMPLETED'].includes(request.status)
       : ['FAILED', 'CANCELLED', 'COMPLETED'].includes(request.status)
 
   const canSearch =
@@ -710,6 +745,8 @@ function RequestCard({
       : request.status === 'PENDING_METADATA'
 
   const canReSearch = request.status === 'CANCELLED'
+  // The download finished but its files are still in the downloads folder
+  const canRetryOrganize = request.type === 'torrent' && request.status === 'ORGANIZE_FAILED'
   const canEdit =
     request.type === 'torrent' &&
     ['PENDING', 'SEARCHING', 'FAILED', 'CANCELLED'].includes(request.status)
@@ -734,7 +771,12 @@ function RequestCard({
           request.type === 'http' ? 'Direct URL' : 'Torrent',
           ...(episodeLabel ? [episodeLabel] : []),
         ]}
-        subtitle={request.foundTorrentTitle || request.filename || request.url}
+        subtitle={
+          (canRetryOrganize && request.organizeError) ||
+          request.foundTorrentTitle ||
+          request.filename ||
+          request.url
+        }
         status={<StatusBadge status={request.status} onArtwork size="sm" />}
         typeBadge={
           <Badge variant="glass" size="sm">
@@ -752,6 +794,17 @@ function RequestCard({
               <ExternalLink className="h-3.5 w-3.5" />
               Details
             </Button>
+            {/* The one state that waits on a person, so its action is not left in the menu */}
+            {canRetryOrganize && (
+              <Button variant="secondary" size="sm" onClick={onRetryOrganize} disabled={busy.retryingOrganize}>
+                {busy.retryingOrganize ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-3.5 w-3.5" />
+                )}
+                {busy.retryingOrganize ? 'Moving…' : 'Retry move'}
+              </Button>
+            )}
             <div className="ml-auto">
               {/* Radix renders this in a portal, so it escapes the rail's
                   overflow and flips above the trigger when there's no room. */}
@@ -770,6 +823,16 @@ function RequestCard({
                         <SearchIcon className="h-3.5 w-3.5" />
                       )}
                       {busy.searching ? 'Searching…' : 'Search now'}
+                    </DropdownMenuItem>
+                  )}
+                  {canRetryOrganize && (
+                    <DropdownMenuItem onClick={onRetryOrganize} disabled={busy.retryingOrganize}>
+                      {busy.retryingOrganize ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <RefreshCw className="h-3.5 w-3.5" />
+                      )}
+                      {busy.retryingOrganize ? 'Moving…' : 'Retry move to library'}
                     </DropdownMenuItem>
                   )}
                   {canReSearch && (

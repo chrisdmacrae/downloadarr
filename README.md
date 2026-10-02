@@ -43,6 +43,21 @@ After setup, visit http://localhost:3001 to complete the onboarding wizard where
 - Set up file organization preferences
 - Complete your Downloadarr setup
 
+### Upgrading
+
+From your install folder:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/chrisdmacrae/downloadarr/refs/heads/main/upgrade.sh -o upgrade.sh && chmod +x upgrade.sh
+./upgrade.sh            # or ./upgrade.sh 0.18.0 to pin a release
+```
+
+`upgrade.sh` backs up the database to `backups/`, pulls the new images, restarts the stack and waits
+for it to come up healthy. It detects whether your install runs with the VPN overlay
+(`docker-compose.vpn.yml`) and uses the same compose files, so an upgrade never restarts aria2 outside
+the VPN. `--compose` also refreshes the compose files; `--vpn` / `--no-vpn` override the detection.
+Each release's notes say whether the compose files changed.
+
 ### Upgrading from separate API and frontend containers
 
 Downloadarr used to run as two containers: `api` on port 3001 and `frontend` (nginx) on port 3000.

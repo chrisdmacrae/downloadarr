@@ -86,15 +86,18 @@ export class TvShowGapAnalysisService {
     for (const season of request.tvShowSeasons) {
       const seasonGap = await this.analyzeSeasonGap(season, request.tmdbId);
       
-      if (seasonGap.completedEpisodes === 0) {
+      if (seasonGap.missingEpisodes.length === 0) {
+        // Nothing that has aired is missing: complete if there are episodes,
+        // otherwise a season that has not started airing and is not a gap yet
+        if (seasonGap.completedEpisodes > 0) {
+          analysis.completeSeasons.push(season.seasonNumber);
+        }
+      } else if (seasonGap.completedEpisodes === 0) {
         // No episodes downloaded for this season
         analysis.missingSeasons.push(season.seasonNumber);
-      } else if (!seasonGap.isFullyDownloaded) {
+      } else {
         // Season is incomplete
         analysis.incompleteSeasons.push(seasonGap);
-      } else {
-        // Season is complete
-        analysis.completeSeasons.push(season.seasonNumber);
       }
     }
 
@@ -121,12 +124,13 @@ export class TvShowGapAnalysisService {
     
     // Find missing episodes
     const completedEpisodeNumbers = completedEpisodes.map(ep => ep.episodeNumber);
+    const airDates = new Map<number, Date | null>(season.episodes.map(ep => [ep.episodeNumber, ep.airDate ?? null]));
     const missingEpisodes: number[] = [];
-    
+
     for (let i = 1; i <= totalEpisodes; i++) {
       if (!completedEpisodeNumbers.includes(i)) {
         // Only include episodes that have been released
-        if (await this.releaseValidator.isEpisodeReleased(tmdbId, season.seasonNumber, i)) {
+        if (await this.hasAired(tmdbId, season.seasonNumber, i, airDates.get(i))) {
           missingEpisodes.push(i);
         }
       }
@@ -143,6 +147,18 @@ export class TvShowGapAnalysisService {
       isComplete,
       isFullyDownloaded,
     };
+  }
+
+  /**
+   * Whether an episode has aired (at least a day ago, as releases follow the
+   * broadcast). The air date stored with the episode answers it without a
+   * TMDB request per episode; TMDB is asked only when there is none.
+   */
+  private async hasAired(tmdbId: number | null, seasonNumber: number, episodeNumber: number, airDate?: Date | null): Promise<boolean> {
+    if (airDate) {
+      return new Date(airDate).getTime() <= Date.now() - 24 * 60 * 60 * 1000;
+    }
+    return this.releaseValidator.isEpisodeReleased(tmdbId, seasonNumber, episodeNumber);
   }
 
   /**

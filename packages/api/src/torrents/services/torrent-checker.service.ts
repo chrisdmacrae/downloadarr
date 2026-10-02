@@ -15,6 +15,7 @@ import { TorrentResult } from '../../discovery/interfaces/external-api.interface
 import { TvShowTorrentSelectionService, MissingContent } from './tv-show-torrent-selection.service';
 import { TvShowGapAnalysisService } from './tv-show-gap-analysis.service';
 
+import { downloadDestinationFor, sanitizeDownloadName } from '../utils/download-target';
 import { rankMusicReleases } from '../../discovery/services/music-release-ranker';
 
 @Injectable()
@@ -95,6 +96,13 @@ export class TorrentCheckerService {
     try {
       this.logger.log(`Processing torrent request: ${request.title} (${request.contentType})`);
 
+      // A show is only searched for while an episode that has aired is
+      // missing. Otherwise it waits, without using up a search attempt.
+      if (request.contentType === ContentType.TV_SHOW && !(await this.isMissingAiredEpisodes(request))) {
+        await this.deferSearch(request);
+        return;
+      }
+
       // Start search via orchestrator (this will increment attempts and set status)
       await this.orchestrator.startSearch(request.id);
 
@@ -122,6 +130,24 @@ export class TorrentCheckerService {
         });
       }
     }
+  }
+
+  private async isMissingAiredEpisodes(request: RequestedTorrent): Promise<boolean> {
+    const missingContent = this.scopeToRequest(
+      request,
+      await this.tvShowTorrentSelection.analyzeMissingContent(request.id),
+    );
+    return this.tvShowTorrentSelection.getNeededSeasons(missingContent).length > 0;
+  }
+
+  /** Look again after the request's search interval, leaving its status and attempts alone. */
+  private async deferSearch(request: RequestedTorrent): Promise<void> {
+    const nextSearchAt = new Date(Date.now() + request.searchIntervalMins * 60 * 1000);
+    await this.prisma.requestedTorrent.update({
+      where: { id: request.id },
+      data: { nextSearchAt },
+    });
+    this.logger.debug(`${request.title} is not missing any aired episodes, checking again at ${nextSearchAt.toISOString()}`);
   }
 
   private async processOngoingTvShowRequest(request: RequestedTorrent): Promise<void> {
@@ -250,6 +276,16 @@ export class TorrentCheckerService {
             requestId: request.id,
             targetStatus: RequestStatus.PENDING,
             reason: 'Could not check the download in progress',
+          });
+          return true;
+        }
+        // The tracker restarts a lost download it has a link for; wait for that
+        if (download.magnetUri || download.torrentLink) {
+          this.logger.log(`aria2 lost download ${download.aria2Gid} for ${request.title}, waiting for it to be restarted`);
+          await this.orchestrator.transitionRequest({
+            requestId: request.id,
+            targetStatus: RequestStatus.PENDING,
+            reason: 'Waiting for a lost download to be restarted',
           });
           return true;
         }
@@ -493,8 +529,8 @@ export class TorrentCheckerService {
       const downloadJob = await this.downloadService.createDownload({
         url: downloadUrl,
         type: downloadType,
-        name: this.sanitizeFilename(torrent.title),
-        destination: this.getDownloadDestination(request),
+        name: sanitizeDownloadName(torrent.title),
+        destination: downloadDestinationFor(request.contentType),
       }, { matchRequests: false });
 
       const downloadJobId = downloadJob.id.toString();
@@ -571,8 +607,8 @@ export class TorrentCheckerService {
       const downloadJob = await this.downloadService.createDownload({
         url: downloadUrl,
         type: downloadType,
-        name: this.sanitizeFilename(torrent.title),
-        destination: this.getDownloadDestination(request),
+        name: sanitizeDownloadName(torrent.title),
+        destination: downloadDestinationFor(request.contentType),
       }, { matchRequests: false });
 
       const downloadJobId = downloadJob.id.toString();
@@ -622,29 +658,6 @@ export class TorrentCheckerService {
 
 
 
-
-  private sanitizeFilename(filename: string): string {
-    return filename
-      .replace(/[<>:"/\\|?*]/g, '_')
-      .replace(/\s+/g, ' ')
-      .trim();
-  }
-
-  private getDownloadDestination(request: RequestedTorrent): string {
-    const baseDir = process.env.DOWNLOAD_PATH || '/downloads';
-
-    if (request.contentType === ContentType.MOVIE) {
-      return `${baseDir}/movies`;
-    } else if (request.contentType === ContentType.TV_SHOW) {
-      return `${baseDir}/tv-shows`;
-    } else if (request.contentType === ContentType.GAME) {
-      return `${baseDir}/games`;
-    } else if (request.contentType === ContentType.MUSIC) {
-      return `${baseDir}/music`;
-    } else {
-      return `${baseDir}/other`;
-    }
-  }
 
   private delay(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));

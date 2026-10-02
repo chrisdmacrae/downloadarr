@@ -161,4 +161,24 @@ describe('SeasonScanningService', () => {
       data: expect.objectContaining({ tvShowSeasonId: 's1', episodeNumber: 4, status: EpisodeStatus.COMPLETED }),
     });
   });
+
+  it('runs two scans of the same show one after the other', async () => {
+    await addFile('Shōgun (2024)', 'Season 01', 'Shogun.S01E02.mkv');
+    let running = 0;
+    let overlapped = false;
+    prisma.requestedTorrent.findUnique.mockImplementation(async () => {
+      running++;
+      overlapped = overlapped || running > 1;
+      await new Promise(resolve => setTimeout(resolve, 10));
+      return request;
+    });
+    prisma.tvShowEpisode.update.mockImplementation(async () => {
+      running--;
+    });
+
+    await Promise.all([service.scanTvShowRequest('request-1'), service.scanTvShowRequest('request-1')]);
+
+    expect(prisma.requestedTorrent.findUnique).toHaveBeenCalledTimes(2);
+    expect(overlapped).toBe(false);
+  });
 });

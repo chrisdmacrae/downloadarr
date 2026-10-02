@@ -321,7 +321,7 @@ export class DownloadAggregationService {
   /**
    * Check if a download has failed by verifying with aria2
    */
-  async isDownloadFailed(aria2Gid: string): Promise<{ failed: boolean; reason?: string }> {
+  async isDownloadFailed(aria2Gid: string): Promise<{ failed: boolean; reason?: string; lost?: boolean }> {
     try {
       const status = await this.aria2Service.getStatus(aria2Gid);
       return {
@@ -332,7 +332,7 @@ export class DownloadAggregationService {
       // Only a download aria2 has forgotten is lost. If aria2 itself cannot be
       // asked, the download is most likely still running.
       if (isGidNotFoundError(error)) {
-        return { failed: true, reason: 'Download no longer exists in aria2' };
+        return { failed: true, lost: true, reason: 'Download no longer exists in aria2' };
       }
       this.logger.debug(`Error checking failure status for ${aria2Gid}:`, error);
       return { failed: false };

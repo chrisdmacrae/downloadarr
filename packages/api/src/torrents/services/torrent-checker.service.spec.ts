@@ -116,6 +116,17 @@ describe('TorrentCheckerService TV shows', () => {
       expect(downloadedTitles()).toEqual(['Severance S01 1080p']);
     });
 
+    it('waits for a lost download to be restarted when there is a link to restart it from', async () => {
+      prisma.torrentDownload.findMany.mockResolvedValue([{ ...activeDownload, magnetUri: 'magnet:?xt=urn:btih:abc' }]);
+      aria2.getStatus.mockRejectedValue(new Error('GID active-gid is not found'));
+
+      await service.processRequest(request);
+
+      expect(prisma.torrentDownload.update).not.toHaveBeenCalled();
+      expect(downloadService.createDownload).not.toHaveBeenCalled();
+      expect(orchestrator.transitionRequest).toHaveBeenCalledWith(expect.objectContaining({ targetStatus: RequestStatus.PENDING }));
+    });
+
     it('starts exactly one download per search', async () => {
       searchReturns({ general: [torrent('Severance S01 1080p'), torrent('Severance S02 1080p'), torrent('Severance S03 1080p')] });
 
@@ -185,6 +196,38 @@ describe('TorrentCheckerService TV shows', () => {
 
       expect(prowlarr.searchTvTorrents.mock.calls.map(([dto]) => dto.season)).toEqual([2]);
       expect(downloadedTitles()).toEqual(['Severance S02 1080p']);
+    });
+  });
+
+  describe('shows with nothing aired left to fetch', () => {
+    beforeEach(() => {
+      prisma.requestedTorrent = { update: jest.fn() };
+      (selection.analyzeMissingContent as jest.Mock).mockResolvedValue({ missingSeasons: [], incompleteSeasons: [] });
+    });
+
+    it('does not search, and does not use up a search attempt', async () => {
+      await service.processRequest({ ...request, searchIntervalMins: 30 });
+
+      expect(orchestrator.startSearch).not.toHaveBeenCalled();
+      expect(prowlarr.searchTvTorrents).not.toHaveBeenCalled();
+    });
+
+    it('checks again after the search interval', async () => {
+      const before = Date.now();
+
+      await service.processRequest({ ...request, searchIntervalMins: 30 });
+
+      const { where, data } = prisma.requestedTorrent.update.mock.calls[0][0];
+      expect(where).toEqual({ id: 'request-1' });
+      expect(data.nextSearchAt.getTime()).toBeGreaterThanOrEqual(before + 30 * 60 * 1000);
+    });
+
+    it('ignores other seasons for a request that only asked for one', async () => {
+      (selection.analyzeMissingContent as jest.Mock).mockResolvedValue({ missingSeasons: [1, 3], incompleteSeasons: [] });
+
+      await service.processRequest({ ...request, isOngoing: false, season: 2, searchIntervalMins: 30 });
+
+      expect(orchestrator.startSearch).not.toHaveBeenCalled();
     });
   });
 });
