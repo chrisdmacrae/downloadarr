@@ -8,7 +8,8 @@ import { DownloadOrganizationService, OrganizeOutcome, OrganizeTarget } from './
 import { OrganizationRulesService } from './organization-rules.service';
 import { SeasonScanningService } from '../../torrents/services/season-scanning.service';
 import { RequestLifecycleOrchestrator } from '../../torrents/services/request-lifecycle-orchestrator.service';
-import { downloadRoot } from '../../common/utils/aria2-paths';
+import { Aria2Service } from '../../download/aria2.service';
+import { downloadRoot, fromAria2Path } from '../../common/utils/aria2-paths';
 import { normalizeShowTitle } from '../../common/utils/episode-files';
 
 export interface DownloadsFolderEntry {
@@ -22,8 +23,13 @@ export interface DownloadsFolderEntry {
   modifiedAt: string;
   /** From the subfolder it sits in (movies, tv-shows, games, music). */
   suggestedContentType: ContentType | null;
-  /** aria2 is still writing it; it cannot be organized yet. */
+  /** aria2 has it as a running, queued or paused download; it cannot be organized yet. */
   inProgress: boolean;
+  /**
+   * aria2 never finished it and no longer has it: a control file is left
+   * beside partial files. It can be organized, but may not be whole.
+   */
+  incomplete: boolean;
   /** A guess from the release name, to prefill the form. */
   detected: { title: string; year?: number; season?: number };
   /** A request whose title matches the guess. */
@@ -41,6 +47,8 @@ export interface OrganizeDownloadRequest {
   season?: number;
   platform?: string;
   artist?: string;
+  /** Organize a download aria2 abandoned part-way, accepting it may not be whole. */
+  allowIncomplete?: boolean;
 }
 
 export interface OrganizeDownloadResult {
@@ -115,6 +123,8 @@ export class DownloadsFolderService {
     private readonly seasonScanningService: SeasonScanningService,
     @Inject(forwardRef(() => RequestLifecycleOrchestrator))
     private readonly orchestrator: RequestLifecycleOrchestrator,
+    @Inject(forwardRef(() => Aria2Service))
+    private readonly aria2Service: Aria2Service,
   ) {}
 
   async list(): Promise<DownloadsFolderEntry[]> {
@@ -147,6 +157,8 @@ export class DownloadsFolderService {
 
         if (
           entry.inProgress ||
+          // A part-finished download is a person's call
+          entry.incomplete ||
           !settled ||
           !typeFolder ||
           matches.length !== 1 ||
@@ -189,13 +201,23 @@ export class DownloadsFolderService {
       orderBy: { updatedAt: 'desc' },
     });
 
+    const active = await this.activeDownloadPaths();
+    const describe = async (relativePath: string, typeFolder: ContentType | null) => {
+      try {
+        found.push(await this.describe(root, relativePath, typeFolder, requests, active));
+      } catch (error) {
+        // One unreadable entry (a broken link, a folder removed mid-scan) must not hide the rest
+        this.logger.debug(`Skipping ${relativePath} in the downloads folder: ${error.message}`);
+      }
+    };
+
     for (const top of await this.readDirectory(root)) {
       if (top.isDirectory() && top.name in TYPE_FOLDERS) {
         for (const child of await this.readDirectory(path.join(root, top.name))) {
-          found.push(await this.describe(root, path.join(top.name, child.name), TYPE_FOLDERS[top.name], requests));
+          await describe(path.join(top.name, child.name), TYPE_FOLDERS[top.name]);
         }
       } else {
-        found.push(await this.describe(root, top.name, null, requests));
+        await describe(top.name, null);
       }
     }
 
@@ -217,8 +239,12 @@ export class DownloadsFolderService {
     if (!stats) {
       throw new Error('That download is no longer in the downloads folder');
     }
-    if (await this.isInProgress(absolutePath)) {
+    const state = await this.downloadState(absolutePath, await this.activeDownloadPaths());
+    if (state.inProgress) {
       throw new Error('aria2 is still downloading this. Wait for it to finish, or cancel it first.');
+    }
+    if (state.incomplete && !dto.allowIncomplete) {
+      throw new Error('aria2 never finished this download, so its files may not be whole. Confirm to organize it anyway.');
     }
 
     const request = dto.requestId
@@ -325,6 +351,7 @@ export class DownloadsFolderService {
     relativePath: string,
     suggestedContentType: ContentType | null,
     requests: CandidateRequest[],
+    active: string[] | null,
   ): Promise<{ entry: DownloadsFolderEntry; typeFolder: ContentType | null; matches: CandidateRequest[] } | null> {
     const absolutePath = path.join(root, relativePath);
     const stats = await fs.stat(absolutePath);
@@ -366,7 +393,7 @@ export class DownloadsFolderService {
       mediaFileCount,
       modifiedAt: new Date(modified).toISOString(),
       suggestedContentType: suggestedContentType ?? match?.contentType ?? null,
-      inProgress: await this.isInProgress(absolutePath),
+      ...(await this.downloadState(absolutePath, active)),
       detected,
       suggestedRequestId: match?.id ?? null,
     };
@@ -374,8 +401,43 @@ export class DownloadsFolderService {
     return { entry, typeFolder: suggestedContentType, matches };
   }
 
-  /** aria2 keeps a "<name>.aria2" control file beside (or inside) a download until it finishes. */
-  private async isInProgress(absolutePath: string): Promise<boolean> {
+  /**
+   * Where aria2's running, queued and paused downloads are writing, or null
+   * when aria2 cannot be asked.
+   */
+  private async activeDownloadPaths(): Promise<string[] | null> {
+    try {
+      const [active, waiting] = await Promise.all([
+        this.aria2Service.getActiveDownloads(),
+        this.aria2Service.getWaitingDownloads(0, 1000),
+      ]);
+      return [...active, ...waiting].flatMap(download =>
+        (download.files ?? []).filter(file => file.path).map(file => fromAria2Path(file.path)),
+      );
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Whether aria2 is working on an entry, or abandoned it part-way. aria2
+   * itself is the authority on what is running. Its "<name>.aria2" control
+   * file only says a download was never finished: it stays behind for good
+   * when aria2 loses the download, so on its own it means "incomplete", and
+   * means "in progress" only when aria2 cannot be asked.
+   */
+  private async downloadState(absolutePath: string, active: string[] | null): Promise<{ inProgress: boolean; incomplete: boolean }> {
+    const hasControlFile = await this.hasControlFile(absolutePath);
+
+    if (active === null) {
+      return { inProgress: hasControlFile, incomplete: false };
+    }
+
+    const inProgress = active.some(file => file === absolutePath || file.startsWith(absolutePath + path.sep));
+    return { inProgress, incomplete: hasControlFile && !inProgress };
+  }
+
+  private async hasControlFile(absolutePath: string): Promise<boolean> {
     if (await fs.access(`${absolutePath}.aria2`).then(() => true, () => false)) {
       return true;
     }

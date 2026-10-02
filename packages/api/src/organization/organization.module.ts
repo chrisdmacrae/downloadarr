@@ -4,6 +4,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { DatabaseModule } from '../database/database.module';
 import { DiscoveryModule } from '../discovery/discovery.module';
 import { TorrentsModule } from '../torrents/torrents.module';
+import { DownloadModule } from '../download/download.module';
 
 // Services
 import { OrganizationRulesService } from './services/organization-rules.service';
@@ -24,6 +25,7 @@ import { AppConfigurationController } from '../config/controllers/app-configurat
     DatabaseModule,
     DiscoveryModule,
     forwardRef(() => TorrentsModule),
+    forwardRef(() => DownloadModule),
   ],
   providers: [
     OrganizationRulesService,

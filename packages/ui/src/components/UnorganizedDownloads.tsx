@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { File, Folder, FolderInput, Loader2 } from 'lucide-react'
+import { AlertCircle, File, Folder, FolderInput, Loader2 } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -106,6 +106,8 @@ export function UnorganizedDownloads() {
     const payload: OrganizeDownloadPayload = {
       path: selected.path,
       season: contentType === 'TV_SHOW' && form.season ? parseInt(form.season, 10) : undefined,
+      // Opening the form for an unfinished download is the confirmation
+      allowIncomplete: selected.incomplete || undefined,
       platform: contentType === 'GAME' && form.platform ? form.platform : undefined,
     }
     if (request) {
@@ -190,6 +192,11 @@ export function UnorganizedDownloads() {
                   ].join(' · ')}
                 </span>
               </div>
+              {entry.incomplete && (
+                <Badge variant="outline" size="sm">
+                  Incomplete
+                </Badge>
+              )}
               {entry.inProgress ? (
                 <Badge variant="outline" size="sm">
                   Still downloading
@@ -220,6 +227,17 @@ export function UnorganizedDownloads() {
               <code className="block break-all rounded-md bg-white/[.05] p-2 font-mono text-sm text-fg-body">
                 {selected.path}
               </code>
+
+              {selected.incomplete && (
+                <div className="flex items-start gap-2 rounded-md border border-hairline p-3 text-sm text-fg-secondary">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-status-failed" />
+                  <p>
+                    aria2 never finished this download and is no longer working on it, so some files
+                    may be partial. Moving it files whatever is there. To get the rest, search for
+                    the request again afterwards.
+                  </p>
+                </div>
+              )}
 
               <div className="flex flex-col gap-2">
                 <Label htmlFor="organize-kind">What is it?</Label>
@@ -346,7 +364,7 @@ export function UnorganizedDownloads() {
             </Button>
             <Button onClick={submit} disabled={organize.isPending || !canSubmit}>
               {organize.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-              {organize.isPending ? 'Moving…' : 'Move to library'}
+              {organize.isPending ? 'Moving…' : selected?.incomplete ? 'Move what is there' : 'Move to library'}
             </Button>
           </DialogFooter>
         </DialogContent>

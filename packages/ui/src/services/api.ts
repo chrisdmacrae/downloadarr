@@ -457,8 +457,10 @@ export interface DownloadsFolderEntry {
   mediaFileCount: number;
   modifiedAt: string;
   suggestedContentType: 'MOVIE' | 'TV_SHOW' | 'GAME' | 'MUSIC' | null;
-  /** aria2 is still writing it. */
+  /** aria2 has it as a running, queued or paused download. */
   inProgress: boolean;
+  /** aria2 abandoned it part-way; its files may not be whole. */
+  incomplete: boolean;
   detected: { title: string; year?: number; season?: number };
   suggestedRequestId: string | null;
 }
@@ -472,6 +474,8 @@ export interface OrganizeDownloadPayload {
   season?: number;
   platform?: string;
   artist?: string;
+  /** Organize a download aria2 abandoned part-way anyway. */
+  allowIncomplete?: boolean;
 }
 
 export interface OrganizeDownloadResult {

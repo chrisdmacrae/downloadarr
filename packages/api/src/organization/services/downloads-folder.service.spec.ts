@@ -25,6 +25,7 @@ describe('DownloadsFolderService', () => {
   let scanner: { scanTvShowRequest: jest.Mock };
   let orchestrator: { markAsCompleted: jest.Mock; markAsManuallyOrganized: jest.Mock; markAsOrganizeFailed: jest.Mock };
   let settings: { organizeOnComplete: boolean };
+  let aria2: { getActiveDownloads: jest.Mock; getWaitingDownloads: jest.Mock };
   let service: DownloadsFolderService;
   const previousRoot = process.env.DOWNLOAD_PATH;
 
@@ -52,6 +53,8 @@ describe('DownloadsFolderService', () => {
     } as any;
     scanner = { scanTvShowRequest: jest.fn() };
     orchestrator = { markAsCompleted: jest.fn(), markAsManuallyOrganized: jest.fn(), markAsOrganizeFailed: jest.fn() };
+    // aria2 is up, with nothing running
+    aria2 = { getActiveDownloads: jest.fn(async () => []), getWaitingDownloads: jest.fn(async () => []) };
 
     settings = { organizeOnComplete: true };
     service = new DownloadsFolderService(
@@ -60,6 +63,7 @@ describe('DownloadsFolderService', () => {
       organizer as any,
       scanner as any,
       orchestrator as any,
+      aria2 as any,
     );
   });
 
@@ -103,13 +107,46 @@ describe('DownloadsFolderService', () => {
       expect(await service.list()).toEqual([]);
     });
 
-    it('marks a download aria2 is still writing', async () => {
+    it('marks a download aria2 is running, queued or has paused', async () => {
+      await write('movies/Heat.1995/Heat.mkv');
+      await write('movies/Dune.2021.mkv');
+      aria2.getActiveDownloads.mockResolvedValue([{ files: [{ path: '/downloads/movies/Heat.1995/Heat.mkv' }] }]);
+      aria2.getWaitingDownloads.mockResolvedValue([{ files: [{ path: '/downloads/movies/Dune.2021.mkv' }] }]);
+      process.env.ARIA2_DOWNLOAD_PATH = '/downloads';
+
+      const entries = await service.list();
+      delete process.env.ARIA2_DOWNLOAD_PATH;
+
+      expect(entries.map(entry => [entry.name, entry.inProgress, entry.incomplete]).sort()).toEqual([
+        ['Dune.2021.mkv', true, false],
+        ['Heat.1995', true, false],
+      ]);
+    });
+
+    it('marks a download aria2 abandoned as incomplete, not as still downloading', async () => {
       await write('movies/Heat.1995/Heat.mkv');
       await write('movies/Heat.1995.aria2');
 
       const [entry] = await service.list();
 
-      expect(entry).toMatchObject({ name: 'Heat.1995', inProgress: true });
+      expect(entry).toMatchObject({ name: 'Heat.1995', inProgress: false, incomplete: true });
+    });
+
+    it('takes a control file to mean still downloading only when aria2 cannot be asked', async () => {
+      await write('movies/Heat.1995/Heat.mkv');
+      await write('movies/Heat.1995.aria2');
+      aria2.getActiveDownloads.mockRejectedValue(new Error('Aria2 RPC not connected'));
+
+      const [entry] = await service.list();
+
+      expect(entry).toMatchObject({ inProgress: true, incomplete: false });
+    });
+
+    it('still lists the rest when one entry cannot be read', async () => {
+      await write('movies/Heat.1995.mkv');
+      await fs.symlink(path.join(root, 'gone'), path.join(root, 'movies/broken-link'));
+
+      expect((await service.list()).map(entry => entry.name)).toEqual(['Heat.1995.mkv']);
     });
   });
 
@@ -122,11 +159,23 @@ describe('DownloadsFolderService', () => {
       expect(organizer.organizeFiles).not.toHaveBeenCalled();
     });
 
-    it('refuses a download that is still in progress', async () => {
+    it('refuses a download aria2 is still working on', async () => {
       await write('movies/Heat.1995/Heat.mkv');
-      await write('movies/Heat.1995/Heat.mkv.aria2');
+      aria2.getActiveDownloads.mockResolvedValue([{ files: [{ path: path.join(root, 'movies/Heat.1995/Heat.mkv') }] }]);
 
       await expect(service.organize({ path: 'movies/Heat.1995', contentType: ContentType.MOVIE, title: 'Heat' })).rejects.toThrow('still downloading');
+    });
+
+    it('organizes a download aria2 abandoned only when told to', async () => {
+      await write('movies/Heat.1995/Heat.mkv');
+      await write('movies/Heat.1995/Heat.mkv.aria2');
+      const mapping = { path: 'movies/Heat.1995', contentType: ContentType.MOVIE, title: 'Heat' };
+
+      await expect(service.organize(mapping)).rejects.toThrow('never finished');
+
+      const result = await service.organize({ ...mapping, allowIncomplete: true });
+      expect(result.success).toBe(true);
+      expect(organizer.organizeFiles).toHaveBeenCalledWith([path.join(root, 'movies/Heat.1995/Heat.mkv')], expect.anything());
     });
 
     it('needs to be told what the download is', async () => {
@@ -252,6 +301,7 @@ describe('DownloadsFolderService', () => {
       await service.organizeMatchedDownloads();
       expect(organizedPaths()).toEqual([]);
 
+      // Abandoned part-way: left for a person, however long it has sat there
       await settledDownload();
       await write('movies/Heat.1995.1080p.aria2');
       await service.organizeMatchedDownloads();
