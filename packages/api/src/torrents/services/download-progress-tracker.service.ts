@@ -14,6 +14,7 @@ import { fromAria2Path } from '../../common/utils/aria2-paths';
 @Injectable()
 export class DownloadProgressTrackerService {
   private readonly logger = new Logger(DownloadProgressTrackerService.name);
+  private isTracking = false;
 
   constructor(
     private readonly requestedTorrentsService: RequestedTorrentsService,
@@ -28,6 +29,16 @@ export class DownloadProgressTrackerService {
 
   @Cron(CronExpression.EVERY_30_SECONDS)
   async trackDownloadStatus(): Promise<void> {
+    // Moving a finished season into the library can take longer than the 30
+    // seconds between runs. A second run would find the same download still
+    // finished, move the same files again on top of the first, and release
+    // the show for its next download before the first move is done.
+    if (this.isTracking) {
+      this.logger.debug('Download tracking already in progress, skipping...');
+      return;
+    }
+
+    this.isTracking = true;
     try {
       await this.recoverStrandedFoundRequests();
 
@@ -47,6 +58,8 @@ export class DownloadProgressTrackerService {
       }
     } catch (error) {
       this.logger.error('Error tracking download status:', error);
+    } finally {
+      this.isTracking = false;
     }
   }
 

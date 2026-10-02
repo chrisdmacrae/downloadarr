@@ -168,40 +168,57 @@ export class FileOrganizationService {
       // Get file stats
       const stats = await fs.stat(resolvedOriginalPath);
 
-      // Check if file already exists
-      const settings = await this.organizationRulesService.getSettings();
-      try {
-        await fs.access(resolvedDestinationPath);
-
-        if (!settings.replaceExistingFiles) {
-          this.logger.warn(`File already exists and replace is disabled: ${resolvedDestinationPath}`);
-          return {
-            success: false,
-            originalPath: context.originalPath,
-            error: 'File already exists and replace is disabled',
-          };
-        }
-
-        // Delete existing file
-        await fs.unlink(resolvedDestinationPath);
-        this.logger.log(`Replaced existing file: ${resolvedDestinationPath}`);
-      } catch {
-        // File doesn't exist, which is fine
+      // A file that is already where it belongs stays put. Replacing it "with
+      // itself" would delete it, as the destination is removed first.
+      if (resolvedOriginalPath === resolvedDestinationPath) {
+        this.logger.log(`Already in place, leaving it: ${resolvedDestinationPath}`);
+        return {
+          success: true,
+          originalPath: context.originalPath,
+          organizedPath: resolvedDestinationPath,
+          filesProcessed: 1,
+        };
       }
 
-      // Move file to organized location
+      // Check if file already exists
+      const settings = await this.organizationRulesService.getSettings();
+      const destinationExists = await fs.access(resolvedDestinationPath).then(() => true, () => false);
+
+      if (destinationExists && !settings.replaceExistingFiles) {
+        this.logger.warn(`File already exists and replace is disabled: ${resolvedDestinationPath}`);
+        return {
+          success: false,
+          originalPath: context.originalPath,
+          error: 'File already exists and replace is disabled',
+        };
+      }
+
+      // Move file to organized location. The existing file is never deleted
+      // first: a rename replaces it in one step, so a move that fails leaves
+      // the library as it was.
       try {
         await fs.rename(resolvedOriginalPath, resolvedDestinationPath);
         this.logger.log(`Successfully moved: ${resolvedOriginalPath} -> ${resolvedDestinationPath}`);
       } catch (error) {
-        // If rename fails (e.g., cross-device link), fall back to copy + delete
+        // If rename fails (e.g., cross-device link), copy next to the
+        // destination and rename that over it once the copy is whole
         if (error.code === 'EXDEV') {
           this.logger.log(`Cross-device move detected, using copy+delete for: ${resolvedOriginalPath}`);
-          await fs.copyFile(resolvedOriginalPath, resolvedDestinationPath);
+          const partialPath = `${resolvedDestinationPath}.partial`;
+          try {
+            await fs.copyFile(resolvedOriginalPath, partialPath);
+            await fs.rename(partialPath, resolvedDestinationPath);
+          } catch (copyError) {
+            await fs.unlink(partialPath).catch(() => undefined);
+            throw copyError;
+          }
           await fs.unlink(resolvedOriginalPath);
         } else {
           throw error;
         }
+      }
+      if (destinationExists) {
+        this.logger.log(`Replaced existing file: ${resolvedDestinationPath}`);
       }
 
       // Record in database

@@ -103,5 +103,43 @@ describe('DownloadProgressTrackerService', () => {
 
       expect(calls).toEqual(['download completed', 'files organized', 'episodes counted', 'request settled']);
     });
+
+    it('does not start a second run while a download is still being moved', async () => {
+      let finishOrganizing: () => void = () => undefined;
+      const getSettings = jest.fn()
+        .mockImplementationOnce(
+          () => new Promise(resolve => { finishOrganizing = () => resolve({ organizeOnComplete: false }); }),
+        )
+        .mockResolvedValue({ organizeOnComplete: false });
+      const getRequestsByStatus = jest.fn().mockResolvedValue([{ id: 'request-1', aria2Gid: 'gid-1' }]);
+
+      const tracker = new DownloadProgressTrackerService(
+        { getRequestsByStatus } as any,
+        { markAsCompleted: jest.fn() } as any,
+        {
+          isDownloadComplete: jest.fn().mockResolvedValue(true),
+          isDownloadFailed: jest.fn().mockResolvedValue({ failed: false }),
+        } as any,
+        aria2Service as any,
+        {
+          requestedTorrent: { findMany: jest.fn().mockResolvedValue([]), findUnique: jest.fn().mockResolvedValue(null) },
+          torrentDownload: { findMany: jest.fn().mockResolvedValue([]), update: jest.fn() },
+        } as any,
+        { getSettings } as any,
+        {} as any,
+        { scanTvShowRequest: jest.fn() } as any,
+      );
+
+      const firstRun = tracker.trackDownloadStatus();
+      await new Promise(resolve => setImmediate(resolve));
+      await tracker.trackDownloadStatus();
+
+      expect(getRequestsByStatus).toHaveBeenCalledTimes(1);
+
+      finishOrganizing();
+      await firstRun;
+      await tracker.trackDownloadStatus();
+      expect(getRequestsByStatus).toHaveBeenCalledTimes(2);
+    });
   });
 });

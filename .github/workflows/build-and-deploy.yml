@@ -1,9 +1,16 @@
 name: Build and Deploy Docker Image
 
+# A release starts from a tag, not from a release made by hand:
+#
+#   git tag v1.2.3 && git push origin v1.2.3
+#
+# The tag is tested, built and published, and only then does the `release`
+# job cut the GitHub release, so a release never points at images that were
+# not built.
 on:
   push:
-    branches: [ main ]   # keeps a warm build cache on the default branch
-    tags: [ 'v*' ]       # publishes the release images
+    branches: [ main ]       # keeps a warm build cache on the default branch
+    tags: [ 'v*.*.*' ]       # publishes the release images, then the release
   pull_request:
     branches: [ main ]
 
@@ -159,3 +166,39 @@ jobs:
         run: |
           docker buildx imagetools inspect \
             ${{ env.REGISTRY }}/${{ github.repository }}:${{ steps.meta.outputs.version }}
+
+  # Cuts the GitHub release for a tag once its images are published: install,
+  # upgrade and rollback instructions (.github/release-notes.md), followed by
+  # GitHub's generated list of what changed.
+  release:
+    needs: merge
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # the previous tag is needed to say what changed
+
+      - name: Write release notes
+        run: .github/scripts/release-notes.sh "$TAG" > "$RUNNER_TEMP/notes.md"
+
+      # A tag with a suffix (v1.2.3-rc.1) is a prerelease: it gets its own
+      # image tag but neither `latest` nor the "Latest" release badge.
+      - name: Publish release
+        run: |
+          flags=(--title "$TAG" --notes-file "$RUNNER_TEMP/notes.md")
+          if [[ "$TAG" == *-* ]]; then
+            flags+=(--prerelease --latest=false)
+          fi
+
+          # A release someone already made for this tag is updated, not duplicated.
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release edit "$TAG" "${flags[@]}"
+          else
+            gh release create "$TAG" --verify-tag "${flags[@]}"
+          fi
